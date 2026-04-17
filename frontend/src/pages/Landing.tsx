@@ -2,7 +2,7 @@
 // The only change is JoinForm now calls the real Django API via the api utility
 
 import { useState, useEffect, useRef } from "react";
-import { joins } from "../utils/api";
+import { joins, matches as matchesApi } from "../utils/api";
 
 function NBLLogoFull({ size = 48, className = "", color = "white" }: { size?: number; className?: string; color?: "white" | "black" | "purple" }) {
   const filter =
@@ -116,13 +116,37 @@ function TickerTape() {
   );
 }
 
-function MatchCard({ rival, type, game, gameColor, date, time, status, score, winner }: {
-  rival: string; type: string; game: string; gameColor: string;
+const GAME_COLORS: Record<string, string> = {
+  rocket_league: "#60b8ff",
+  valorant: "#ff7080",
+  fortnite: "#ffd700",
+};
+
+const GAME_LABELS: Record<string, string> = {
+  rocket_league: "Rocket League",
+  valorant: "Valorant",
+  fortnite: "Fortnite",
+};
+
+function MatchCard({ rival, type, game, date, time, status, score, winner }: {
+  rival: string; type: string; game: string;
   date: string; time: string; status: "upcoming" | "live" | "completed";
-  score?: string; winner?: "nbl" | "rival";
+  score?: string; winner?: "nbl" | "rival" | "draw" | "";
 }) {
+  const gameColor = GAME_COLORS[game] || "#a855f7";
+  const gameLabel = GAME_LABELS[game] || game;
   const nblLoser = status === "completed" && winner === "rival";
   const rivalLoser = status === "completed" && winner === "nbl";
+
+  // Format date nicely
+  const formattedDate = (() => {
+    try {
+      return new Date(date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    } catch {
+      return date;
+    }
+  })();
+
   return (
     <div className="group flex items-center gap-5 bg-white/5 border border-white/8 hover:border-purple-500/35 rounded-2xl px-7 py-6 transition-all duration-200">
       <div className={`flex flex-col items-center gap-2 min-w-[100px] transition-opacity duration-200 ${nblLoser ? "opacity-40" : ""}`}>
@@ -146,14 +170,14 @@ function MatchCard({ rival, type, game, gameColor, date, time, status, score, wi
       </div>
       <div className={`flex flex-col items-center gap-2 min-w-[100px] transition-opacity duration-200 ${rivalLoser ? "opacity-40" : ""}`}>
         <div className={`w-14 h-14 rounded-xl bg-gradient-to-br from-pink-600 to-pink-500 flex items-center justify-center text-white font-black text-2xl ${winner === "rival" ? "ring-2 ring-pink-400/60" : ""}`}>
-          {rival.charAt(0)}
+          {rival.charAt(0).toUpperCase()}
         </div>
         <span className="text-white text-xs font-bold tracking-widest uppercase text-center">{rival}</span>
       </div>
       <div className="ml-auto text-right min-w-[130px]">
         <span className="inline-flex items-center text-xs font-bold px-3 py-1 rounded-full mb-2 uppercase tracking-wider"
-          style={{ background: `${gameColor}20`, color: gameColor, border: `1px solid ${gameColor}40` }}>{game}</span>
-        <div className="text-white font-bold text-sm">{date}</div>
+          style={{ background: `${gameColor}20`, color: gameColor, border: `1px solid ${gameColor}40` }}>{gameLabel}</span>
+        <div className="text-white font-bold text-sm">{formattedDate}</div>
         <div className="text-purple-400 text-sm mt-0.5">{time}</div>
       </div>
       {status === "live" && (
@@ -172,6 +196,9 @@ function MatchCard({ rival, type, game, gameColor, date, time, status, score, wi
       {status === "completed" && winner === "rival" && (
         <span className="ml-4 inline-flex items-center justify-center text-xs font-bold px-4 py-2 rounded-full uppercase tracking-widest"
           style={{ minWidth: "110px", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.3)", border: "1px solid rgba(255,255,255,0.1)" }}>Loss</span>
+      )}
+      {status === "completed" && winner === "draw" && (
+        <span className="ml-4 inline-flex items-center justify-center text-xs font-bold px-4 py-2 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/25 uppercase tracking-widest" style={{ minWidth: "110px" }}>Draw</span>
       )}
     </div>
   );
@@ -224,7 +251,6 @@ function JoinForm() {
     e.preventDefault();
     setStatus("loading");
     try {
-      // Map game display name to DB key
       const gameKey = formData.game.toLowerCase().replace(" ", "_");
       await joins.submit({ ...formData, game: gameKey });
       setStatus("success");
@@ -286,6 +312,69 @@ function JoinForm() {
         </form>
       )}
     </div>
+  );
+}
+
+// ── Live Match Schedule ────────────────────────────────────────────────────────
+function MatchSchedule() {
+  const [matchList, setMatchList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (matchesApi.list() as Promise<any>)
+      .then(r => setMatchList(r.matches || []))
+      .catch(() => setMatchList([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Show at most 5 most recent/upcoming matches
+  const displayed = matchList.slice(0, 5);
+
+  return (
+    <section id="schedule" className="py-24">
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="text-center mb-16">
+          <span className="inline-block border border-purple-500/40 text-purple-400 font-bold tracking-widest uppercase text-xs px-4 py-2 rounded-full mb-6">Playoff Schedule</span>
+          <h2 className="text-5xl md:text-6xl font-black uppercase leading-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            Match <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-300">Schedule</span>
+          </h2>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : displayed.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-white/30 text-lg tracking-wider uppercase">No matches scheduled yet.</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 mb-10">
+            {displayed.map((m: any) => (
+              <MatchCard
+                key={m.id}
+                rival={m.rival}
+                type={m.match_type}
+                game={m.game}
+                date={m.date}
+                time={m.time}
+                status={m.status}
+                score={m.score}
+                winner={m.winner}
+              />
+            ))}
+          </div>
+        )}
+
+        {matchList.length > 5 && (
+          <div className="text-center">
+            <a href="#" className="inline-flex items-center gap-2 bg-white/5 hover:bg-purple-500/15 border border-white/10 hover:border-purple-500/40 text-white font-bold px-8 py-3 rounded-full text-sm tracking-widest uppercase transition-all duration-200">
+              View Full Match History →
+            </a>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -441,26 +530,8 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* SCHEDULE */}
-      <section id="schedule" className="py-24">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <span className="inline-block border border-purple-500/40 text-purple-400 font-bold tracking-widest uppercase text-xs px-4 py-2 rounded-full mb-6">Playoff Schedule</span>
-            <h2 className="text-5xl md:text-6xl font-black uppercase leading-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-              Match <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-300">Schedule</span>
-            </h2>
-          </div>
-          <div className="flex flex-col gap-3 mb-10">
-            <MatchCard rival="DPL Esports" type="Tournament" game="Rocket League" gameColor="#60b8ff" date="Jan 23, 2026" time="10:30 GMT+1" status="upcoming" />
-            <MatchCard rival="Team Phoenix" type="Tournament" game="Valorant" gameColor="#ff7080" date="Jan 25, 2026" time="18:00 GMT+1" status="live" />
-            <MatchCard rival="Storm Gaming" type="Practice" game="Fortnite" gameColor="#ffd700" date="Jan 20, 2026" time="15:00 GMT+1" status="completed" score="3 — 1" winner="nbl" />
-            <MatchCard rival="Rivals FC" type="Tournament" game="Rocket League" gameColor="#60b8ff" date="Jan 18, 2026" time="20:00 GMT+1" status="completed" score="1 — 3" winner="rival" />
-          </div>
-          <div className="text-center">
-            <a href="#" className="inline-flex items-center gap-2 bg-white/5 hover:bg-purple-500/15 border border-white/10 hover:border-purple-500/40 text-white font-bold px-8 py-3 rounded-full text-sm tracking-widest uppercase transition-all duration-200">View Full Matches History →</a>
-          </div>
-        </div>
-      </section>
+      {/* SCHEDULE — live from API */}
+      <MatchSchedule />
 
       {/* ABOUT */}
       <section id="about" className="py-24 relative">

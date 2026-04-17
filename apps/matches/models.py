@@ -46,13 +46,15 @@ class Match(models.Model):
         return f"NBL vs {self.rival} — {self.game} ({self.date})"
 
     def to_dict(self):
+        date_val = self.date.isoformat() if hasattr(self.date, 'isoformat') else str(self.date)
+        time_val = self.time.strftime('%H:%M') if hasattr(self.time, 'strftime') else str(self.time)[:5]
         return {
             'id': self.id,
             'rival': self.rival,
             'match_type': self.match_type,
             'game': self.game,
-            'date': self.date.isoformat(),
-            'time': self.time.strftime('%H:%M'),
+            'date': date_val,
+            'time': time_val,
             'status': self.status,
             'score': self.score,
             'winner': self.winner,
