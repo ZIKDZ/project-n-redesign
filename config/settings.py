@@ -90,3 +90,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Session settings
 SESSION_COOKIE_AGE = 86400 * 7  # 7 days
 SESSION_COOKIE_HTTPONLY = True
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+]

@@ -50,6 +50,8 @@ export const joins = {
     request(`/api/joins/list/${status ? `?status=${status}` : ''}`),
   updateStatus: (id: number, data: { status?: string; notes?: string }) =>
     request(`/api/joins/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+  accept: (id: number) =>
+    request(`/api/joins/${id}/accept/`, { method: 'POST' }),
 }
 
 // ── Matches ───────────────────────────────────────────────────────────────────

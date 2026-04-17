@@ -4,6 +4,7 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from .models import JoinRequest
+from apps.players.models import Player
 
 
 @csrf_exempt
@@ -53,3 +54,32 @@ def update_join_status(request, pk):
         return JsonResponse({'error': 'Not found'}, status=404)
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+
+@login_required
+@require_http_methods(['POST'])
+def accept_join(request, pk):
+    """Staff only — accept a join request and create a Player record."""
+    try:
+        join = JoinRequest.objects.get(pk=pk)
+
+        # Avoid duplicate players from the same join request
+        if join.status == 'accepted':
+            return JsonResponse({'error': 'Already accepted'}, status=400)
+
+        Player.objects.create(
+            username=join.username,
+            ingame_username=join.ingame_username,
+            game=join.game,
+            role='player',
+            rank=join.rank,
+            discord_username=join.discord_username,
+            email=join.email,
+        )
+
+        join.status = 'accepted'
+        join.save()
+
+        return JsonResponse({'success': True})
+    except JoinRequest.DoesNotExist:
+        return JsonResponse({'error': 'Not found'}, status=404)
