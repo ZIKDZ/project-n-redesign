@@ -2,7 +2,7 @@
 // The only change is JoinForm now calls the real Django API via the api utility
 
 import { useState, useEffect, useRef } from "react";
-import { joins, matches as matchesApi } from "../utils/api";
+import { joins, matches as matchesApi, news as newsApi } from "../utils/api";
 
 function NBLLogoFull({ size = 48, className = "", color = "white" }: { size?: number; className?: string; color?: "white" | "black" | "purple" }) {
   const filter =
@@ -204,29 +204,67 @@ function MatchCard({ rival, type, game, date, time, status, score, winner }: {
   );
 }
 
-function NewsCard({ tag, description, href, date, thumbnail }: { tag: string; description: string; href: string; date: string; thumbnail: string }) {
+function NewsCard({ tag, title, description, date, thumbnail }: { tag: string; title: string; description: string; date: string; thumbnail: string }) {
+  const formattedDate = (() => {
+    try { return new Date(date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) }
+    catch { return date }
+  })();
   return (
     <div className="group border border-white/8 hover:border-purple-500/40 rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1" style={{ background: "rgba(255,255,255,0.04)" }}>
       <div className="relative overflow-hidden h-48">
-        <img src={thumbnail} alt={tag} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-          style={{ willChange: "transform", transform: "translateZ(0)" }} />
+        {thumbnail
+          ? <img src={thumbnail} alt={tag} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" style={{ willChange: "transform", transform: "translateZ(0)" }} />
+          : <div className="w-full h-full bg-purple-950/40 flex items-center justify-center"><span className="text-purple-500/40 text-4xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>NBL</span></div>
+        }
         <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(13,0,20,0.9), transparent)" }} />
         <span className="absolute top-3 left-3 text-xs font-bold tracking-widest uppercase px-3 py-1.5 rounded-full bg-purple-500/25 text-purple-300 border border-purple-500/40">{tag}</span>
       </div>
       <div className="p-5">
-        <p className="text-white/55 text-sm leading-relaxed mb-5">{description}</p>
-        <div className="flex items-center justify-between">
-          <a href={href}
-            className="inline-flex items-center gap-2 text-xs font-bold tracking-widest uppercase text-purple-400 border border-purple-500/35 px-4 py-2 rounded-full hover:bg-purple-500/15 hover:text-purple-300 transition-all duration-200">
-            Read More
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M12 5l7 7-7 7" />
-            </svg>
-          </a>
-          <span className="text-xs text-white/25 tracking-wider">{date}</span>
-        </div>
+        {title && <h3 className="text-white font-bold text-sm mb-2 line-clamp-1">{title}</h3>}
+        <p className="text-white/55 text-sm leading-relaxed mb-4 line-clamp-3">{description}</p>
+        <span className="text-xs text-white/25 tracking-wider">{formattedDate}</span>
       </div>
     </div>
+  );
+}
+
+function LiveNewsSection() {
+  const [newsList, setNewsList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (newsApi.list() as Promise<any>)
+      .then(r => setNewsList(r.news || []))
+      .catch(() => setNewsList([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const displayed = newsList.slice(0, 3);
+
+  return (
+    <section id="news" className="py-24">
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="text-center mb-16">
+          <span className="text-purple-400 font-bold tracking-widest uppercase text-sm mb-4 block">Latest News</span>
+          <h2 className="text-5xl md:text-6xl font-black uppercase leading-tight mb-4" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            News & <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-300">Updates</span>
+          </h2>
+        </div>
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : displayed.length === 0 ? (
+          <p className="text-center text-white/30 text-lg tracking-wider uppercase py-12">No news yet. Check back soon.</p>
+        ) : (
+          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
+            {displayed.map((n: any) => (
+              <NewsCard key={n.id} tag={n.tag} title={n.title} description={n.description} date={n.published_at} thumbnail={n.thumbnail || ""} />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -571,22 +609,8 @@ export default function Landing() {
         </div>
       </div>
 
-      {/* NEWS */}
-      <section id="news" className="py-24">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <span className="text-purple-400 font-bold tracking-widest uppercase text-sm mb-4 block">Latest News</span>
-            <h2 className="text-5xl md:text-6xl font-black uppercase leading-tight mb-4" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-              News & <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-300">Updates</span>
-            </h2>
-          </div>
-          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
-            <NewsCard tag="Award" description="Vote for Nebula Esports to win Best Algerian Esports Organization at the Algeria Game Awards 2026." href="#" date="Jan 2026" thumbnail="https://placehold.co/600x400/1a0030/a855f7?text=Algeria+Game+Awards" />
-            <NewsCard tag="Community" description="Nebula DZ — our community server where you can chill, watch matches, and connect with friends." href="#" date="Jan 2026" thumbnail="https://placehold.co/600x400/0d001f/7c3aed?text=Nebula+DZ+Discord" />
-            <NewsCard tag="Announcement" description="Stay tuned for upcoming match announcements, roster updates, and season highlights from NBLEsport." href="#" date="Coming Soon" thumbnail="https://placehold.co/600x400/13001f/a855f7?text=Coming+Soon" />
-          </div>
-        </div>
-      </section>
+      {/* NEWS — loaded from Django API */}
+      <LiveNewsSection />
 
       {/* JOIN */}
       <section id="join" className="py-24 relative overflow-hidden">

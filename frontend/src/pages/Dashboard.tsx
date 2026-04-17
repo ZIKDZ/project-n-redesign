@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../App'
 import { auth, joins, matches, news, players, teams } from '../utils/api'
@@ -107,7 +107,7 @@ function Overview() {
 function JoinsSection() {
   const [data, setData] = useState<any[]>([])
   const [filter, setFilter] = useState('')
-  const [reviewed, setReviewed] = useState<any | null>(null) // join being reviewed in modal
+  const [reviewed, setReviewed] = useState<any | null>(null)
 
   const load = () => {
     (joins.list(filter || undefined) as Promise<any>)
@@ -117,13 +117,7 @@ function JoinsSection() {
 
   useEffect(() => { load() }, [filter])
 
-  const setStatus = async (id: number, status: string) => {
-    await joins.updateStatus(id, { status })
-    load()
-  }
-
   const openReview = async (j: any) => {
-    // mark as reviewing if still pending
     if (j.status === 'pending') {
       await joins.updateStatus(j.id, { status: 'reviewing' })
       load()
@@ -173,7 +167,6 @@ function JoinsSection() {
         }
       />
 
-      {/* List */}
       <div className="space-y-3">
         {data.length === 0 && <p className="text-white/30 text-sm">No join requests found.</p>}
         {data.map((j: any) => (
@@ -190,7 +183,6 @@ function JoinsSection() {
               <p className="text-white/20 text-xs mt-1">{new Date(j.submitted_at).toLocaleDateString()}</p>
             </div>
             <div className="flex items-center gap-2">
-              {/* Review button — hidden once accepted/rejected */}
               {j.status !== 'accepted' && j.status !== 'rejected' && (
                 <ActionButton onClick={() => openReview(j)}>Review</ActionButton>
               )}
@@ -205,7 +197,6 @@ function JoinsSection() {
         ))}
       </div>
 
-      {/* Review Modal */}
       {reviewed && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -213,24 +204,21 @@ function JoinsSection() {
           onClick={e => { if (e.target === e.currentTarget) setReviewed(null) }}
         >
           <div className="bg-[#13001f] border border-white/10 rounded-3xl p-8 w-full max-w-md shadow-2xl shadow-purple-900/30">
-            {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-white font-black text-xl uppercase tracking-wide" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
                 Application Review
               </h3>
               <button onClick={() => setReviewed(null)} className="text-white/30 hover:text-white transition-colors text-xl">✕</button>
             </div>
-
-            {/* Player info */}
             <div className="space-y-3 mb-8">
               {[
-                { label: 'Username',       value: reviewed.username },
-                { label: 'In-Game Name',   value: reviewed.ingame_username },
-                { label: 'Game',           value: GAME_LABELS[reviewed.game] ?? reviewed.game },
-                { label: 'Rank',           value: reviewed.rank },
-                { label: 'Discord',        value: reviewed.discord_username },
-                { label: 'Email',          value: reviewed.email },
-                { label: 'Submitted',      value: new Date(reviewed.submitted_at).toLocaleDateString() },
+                { label: 'Username',     value: reviewed.username },
+                { label: 'In-Game Name', value: reviewed.ingame_username },
+                { label: 'Game',         value: GAME_LABELS[reviewed.game] ?? reviewed.game },
+                { label: 'Rank',         value: reviewed.rank },
+                { label: 'Discord',      value: reviewed.discord_username },
+                { label: 'Email',        value: reviewed.email },
+                { label: 'Submitted',    value: new Date(reviewed.submitted_at).toLocaleDateString() },
               ].map(row => (
                 <div key={row.label} className="flex justify-between items-center py-2 border-b border-white/5">
                   <span className="text-white/40 text-xs font-bold tracking-widest uppercase">{row.label}</span>
@@ -238,31 +226,19 @@ function JoinsSection() {
                 </div>
               ))}
             </div>
-
-            {/* Notes */}
             <textarea
               placeholder="Internal notes (optional)…"
               defaultValue={reviewed.notes}
               onBlur={e => joins.updateStatus(reviewed.id, { notes: e.target.value })}
               className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder-white/20 focus:outline-none focus:border-purple-500/60 resize-none h-20 mb-6"
             />
-
-            {/* Actions */}
             <div className="flex gap-3">
-              <button
-                onClick={handleAccept}
+              <button onClick={handleAccept}
                 className="flex-1 bg-green-600 hover:bg-green-500 text-white font-black py-3 rounded-xl text-sm tracking-widest uppercase transition-all duration-200"
-                style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-              >
-                Accept
-              </button>
-              <button
-                onClick={handleReject}
+                style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>Accept</button>
+              <button onClick={handleReject}
                 className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 font-black py-3 rounded-xl text-sm tracking-widest uppercase transition-all duration-200"
-                style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-              >
-                Reject
-              </button>
+                style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>Reject</button>
             </div>
           </div>
         </div>
@@ -284,6 +260,7 @@ function MatchesSection() {
   useEffect(() => { load() }, [])
 
   const save = async () => {
+    if (!form.rival || !form.date || !form.time) return
     await matches.create(form)
     setShowForm(false)
     setForm({ rival: '', match_type: 'tournament', game: 'rocket_league', date: '', time: '', status: 'upcoming', score: '', winner: '' })
@@ -362,10 +339,27 @@ function MatchesSection() {
 }
 
 // ── News section ──────────────────────────────────────────────────────────────
+function getCsrfToken(): string {
+  const value = `; ${document.cookie}`
+  const parts = value.split(`; csrftoken=`)
+  if (parts.length === 2) return parts.pop()!.split(';').shift() || ''
+  return ''
+}
+
 function NewsSection() {
   const [data, setData] = useState<any[]>([])
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ title: '', tag: 'announcement', description: '', thumbnail_url: '', published_at: '', is_published: true })
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({
+    title: '',
+    tag: 'announcement',
+    description: '',
+    published_at: '',
+    is_published: true,
+  })
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
+  const [thumbnailPreview, setThumbnailPreview] = useState<string>('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const load = () => {
     (news.listAll() as Promise<any>).then(r => setData(r.news || [])).catch(() => {})
@@ -373,11 +367,51 @@ function NewsSection() {
 
   useEffect(() => { load() }, [])
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null
+    setThumbnailFile(file)
+    if (file) {
+      setThumbnailPreview(URL.createObjectURL(file))
+    } else {
+      setThumbnailPreview('')
+    }
+  }
+
+  const resetForm = () => {
+    setForm({ title: '', tag: 'announcement', description: '', published_at: '', is_published: true })
+    setThumbnailFile(null)
+    setThumbnailPreview('')
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
   const save = async () => {
-    await news.create(form)
-    setShowForm(false)
-    setForm({ title: '', tag: 'announcement', description: '', thumbnail_url: '', published_at: '', is_published: true })
-    load()
+    if (!form.title || !form.description || !form.published_at) return
+    setSaving(true)
+    try {
+      // Always use multipart so we can attach a file if present
+      const fd = new FormData()
+      fd.append('title', form.title)
+      fd.append('tag', form.tag)
+      fd.append('description', form.description)
+      fd.append('published_at', form.published_at)
+      fd.append('is_published', form.is_published ? 'true' : 'false')
+      if (thumbnailFile) fd.append('thumbnail', thumbnailFile)
+
+      await fetch('/api/news/create/', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'X-CSRFToken': getCsrfToken() },
+        // Do NOT set Content-Type — browser sets multipart boundary automatically
+        body: fd,
+      })
+      setShowForm(false)
+      resetForm()
+      load()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const remove = async (id: number) => {
@@ -397,24 +431,127 @@ function NewsSection() {
     <div>
       <SectionHeader
         title="News"
-        action={<ActionButton onClick={() => setShowForm(v => !v)}>+ New Post</ActionButton>}
+        action={<ActionButton onClick={() => { setShowForm(v => !v); if (showForm) resetForm() }}>
+          {showForm ? 'Cancel' : '+ New Post'}
+        </ActionButton>}
       />
 
       {showForm && (
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <input placeholder="Title" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} className={inputClass} />
-          <input type="date" value={form.published_at} onChange={e => setForm(p => ({ ...p, published_at: e.target.value }))} className={inputClass} />
-          <input placeholder="Thumbnail URL" value={form.thumbnail_url} onChange={e => setForm(p => ({ ...p, thumbnail_url: e.target.value }))} className={inputClass} />
-          <select value={form.tag} onChange={e => setForm(p => ({ ...p, tag: e.target.value }))} className={inputClass + ' cursor-pointer'}>
-            {['announcement','award','community','match','roster','update'].map(t => (
-              <option key={t} value={t} className="bg-[#1a0030]">{t}</option>
-            ))}
-          </select>
-          <textarea placeholder="Description" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-            className={inputClass + ' md:col-span-2 h-24 resize-none'} />
-          <div className="md:col-span-2 flex gap-3">
-            <ActionButton onClick={save}>Save Post</ActionButton>
-            <ActionButton variant="ghost" onClick={() => setShowForm(false)}>Cancel</ActionButton>
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Title */}
+            <div className="md:col-span-2">
+              <label className="block text-white/40 text-xs font-bold tracking-widest uppercase mb-1">Title *</label>
+              <input
+                placeholder="Post title"
+                value={form.title}
+                onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
+                className={inputClass}
+              />
+            </div>
+
+            {/* Tag */}
+            <div>
+              <label className="block text-white/40 text-xs font-bold tracking-widest uppercase mb-1">Tag</label>
+              <select value={form.tag} onChange={e => setForm(p => ({ ...p, tag: e.target.value }))} className={inputClass + ' cursor-pointer'}>
+                {['announcement','award','community','match','roster','update'].map(t => (
+                  <option key={t} value={t} className="bg-[#1a0030]">{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Date */}
+            <div>
+              <label className="block text-white/40 text-xs font-bold tracking-widest uppercase mb-1">Publish Date *</label>
+              <input
+                type="date"
+                value={form.published_at}
+                onChange={e => setForm(p => ({ ...p, published_at: e.target.value }))}
+                className={inputClass}
+                max="2099-12-31"
+              />
+            </div>
+
+            {/* Description */}
+            <div className="md:col-span-2">
+              <label className="block text-white/40 text-xs font-bold tracking-widest uppercase mb-1">Description *</label>
+              <textarea
+                placeholder="Write the post content…"
+                value={form.description}
+                onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                className={inputClass + ' h-28 resize-none'}
+              />
+            </div>
+
+            {/* Thumbnail upload */}
+            <div className="md:col-span-2">
+              <label className="block text-white/40 text-xs font-bold tracking-widest uppercase mb-2">Thumbnail Image</label>
+              <div className="flex items-start gap-4">
+                {/* Preview */}
+                <div
+                  className="w-32 h-20 rounded-xl border-2 border-dashed border-white/10 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:border-purple-500/50 transition-colors"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {thumbnailPreview
+                    ? <img src={thumbnailPreview} className="w-full h-full object-cover" alt="preview" />
+                    : <span className="text-white/20 text-xs text-center px-2">Click to upload</span>
+                  }
+                </div>
+                <div className="flex-1">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="bg-white/5 border border-white/10 hover:border-purple-500/40 text-white/60 hover:text-white text-xs font-bold px-4 py-2 rounded-lg tracking-wider uppercase transition-all duration-200"
+                  >
+                    {thumbnailFile ? 'Change Image' : 'Choose Image'}
+                  </button>
+                  {thumbnailFile && (
+                    <p className="text-white/30 text-xs mt-2">{thumbnailFile.name}</p>
+                  )}
+                  {thumbnailFile && (
+                    <button
+                      type="button"
+                      onClick={() => { setThumbnailFile(null); setThumbnailPreview(''); if (fileInputRef.current) fileInputRef.current.value = '' }}
+                      className="text-red-400/60 hover:text-red-400 text-xs mt-1 transition-colors"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Published toggle */}
+            <div className="md:col-span-2 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setForm(p => ({ ...p, is_published: !p.is_published }))}
+                className={`w-10 h-6 rounded-full transition-colors duration-200 relative ${form.is_published ? 'bg-purple-600' : 'bg-white/10'}`}
+              >
+                <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all duration-200 ${form.is_published ? 'left-4.5' : 'left-0.5'}`} style={{ left: form.is_published ? '18px' : '2px' }} />
+              </button>
+              <span className="text-white/50 text-xs font-bold tracking-widest uppercase">
+                {form.is_published ? 'Published' : 'Draft'}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex gap-3 mt-6">
+            <button
+              onClick={save}
+              disabled={saving || !form.title || !form.description || !form.published_at}
+              className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black px-6 py-2.5 rounded-lg text-xs tracking-widest uppercase transition-all duration-200"
+            >
+              {saving ? 'Saving…' : 'Save Post'}
+            </button>
+            <ActionButton variant="ghost" onClick={() => { setShowForm(false); resetForm() }}>Cancel</ActionButton>
           </div>
         </div>
       )}
@@ -423,16 +560,18 @@ function NewsSection() {
         {data.length === 0 && <p className="text-white/30 text-sm">No news posts yet.</p>}
         {data.map((n: any) => (
           <div key={n.id} className="bg-white/5 border border-white/8 rounded-2xl px-6 py-4 flex items-center gap-4">
-            {n.thumbnail && <img src={n.thumbnail} className="w-16 h-12 object-cover rounded-lg opacity-70" alt="" />}
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-1">
-                <span className="text-white font-bold">{n.title}</span>
+            {n.thumbnail && (
+              <img src={n.thumbnail} className="w-16 h-12 object-cover rounded-lg opacity-70 shrink-0" alt="" />
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 mb-1 flex-wrap">
+                <span className="text-white font-bold truncate">{n.title}</span>
                 <Badge color="purple">{n.tag}</Badge>
                 {!n.is_published && <Badge color="gray">Draft</Badge>}
               </div>
-              <p className="text-white/40 text-xs">{n.published_at} · {n.description.slice(0, 80)}…</p>
+              <p className="text-white/40 text-xs truncate">{n.published_at} · {n.description.slice(0, 80)}…</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 shrink-0">
               <ActionButton variant="ghost" onClick={() => toggle(n.id, n.is_published)}>
                 {n.is_published ? 'Unpublish' : 'Publish'}
               </ActionButton>
@@ -654,11 +793,8 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-[#0d0014] text-white flex" style={{ fontFamily: "'Barlow', sans-serif" }}>
 
-      {/* ── Sidebar ── */}
       <aside className={`fixed inset-y-0 left-0 z-40 w-60 bg-[#0a0010] border-r border-white/8 flex flex-col transition-transform duration-200
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
-
-        {/* Logo */}
         <div className="px-6 py-5 border-b border-white/8">
           <a href="/" className="flex items-center gap-3">
             <img src="/images/logo.svg" alt="" className="w-8 h-8" style={{ filter: 'brightness(0) invert(1)' }} />
@@ -671,7 +807,6 @@ export default function Dashboard() {
           </a>
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {NAV_ITEMS.map(item => (
             <button
@@ -688,7 +823,6 @@ export default function Dashboard() {
           ))}
         </nav>
 
-        {/* User + logout */}
         <div className="px-4 py-4 border-t border-white/8">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-8 h-8 rounded-full bg-purple-600/30 border border-purple-500/40 flex items-center justify-center text-purple-300 text-xs font-bold">
@@ -708,14 +842,11 @@ export default function Dashboard() {
         </div>
       </aside>
 
-      {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-30 bg-black/60 md:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* ── Main content ── */}
       <main className="flex-1 md:ml-60 min-h-screen">
-        {/* Top bar */}
         <div className="sticky top-0 z-20 bg-[#0d0014]/90 backdrop-blur border-b border-white/8 px-6 py-4 flex items-center justify-between md:hidden">
           <button onClick={() => setSidebarOpen(true)} className="text-white/60 hover:text-white">
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

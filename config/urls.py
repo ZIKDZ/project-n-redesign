@@ -14,10 +14,12 @@ urlpatterns = [
     path('api/news/', include('apps.news.urls')),
     path('api/players/', include('apps.players.urls')),
     path('api/teams/', include('apps.teams.urls')),
-
-    # React catches everything else (landing + dashboard)
-    re_path(r'^.*$', TemplateView.as_view(template_name='index.html')),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Serve media properly 
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# Catch-all LAST and exclude media
+urlpatterns += [
+    re_path(r'^(?!media/).*$', TemplateView.as_view(template_name='index.html')),
+]
