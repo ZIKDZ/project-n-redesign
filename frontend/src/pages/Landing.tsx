@@ -1,8 +1,20 @@
-// This is your existing landing page — moved from App.tsx to pages/Landing.tsx
-// The only change is JoinForm now calls the real Django API via the api utility
-
 import { useState, useEffect, useRef } from "react";
-import { joins, matches as matchesApi, news as newsApi } from "../utils/api";
+import { joins, matches as matchesApi, news as newsApi, games as gamesApi } from "../utils/api";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface GameData {
+  id: number;
+  title: string;
+  slug: string;
+  publisher: string;
+  genre: string;
+  banner: string;
+  logo: string;
+  overlay_color: string;
+  ranks: string[];
+  is_active: boolean;
+  display_order: number;
+}
 
 function NBLLogoFull({ size = 48, className = "", color = "white" }: { size?: number; className?: string; color?: "white" | "black" | "purple" }) {
   const filter =
@@ -54,23 +66,79 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
   );
 }
 
-function GameCard({ name, publisher, banner, overlayColor }: { name: string; publisher: string; banner: string; overlayColor: string }) {
+// ── Dynamic Game Card ─────────────────────────────────────────────────────────
+function GameCard({ game }: { game: GameData }) {
+  const overlayColor = game.overlay_color || 'rgba(80,0,160,0.35)';
   return (
     <div className="group relative border border-white/10 rounded-2xl overflow-hidden hover:-translate-y-1 transition-all duration-300 cursor-pointer" style={{ background: "#13001f" }}>
       <div className="h-40 relative" style={{ overflow: "hidden", borderRadius: "16px 16px 0 0" }}>
-        <img src={banner} alt={name}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-          style={{ willChange: "transform", transform: "translateZ(0)" }} />
+        {game.banner ? (
+          <img src={game.banner} alt={game.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            style={{ willChange: "transform", transform: "translateZ(0)" }} />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center" style={{ background: overlayColor }}>
+            <span className="text-white/20 text-4xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+              {game.title.charAt(0)}
+            </span>
+          </div>
+        )}
         <div className="absolute inset-0" style={{ background: `linear-gradient(to top, #13001f 0%, ${overlayColor} 50%, transparent 100%)` }} />
       </div>
       <div className="p-5">
-        <h3 className="text-white font-bold text-lg mb-1 tracking-wide font-barlow-condensed">{name}</h3>
-        <p className="text-white/40 text-xs mb-4">{publisher}</p>
+        <h3 className="text-white font-bold text-lg mb-1 tracking-wide" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>{game.title}</h3>
+        <p className="text-white/40 text-xs mb-4">
+          {[game.genre, game.publisher].filter(Boolean).join(' · ')}
+        </p>
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-green-500/15 text-green-400 border border-green-500/25 uppercase tracking-wider">
           <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />Active
         </span>
       </div>
     </div>
+  );
+}
+
+// ── Games Section (dynamic) ───────────────────────────────────────────────────
+function GamesSection() {
+  const [gameList, setGameList] = useState<GameData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (gamesApi.list() as Promise<any>)
+      .then(r => setGameList(r.games || []))
+      .catch(() => setGameList([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <section id="games" className="py-24">
+        <div className="max-w-7xl mx-auto px-6 flex justify-center py-12">
+          <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section id="games" className="py-24">
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="text-center mb-16">
+          <span className="text-purple-400 font-bold tracking-widest uppercase text-sm mb-4 block">Our Games</span>
+          <h2 className="text-5xl md:text-6xl font-black uppercase leading-tight mb-4" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            We Play to <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-300">Win</span>
+          </h2>
+          <p className="text-gray-400 max-w-xl mx-auto">Competing at the highest level across the most exciting esports titles</p>
+        </div>
+        {gameList.length === 0 ? (
+          <p className="text-center text-white/30 text-lg tracking-wider uppercase py-12">No active games yet.</p>
+        ) : (
+          <div className={`grid gap-6 ${gameList.length === 1 ? 'max-w-sm mx-auto' : gameList.length === 2 ? 'sm:grid-cols-2 max-w-2xl mx-auto' : 'sm:grid-cols-2 md:grid-cols-3'}`}>
+            {gameList.map(g => <GameCard key={g.id} game={g} />)}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -82,7 +150,7 @@ function PillarCard({ icon, title, description }: { icon: React.ReactNode; title
         <div className="w-14 h-14 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center mb-6 group-hover:bg-purple-500/30 transition-colors duration-300">
           {icon}
         </div>
-        <h3 className="text-white font-bold text-xl mb-3 font-barlow-condensed tracking-wider">{title}</h3>
+        <h3 className="text-white font-bold text-xl mb-3" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>{title}</h3>
         <p className="text-gray-400 leading-relaxed">{description}</p>
       </div>
     </div>
@@ -92,7 +160,7 @@ function PillarCard({ icon, title, description }: { icon: React.ReactNode; title
 function StatCard({ value, label, suffix }: { value: number; label: string; suffix?: string }) {
   return (
     <div className="text-center">
-      <div className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-300 font-barlow-condensed mb-2">
+      <div className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-300 mb-2" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
         <Counter end={value} suffix={suffix || "+"} />
       </div>
       <p className="text-gray-400 uppercase tracking-widest text-sm font-medium">{label}</p>
@@ -122,29 +190,20 @@ const GAME_COLORS: Record<string, string> = {
   fortnite: "#ffd700",
 };
 
-const GAME_LABELS: Record<string, string> = {
-  rocket_league: "Rocket League",
-  valorant: "Valorant",
-  fortnite: "Fortnite",
-};
-
-function MatchCard({ rival, type, game, date, time, status, score, winner }: {
+function MatchCard({ rival, type, game, date, time, status, score, winner, gameColor }: {
   rival: string; type: string; game: string;
   date: string; time: string; status: "upcoming" | "live" | "completed";
   score?: string; winner?: "nbl" | "rival" | "draw" | "";
+  gameColor?: string;
 }) {
-  const gameColor = GAME_COLORS[game] || "#a855f7";
-  const gameLabel = GAME_LABELS[game] || game;
+  const color = gameColor || GAME_COLORS[game] || "#a855f7";
   const nblLoser = status === "completed" && winner === "rival";
   const rivalLoser = status === "completed" && winner === "nbl";
 
-  // Format date nicely
   const formattedDate = (() => {
     try {
       return new Date(date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-    } catch {
-      return date;
-    }
+    } catch { return date; }
   })();
 
   return (
@@ -176,7 +235,7 @@ function MatchCard({ rival, type, game, date, time, status, score, winner }: {
       </div>
       <div className="ml-auto text-right min-w-[130px]">
         <span className="inline-flex items-center text-xs font-bold px-3 py-1 rounded-full mb-2 uppercase tracking-wider"
-          style={{ background: `${gameColor}20`, color: gameColor, border: `1px solid ${gameColor}40` }}>{gameLabel}</span>
+          style={{ background: `${color}20`, color, border: `1px solid ${color}40` }}>{game.replace('_', ' ')}</span>
         <div className="text-white font-bold text-sm">{formattedDate}</div>
         <div className="text-purple-400 text-sm mt-0.5">{time}</div>
       </div>
@@ -186,9 +245,7 @@ function MatchCard({ rival, type, game, date, time, status, score, winner }: {
         </span>
       )}
       {status === "upcoming" && (
-        <span className="ml-4 inline-flex items-center justify-center text-xs font-bold px-4 py-2 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 uppercase tracking-widest" style={{ minWidth: "110px" }}>
-          Upcoming
-        </span>
+        <span className="ml-4 inline-flex items-center justify-center text-xs font-bold px-4 py-2 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 uppercase tracking-widest" style={{ minWidth: "110px" }}>Upcoming</span>
       )}
       {status === "completed" && winner === "nbl" && (
         <span className="ml-4 inline-flex items-center justify-center text-xs font-bold px-4 py-2 rounded-full bg-green-500/15 text-green-400 border border-green-500/25 uppercase tracking-widest" style={{ minWidth: "110px" }}>Win</span>
@@ -268,17 +325,23 @@ function LiveNewsSection() {
   );
 }
 
-// JoinForm now calls Django API via the api utility
+// ── Dynamic Join Form ─────────────────────────────────────────────────────────
 function JoinForm() {
-  const [formData, setFormData] = useState({ username: "", ingame_username: "", game: "", discord_username: "", rank: "", email: "" });
+  const [gameList, setGameList] = useState<GameData[]>([]);
+  const [formData, setFormData] = useState({
+    username: "", ingame_username: "", game: "", discord_username: "", rank: "", email: "",
+  });
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
 
-  const games = ["Rocket League", "Valorant", "Fortnite"];
-  const ranksByGame: Record<string, string[]> = {
-    "Rocket League": ["Bronze", "Silver", "Gold", "Platinum", "Diamond", "Champion", "Grand Champion", "Supersonic Legend"],
-    "Valorant": ["Iron", "Bronze", "Silver", "Gold", "Platinum", "Diamond", "Ascendant", "Immortal", "Radiant"],
-    "Fortnite": ["Open League", "Contender League", "Champion League"],
-  };
+  // Load games from API
+  useEffect(() => {
+    (gamesApi.list() as Promise<any>)
+      .then(r => setGameList(r.games || []))
+      .catch(() => setGameList([]));
+  }, []);
+
+  const selectedGame = gameList.find(g => g.slug === formData.game);
+  const ranks = selectedGame?.ranks || [];
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -289,8 +352,7 @@ function JoinForm() {
     e.preventDefault();
     setStatus("loading");
     try {
-      const gameKey = formData.game.toLowerCase().replace(" ", "_");
-      await joins.submit({ ...formData, game: gameKey });
+      await joins.submit(formData);
       setStatus("success");
       setFormData({ username: "", ingame_username: "", game: "", discord_username: "", rank: "", email: "" });
     } catch {
@@ -319,29 +381,60 @@ function JoinForm() {
       ) : (
         <form onSubmit={handleSubmit}>
           <div className="grid md:grid-cols-2 gap-6">
-            <div><label className={labelClass}>Username</label>
-              <input type="text" name="username" value={formData.username} onChange={handleChange} required placeholder="Your username" className={inputClass} /></div>
-            <div><label className={labelClass}>In-Game Username</label>
-              <input type="text" name="ingame_username" value={formData.ingame_username} onChange={handleChange} required placeholder="Your in-game name" className={inputClass} /></div>
-            <div><label className={labelClass}>Game</label>
+            <div>
+              <label className={labelClass}>Username</label>
+              <input type="text" name="username" value={formData.username} onChange={handleChange} required placeholder="Your username" className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass}>In-Game Username</label>
+              <input type="text" name="ingame_username" value={formData.ingame_username} onChange={handleChange} required placeholder="Your in-game name" className={inputClass} />
+            </div>
+
+            {/* Game — loaded from DB */}
+            <div>
+              <label className={labelClass}>Game</label>
               <select name="game" value={formData.game} onChange={handleChange} required className={inputClass + " cursor-pointer"}>
-                <option value="" disabled>Select a game</option>
-                {games.map(g => <option key={g} value={g} className="bg-[#1a0030]">{g}</option>)}
-              </select></div>
-            <div><label className={labelClass}>Discord Username</label>
-              <input type="text" name="discord_username" value={formData.discord_username} onChange={handleChange} required placeholder="username#0000" className={inputClass} /></div>
-            <div><label className={labelClass}>Rank</label>
-              <select name="rank" value={formData.rank} onChange={handleChange} required disabled={!formData.game}
+                <option value="" disabled>
+                  {gameList.length === 0 ? "Loading games…" : "Select a game"}
+                </option>
+                {gameList.map(g => (
+                  <option key={g.slug} value={g.slug} className="bg-[#1a0030]">{g.title}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelClass}>Discord Username</label>
+              <input type="text" name="discord_username" value={formData.discord_username} onChange={handleChange} required placeholder="username#0000" className={inputClass} />
+            </div>
+
+            {/* Rank — loaded from selected game's rank list */}
+            <div>
+              <label className={labelClass}>Rank</label>
+              <select name="rank" value={formData.rank} onChange={handleChange} required
+                disabled={!formData.game || ranks.length === 0}
                 className={inputClass + " cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"}>
-                <option value="" disabled>{formData.game ? "Select a rank" : "Select a game first"}</option>
-                {(ranksByGame[formData.game] || []).map(r => <option key={r} value={r} className="bg-[#1a0030]">{r}</option>)}
-              </select></div>
-            <div><label className={labelClass}>Email</label>
-              <input type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="your@email.com" className={inputClass} /></div>
+                <option value="" disabled>
+                  {!formData.game ? "Select a game first" : ranks.length === 0 ? "No ranks defined" : "Select your rank"}
+                </option>
+                {ranks.map(r => (
+                  <option key={r} value={r} className="bg-[#1a0030]">{r}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelClass}>Email</label>
+              <input type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="your@email.com" className={inputClass} />
+            </div>
           </div>
-          {status === "error" && <p className="mt-4 text-red-400 text-sm text-center">Something went wrong. Please try again.</p>}
+
+          {status === "error" && (
+            <p className="mt-4 text-red-400 text-sm text-center">Something went wrong. Please try again.</p>
+          )}
+
           <div className="mt-8">
-            <button type="submit" disabled={status === "loading"}
+            <button type="submit" disabled={status === "loading" || gameList.length === 0}
               className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-black py-4 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 hover:shadow-2xl hover:shadow-purple-500/40 hover:-translate-y-0.5"
               style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: "1rem" }}>
               {status === "loading" ? "Submitting..." : "Apply Now"}
@@ -353,7 +446,7 @@ function JoinForm() {
   );
 }
 
-// ── Live Match Schedule ────────────────────────────────────────────────────────
+// ── Match Schedule ─────────────────────────────────────────────────────────────
 function MatchSchedule() {
   const [matchList, setMatchList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -365,7 +458,6 @@ function MatchSchedule() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Show at most 5 most recent/upcoming matches
   const displayed = matchList.slice(0, 5);
 
   return (
@@ -377,7 +469,6 @@ function MatchSchedule() {
             Match <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-300">Schedule</span>
           </h2>
         </div>
-
         {loading ? (
           <div className="flex justify-center py-12">
             <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
@@ -389,21 +480,11 @@ function MatchSchedule() {
         ) : (
           <div className="flex flex-col gap-3 mb-10">
             {displayed.map((m: any) => (
-              <MatchCard
-                key={m.id}
-                rival={m.rival}
-                type={m.match_type}
-                game={m.game}
-                date={m.date}
-                time={m.time}
-                status={m.status}
-                score={m.score}
-                winner={m.winner}
-              />
+              <MatchCard key={m.id} rival={m.rival} type={m.match_type} game={m.game}
+                date={m.date} time={m.time} status={m.status} score={m.score} winner={m.winner} />
             ))}
           </div>
         )}
-
         {matchList.length > 5 && (
           <div className="text-center">
             <a href="#" className="inline-flex items-center gap-2 bg-white/5 hover:bg-purple-500/15 border border-white/10 hover:border-purple-500/40 text-white font-bold px-8 py-3 rounded-full text-sm tracking-widest uppercase transition-all duration-200">
@@ -456,7 +537,7 @@ export default function Landing() {
         </div>
         {menuOpen && (
           <div className="md:hidden bg-[#0d0014]/98 border-t border-white/10 px-6 py-6 flex flex-col gap-6">
-            {["Games", "About", "Stats", "Join Us"].map(item => (
+            {["Games", "Schedule", "About", "News", "Join Us"].map(item => (
               <a key={item} href={`#${item.toLowerCase().replace(" ", "")}`} onClick={() => setMenuOpen(false)}
                 className="text-gray-300 hover:text-purple-400 font-semibold tracking-wider uppercase transition-colors">{item}</a>
             ))}
@@ -495,7 +576,7 @@ export default function Landing() {
             </p>
             <div className="flex flex-wrap gap-4">
               <a href="#join" className="group relative bg-purple-600 hover:bg-purple-500 text-white font-bold px-8 py-4 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 hover:shadow-2xl hover:shadow-purple-500/40 hover:-translate-y-0.5">
-                <span className="relative z-10">Join the Team</span>
+                Join the Team
               </a>
               <a href="#about" className="border border-white/20 hover:border-purple-500/60 text-white font-bold px-8 py-4 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 hover:bg-purple-500/10 hover:-translate-y-0.5">Learn More</a>
             </div>
@@ -550,25 +631,10 @@ export default function Landing() {
 
       <div className="max-w-7xl mx-auto px-6"><div className="h-px bg-gradient-to-r from-transparent via-purple-500/40 to-transparent" /></div>
 
-      {/* GAMES */}
-      <section id="games" className="py-24">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <span className="text-purple-400 font-bold tracking-widest uppercase text-sm mb-4 block">Our Games</span>
-            <h2 className="text-5xl md:text-6xl font-black uppercase leading-tight mb-4" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-              We Play to <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-300">Win</span>
-            </h2>
-            <p className="text-gray-400 max-w-xl mx-auto">Competing at the highest level across the most exciting esports titles</p>
-          </div>
-          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
-            <GameCard name="Rocket League" publisher="Competitive · Psyonix" banner="https://cdn.cloudflare.steamstatic.com/steam/apps/252950/header.jpg" overlayColor="rgba(0,48,135,0.4)" />
-            <GameCard name="Valorant" publisher="Tactical FPS · Riot Games" banner="https://games.gg/_next/image/?url=https%3A%2F%2Fassets.games.gg%2F1752153837845_valorant_banner_d5a4331252.jpeg&w=3840&q=75" overlayColor="rgba(255,70,85,0.3)" />
-            <GameCard name="Fortnite" publisher="Battle Royale · Epic Games" banner="https://cdn2.unrealengine.com/social-image-chapter4-s3-3840x2160-d35912cc25ad.jpg" overlayColor="rgba(100,60,200,0.35)" />
-          </div>
-        </div>
-      </section>
+      {/* GAMES — dynamic from DB */}
+      <GamesSection />
 
-      {/* SCHEDULE — live from API */}
+      {/* SCHEDULE */}
       <MatchSchedule />
 
       {/* ABOUT */}
@@ -609,10 +675,10 @@ export default function Landing() {
         </div>
       </div>
 
-      {/* NEWS — loaded from Django API */}
+      {/* NEWS */}
       <LiveNewsSection />
 
-      {/* JOIN */}
+      {/* JOIN — with dynamic games */}
       <section id="join" className="py-24 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-950/20 to-[#0d0014]" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-3xl" />

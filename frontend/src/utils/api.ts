@@ -16,7 +16,7 @@ async function request<T>(
 
   const res = await fetch(url, {
     ...options,
-    credentials: 'include', // send session cookie always
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {}),
@@ -40,6 +40,20 @@ export const auth = {
     request('/api/auth/logout/', { method: 'POST' }),
   me: () =>
     request<{ authenticated: boolean; user?: { username: string; is_staff: boolean } }>('/api/auth/me/'),
+}
+
+// ── Games ─────────────────────────────────────────────────────────────────────
+export const games = {
+  list: () =>
+    request('/api/games/'),
+  listAll: () =>
+    request('/api/games/all/'),
+  create: (data: object) =>
+    request('/api/games/create/', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: object) =>
+    request(`/api/games/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+  delete: (id: number) =>
+    request(`/api/games/${id}/delete/`, { method: 'DELETE' }),
 }
 
 // ── Join requests ─────────────────────────────────────────────────────────────

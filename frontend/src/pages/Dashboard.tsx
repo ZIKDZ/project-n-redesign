@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../App'
-import { auth, joins, matches, news, players, teams } from '../utils/api'
+import { auth, joins, matches, news, players, teams, games } from '../utils/api'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Section = 'overview' | 'joins' | 'matches' | 'news' | 'players' | 'teams'
+type Section = 'overview' | 'joins' | 'matches' | 'news' | 'players' | 'teams' | 'games'
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 const NAV_ITEMS: { id: Section; label: string; icon: string }[] = [
@@ -14,6 +14,7 @@ const NAV_ITEMS: { id: Section; label: string; icon: string }[] = [
   { id: 'news',      label: 'News',          icon: '◈' },
   { id: 'players',   label: 'Players',       icon: '◉' },
   { id: 'teams',     label: 'Teams',         icon: '◈' },
+  { id: 'games',     label: 'Games',         icon: '🎮' },
 ]
 
 // ── Small reusable components ─────────────────────────────────────────────────
@@ -388,7 +389,6 @@ function NewsSection() {
     if (!form.title || !form.description || !form.published_at) return
     setSaving(true)
     try {
-      // Always use multipart so we can attach a file if present
       const fd = new FormData()
       fd.append('title', form.title)
       fd.append('tag', form.tag)
@@ -401,7 +401,6 @@ function NewsSection() {
         method: 'POST',
         credentials: 'include',
         headers: { 'X-CSRFToken': getCsrfToken() },
-        // Do NOT set Content-Type — browser sets multipart boundary automatically
         body: fd,
       })
       setShowForm(false)
@@ -439,18 +438,11 @@ function NewsSection() {
       {showForm && (
         <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Title */}
             <div className="md:col-span-2">
               <label className="block text-white/40 text-xs font-bold tracking-widest uppercase mb-1">Title *</label>
-              <input
-                placeholder="Post title"
-                value={form.title}
-                onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
-                className={inputClass}
-              />
+              <input placeholder="Post title" value={form.title}
+                onChange={e => setForm(p => ({ ...p, title: e.target.value }))} className={inputClass} />
             </div>
-
-            {/* Tag */}
             <div>
               <label className="block text-white/40 text-xs font-bold tracking-widest uppercase mb-1">Tag</label>
               <select value={form.tag} onChange={e => setForm(p => ({ ...p, tag: e.target.value }))} className={inputClass + ' cursor-pointer'}>
@@ -459,96 +451,55 @@ function NewsSection() {
                 ))}
               </select>
             </div>
-
-            {/* Date */}
             <div>
               <label className="block text-white/40 text-xs font-bold tracking-widest uppercase mb-1">Publish Date *</label>
-              <input
-                type="date"
-                value={form.published_at}
-                onChange={e => setForm(p => ({ ...p, published_at: e.target.value }))}
-                className={inputClass}
-                max="2099-12-31"
-              />
+              <input type="date" value={form.published_at} max="2099-12-31"
+                onChange={e => setForm(p => ({ ...p, published_at: e.target.value }))} className={inputClass} />
             </div>
-
-            {/* Description */}
             <div className="md:col-span-2">
               <label className="block text-white/40 text-xs font-bold tracking-widest uppercase mb-1">Description *</label>
-              <textarea
-                placeholder="Write the post content…"
-                value={form.description}
+              <textarea placeholder="Write the post content…" value={form.description}
                 onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                className={inputClass + ' h-28 resize-none'}
-              />
+                className={inputClass + ' h-28 resize-none'} />
             </div>
-
-            {/* Thumbnail upload */}
             <div className="md:col-span-2">
               <label className="block text-white/40 text-xs font-bold tracking-widest uppercase mb-2">Thumbnail Image</label>
               <div className="flex items-start gap-4">
-                {/* Preview */}
-                <div
-                  className="w-32 h-20 rounded-xl border-2 border-dashed border-white/10 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:border-purple-500/50 transition-colors"
-                  onClick={() => fileInputRef.current?.click()}
-                >
+                <div className="w-32 h-20 rounded-xl border-2 border-dashed border-white/10 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:border-purple-500/50 transition-colors"
+                  onClick={() => fileInputRef.current?.click()}>
                   {thumbnailPreview
                     ? <img src={thumbnailPreview} className="w-full h-full object-cover" alt="preview" />
-                    : <span className="text-white/20 text-xs text-center px-2">Click to upload</span>
-                  }
+                    : <span className="text-white/20 text-xs text-center px-2">Click to upload</span>}
                 </div>
                 <div className="flex-1">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="bg-white/5 border border-white/10 hover:border-purple-500/40 text-white/60 hover:text-white text-xs font-bold px-4 py-2 rounded-lg tracking-wider uppercase transition-all duration-200"
-                  >
+                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+                  <button type="button" onClick={() => fileInputRef.current?.click()}
+                    className="bg-white/5 border border-white/10 hover:border-purple-500/40 text-white/60 hover:text-white text-xs font-bold px-4 py-2 rounded-lg tracking-wider uppercase transition-all duration-200">
                     {thumbnailFile ? 'Change Image' : 'Choose Image'}
                   </button>
+                  {thumbnailFile && <p className="text-white/30 text-xs mt-2">{thumbnailFile.name}</p>}
                   {thumbnailFile && (
-                    <p className="text-white/30 text-xs mt-2">{thumbnailFile.name}</p>
-                  )}
-                  {thumbnailFile && (
-                    <button
-                      type="button"
+                    <button type="button"
                       onClick={() => { setThumbnailFile(null); setThumbnailPreview(''); if (fileInputRef.current) fileInputRef.current.value = '' }}
-                      className="text-red-400/60 hover:text-red-400 text-xs mt-1 transition-colors"
-                    >
-                      Remove
-                    </button>
+                      className="text-red-400/60 hover:text-red-400 text-xs mt-1 transition-colors">Remove</button>
                   )}
                 </div>
               </div>
             </div>
-
-            {/* Published toggle */}
             <div className="md:col-span-2 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setForm(p => ({ ...p, is_published: !p.is_published }))}
-                className={`w-10 h-6 rounded-full transition-colors duration-200 relative ${form.is_published ? 'bg-purple-600' : 'bg-white/10'}`}
-              >
-                <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all duration-200 ${form.is_published ? 'left-4.5' : 'left-0.5'}`} style={{ left: form.is_published ? '18px' : '2px' }} />
+              <button type="button" onClick={() => setForm(p => ({ ...p, is_published: !p.is_published }))}
+                className={`w-10 h-6 rounded-full transition-colors duration-200 relative ${form.is_published ? 'bg-purple-600' : 'bg-white/10'}`}>
+                <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all duration-200"
+                  style={{ left: form.is_published ? '18px' : '2px' }} />
               </button>
               <span className="text-white/50 text-xs font-bold tracking-widest uppercase">
                 {form.is_published ? 'Published' : 'Draft'}
               </span>
             </div>
           </div>
-
           <div className="flex gap-3 mt-6">
-            <button
-              onClick={save}
-              disabled={saving || !form.title || !form.description || !form.published_at}
-              className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black px-6 py-2.5 rounded-lg text-xs tracking-widest uppercase transition-all duration-200"
-            >
+            <button onClick={save} disabled={saving || !form.title || !form.description || !form.published_at}
+              className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black px-6 py-2.5 rounded-lg text-xs tracking-widest uppercase transition-all duration-200">
               {saving ? 'Saving…' : 'Save Post'}
             </button>
             <ActionButton variant="ghost" onClick={() => { setShowForm(false); resetForm() }}>Cancel</ActionButton>
@@ -560,9 +511,7 @@ function NewsSection() {
         {data.length === 0 && <p className="text-white/30 text-sm">No news posts yet.</p>}
         {data.map((n: any) => (
           <div key={n.id} className="bg-white/5 border border-white/8 rounded-2xl px-6 py-4 flex items-center gap-4">
-            {n.thumbnail && (
-              <img src={n.thumbnail} className="w-16 h-12 object-cover rounded-lg opacity-70 shrink-0" alt="" />
-            )}
+            {n.thumbnail && <img src={n.thumbnail} className="w-16 h-12 object-cover rounded-lg opacity-70 shrink-0" alt="" />}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 mb-1 flex-wrap">
                 <span className="text-white font-bold truncate">{n.title}</span>
@@ -768,6 +717,336 @@ function TeamsSection() {
   )
 }
 
+// ── Games section ─────────────────────────────────────────────────────────────
+const EMPTY_GAME_FORM = {
+  title: '',
+  slug: '',
+  publisher: '',
+  genre: '',
+  banner: '',           // ← was banner_url
+  overlay_color: '',
+  is_active: true,
+  display_order: -1 as number,
+  ranks: [] as string[],
+}
+
+function GameFormModal({
+  initial,
+  isEdit,
+  onSave,
+  onClose,
+  autoOrder,
+}: {
+  initial: typeof EMPTY_GAME_FORM
+  isEdit: boolean
+  onSave: (data: any) => Promise<void>
+  onClose: () => void
+  autoOrder: number
+}) {
+  const [form, setForm] = useState(initial)
+  const [ranksText, setRanksText] = useState((initial.ranks ?? []).join('\n'))
+  const [saving, setSaving] = useState(false)
+
+  const inputClass = 'bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-purple-500/60 w-full'
+
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const title = e.target.value
+    if (!isEdit) {
+      const slug = title.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+      setForm(p => ({ ...p, title, slug }))
+    } else {
+      setForm(p => ({ ...p, title }))
+    }
+  }
+
+  const handleSubmit = async () => {
+    if (!form.title || !form.slug) return
+    setSaving(true)
+    try {
+      const ranks = ranksText.split('\n').map(r => r.trim()).filter(Boolean)
+      const display_order = form.display_order === -1 ? autoOrder : form.display_order
+      await onSave({ ...form, ranks, display_order })
+      onClose()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.80)', backdropFilter: 'blur(4px)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div
+        className="bg-[#13001f] rounded-3xl w-full max-w-xl shadow-2xl shadow-purple-900/30 flex flex-col"
+        style={{ maxHeight: 'min(85vh, 600px)' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 pt-5 pb-3">
+          <h3
+            className="text-white font-black text-lg uppercase tracking-wide"
+            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+          >
+            {isEdit ? 'Edit Game' : 'Add Game'}
+          </h3>
+          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors text-xl">✕</button>
+        </div>
+
+        {/* Scrollable body — scrollbar hidden */}
+        <div
+          className="overflow-y-auto flex-1 px-6 py-2"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {/* Hide webkit scrollbar */}
+          <style>{`.no-scroll::-webkit-scrollbar { display: none; }`}</style>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">Title *</label>
+              <input
+                placeholder="e.g. Rocket League"
+                value={form.title}
+                onChange={handleTitleChange}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">
+                Slug * {!isEdit && <span className="normal-case text-white/20">(auto)</span>}
+              </label>
+              <input
+                placeholder="e.g. RL"
+                value={form.slug}
+                onChange={e => setForm(p => ({ ...p, slug: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') }))}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">Publisher</label>
+              <input
+                placeholder="e.g. Psyonix"
+                value={form.publisher}
+                onChange={e => setForm(p => ({ ...p, publisher: e.target.value }))}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">Genre</label>
+              <input
+                placeholder="e.g. Tactical FPS"
+                value={form.genre}
+                onChange={e => setForm(p => ({ ...p, genre: e.target.value }))}
+                className={inputClass}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">Banner Image URL</label>
+              <input
+                placeholder="https://…"
+                value={form.banner}                  // ← was form.banner_url
+                onChange={e => setForm(p => ({ ...p, banner: e.target.value }))}   // ← was banner_url
+                className={inputClass}
+              />
+              {form.banner && (                       // ← was form.banner_url
+                <img
+                  src={form.banner}                  // ← was form.banner_url
+                  alt="preview"
+                  className="mt-2 w-full h-20 object-cover rounded-xl border border-white/10 opacity-80"
+                />
+              )}
+            </div>
+            <div>
+              <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">Overlay Color</label>
+              <input
+                placeholder="rgba(0,48,135,0.4)"
+                value={form.overlay_color}
+                onChange={e => setForm(p => ({ ...p, overlay_color: e.target.value }))}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">
+                Display Order
+                {form.display_order === -1 && (
+                  <span className="normal-case text-white/20 ml-1">(auto → {autoOrder})</span>
+                )}
+              </label>
+              <input
+                type="number"
+                min="0"
+                placeholder={`auto (${autoOrder})`}
+                value={form.display_order === -1 ? '' : form.display_order}
+                onChange={e => setForm(p => ({
+                  ...p,
+                  display_order: e.target.value === '' ? -1 : parseInt(e.target.value) || 0,
+                }))}
+                className={inputClass}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">
+                Ranks <span className="normal-case text-white/20">(one per line)</span>
+              </label>
+              <textarea
+                placeholder={"Bronze I\nBronze II\nSilver I\nGold I\n…"}
+                value={ranksText}
+                onChange={e => setRanksText(e.target.value)}
+                className={inputClass + ' h-24 resize-none font-mono text-xs'}
+              />
+              <p className="text-white/20 text-[10px] mt-1">
+                {ranksText.split('\n').filter(r => r.trim()).length} rank(s) defined
+              </p>
+            </div>
+            <div className="md:col-span-2 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setForm(p => ({ ...p, is_active: !p.is_active }))}
+                className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${form.is_active ? 'bg-purple-600' : 'bg-white/10'}`}
+              >
+                <span
+                  className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
+                  style={{ left: form.is_active ? '16px' : '2px' }}
+                />
+              </button>
+              <span className="text-white/50 text-[10px] font-bold tracking-widest uppercase">
+                {form.is_active ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-3 px-6 py-4">
+          <button
+            onClick={handleSubmit}
+            disabled={saving || !form.title || !form.slug}
+            className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black px-6 py-2 rounded-xl text-xs tracking-widest uppercase transition-all duration-200"
+            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+          >
+            {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Game'}
+          </button>
+          <ActionButton variant="ghost" onClick={onClose}>Cancel</ActionButton>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function GamesSection() {
+  const [data, setData] = useState<any[]>([])
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [editingGame, setEditingGame] = useState<typeof EMPTY_GAME_FORM | null>(null)
+
+  const load = () => {
+    (games.listAll() as Promise<any>).then(r => setData(r.games || [])).catch(() => {})
+  }
+
+  useEffect(() => { load() }, [])
+
+  const nextOrder = data.length > 0
+    ? Math.max(...data.map((g: any) => g.display_order ?? 0)) + 1
+    : 0
+
+  const handleAdd = async (payload: any) => {
+    await games.create(payload)
+    load()
+  }
+
+  const handleEdit = async (payload: any) => {
+    if (!editingGame) return
+    await games.update((editingGame as any).id, payload)
+    load()
+  }
+
+  const openEdit = (g: any) => {
+    setEditingGame({ ...EMPTY_GAME_FORM, ...g })
+  }
+
+  const remove = async (id: number) => {
+    if (!confirm('Delete this game? This will affect related join requests.')) return
+    await games.delete(id)
+    load()
+  }
+
+  const toggleActive = async (id: number, is_active: boolean) => {
+    await games.update(id, { is_active: !is_active })
+    load()
+  }
+
+  return (
+    <div>
+      <SectionHeader
+        title="Games"
+        action={<ActionButton onClick={() => setShowAddModal(true)}>+ Add Game</ActionButton>}
+      />
+
+      <div className="space-y-3">
+        {data.length === 0 && <p className="text-white/30 text-sm">No games yet.</p>}
+        {data.map((g: any) => (
+          <div
+            key={g.id}
+            className={`bg-white/5 border border-white/8 rounded-2xl p-5 flex items-center gap-4 transition-opacity ${!g.is_active ? 'opacity-50' : ''}`}
+          >
+            {/* Banner — fixed size, real image or letter fallback */}
+            <div className="w-24 h-16 rounded-xl shrink-0 overflow-hidden border border-white/10">
+              {g.banner
+                ? <img src={g.banner} alt={g.title} className="w-full h-full object-cover" />
+                : <div className="w-full h-full bg-white/5 flex items-center justify-center">
+                    <span className="text-white/20 text-xl font-black">{g.title.charAt(0)}</span>
+                  </div>
+              }
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 mb-1 flex-wrap">
+                <span className="text-white font-bold">{g.title}</span>
+                <Badge color="purple">{g.slug}</Badge>
+                {!g.is_active && <Badge color="gray">Inactive</Badge>}
+              </div>
+              <p className="text-white/40 text-xs">
+                {[g.genre, g.publisher].filter(Boolean).join(' · ')}
+                {g.ranks?.length > 0 && ` · ${g.ranks.length} ranks`}
+                {` · Order: ${g.display_order}`}
+              </p>
+            </div>
+
+            <div className="flex gap-2 shrink-0">
+              <ActionButton variant="ghost" onClick={() => openEdit(g)}>Edit</ActionButton>
+              <ActionButton variant="ghost" onClick={() => toggleActive(g.id, g.is_active)}>
+                {g.is_active ? 'Deactivate' : 'Activate'}
+              </ActionButton>
+              <ActionButton variant="danger" onClick={() => remove(g.id)}>Delete</ActionButton>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {showAddModal && (
+        <GameFormModal
+          initial={EMPTY_GAME_FORM}
+          isEdit={false}
+          onSave={handleAdd}
+          onClose={() => setShowAddModal(false)}
+          autoOrder={nextOrder}
+        />
+      )}
+
+      {editingGame && (
+        <GameFormModal
+          initial={editingGame}
+          isEdit={true}
+          onSave={handleEdit}
+          onClose={() => setEditingGame(null)}
+          autoOrder={nextOrder}
+        />
+      )}
+    </div>
+  )
+}
+
 // ── Dashboard shell ───────────────────────────────────────────────────────────
 export default function Dashboard() {
   const { user, setUser } = useAuth()
@@ -788,10 +1067,11 @@ export default function Dashboard() {
     news:     <NewsSection />,
     players:  <PlayersSection />,
     teams:    <TeamsSection />,
+    games:    <GamesSection />,
   }
 
   return (
-    <div className="min-h-screen bg-[#0d0014] text-white flex" style={{ fontFamily: "'Barlow', sans-serif" }}>
+    <div className="min-h-screen bg-[#0d0014] text-white flex" style={{ fontFamily: "'Barlow', sans-serif", zoom: 1.4 }}>
 
       <aside className={`fixed inset-y-0 left-0 z-40 w-60 bg-[#0a0010] border-r border-white/8 flex flex-col transition-transform duration-200
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
@@ -835,7 +1115,7 @@ export default function Dashboard() {
           </div>
           <button
             onClick={handleLogout}
-            className="w-full text-xs font-bold tracking-widest uppercase text-white/30 hover:text-red-400 transition-colors py-2"
+            className="w-full text-xs font-bold tracking-widest uppercase text-white/30 hover:text-red-400 transition-all py-2 cursor-pointer"
           >
             Sign Out
           </button>
