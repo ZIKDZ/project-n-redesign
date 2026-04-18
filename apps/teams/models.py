@@ -7,11 +7,27 @@ GAME_CHOICES = [
     ('fortnite', 'Fortnite'),
 ]
 
+VISIBILITY_CHOICES = [
+    ('public', 'Public'),
+    ('hidden', 'Hidden'),
+]
+
 
 class Team(models.Model):
     name = models.CharField(max_length=100)
     game = models.CharField(max_length=50, choices=GAME_CHOICES)
     description = models.TextField(blank=True)
+    banner_url = models.URLField(blank=True, help_text='Banner image URL for the roster card')
+    logo_url = models.URLField(blank=True, help_text='Logo/icon URL for the roster')
+    max_players = models.PositiveSmallIntegerField(default=5, help_text='Maximum number of main players')
+    igl = models.ForeignKey(
+        'players.Player',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='igl_of_teams',
+        help_text='In-Game Leader',
+    )
+    visibility = models.CharField(max_length=10, choices=VISIBILITY_CHOICES, default='public')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -22,11 +38,22 @@ class Team(models.Model):
         return f"{self.name} ({self.game})"
 
     def to_dict(self):
+        main_players = self.players.filter(
+            status='active', role__in=['player', 'captain', 'coach']
+        )
+        subs = self.players.filter(status='active', role='substitute')
         return {
             'id': self.id,
             'name': self.name,
             'game': self.game,
             'description': self.description,
+            'banner_url': self.banner_url,
+            'logo_url': self.logo_url,
+            'max_players': self.max_players,
+            'igl': self.igl.to_dict() if self.igl else None,
+            'igl_id': self.igl_id,
+            'visibility': self.visibility,
             'is_active': self.is_active,
-            'players': [p.to_dict() for p in self.players.filter(is_active=True)],
+            'players': [p.to_dict() for p in main_players],
+            'substitutes': [p.to_dict() for p in subs],
         }
