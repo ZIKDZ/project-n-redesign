@@ -20,7 +20,17 @@ class Game(models.Model):
         default=list, blank=True,
         help_text='Ordered list of rank names, e.g. ["Bronze","Silver","Gold"]'
     )
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(
+        default=True,
+        help_text='Controls whether the game appears on the public site (games section, join form).'
+    )
+    registration_open = models.BooleanField(
+        default=False,
+        help_text=(
+            'When True, this game appears in the join-request form on the landing page. '
+            'Set to False to close recruitment without hiding the game from the games showcase.'
+        )
+    )
     display_order = models.PositiveSmallIntegerField(default=0, help_text='Lower = shown first')
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -52,5 +62,6 @@ class Game(models.Model):
             'overlay_color': self.overlay_color,
             'ranks': self.ranks,
             'is_active': self.is_active,
+            'registration_open': self.registration_open,
             'display_order': self.display_order,
         }

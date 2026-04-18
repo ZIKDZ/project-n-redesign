@@ -328,26 +328,29 @@ function LiveNewsSection() {
 // ── Dynamic Join Form ─────────────────────────────────────────────────────────
 function JoinForm() {
   const [gameList, setGameList] = useState<GameData[]>([]);
+  const [loadingGames, setLoadingGames] = useState(true);
   const [formData, setFormData] = useState({
     username: "", ingame_username: "", game: "", discord_username: "", rank: "", email: "",
   });
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
-
-  // Load games from API
+ 
+  // Load ONLY games open for registration
   useEffect(() => {
-    (gamesApi.list() as Promise<any>)
+    (gamesApi.listOpen() as Promise<any>)
       .then(r => setGameList(r.games || []))
-      .catch(() => setGameList([]));
+      .catch(() => setGameList([]))
+      .finally(() => setLoadingGames(false));
   }, []);
-
+ 
   const selectedGame = gameList.find(g => g.slug === formData.game);
   const ranks = selectedGame?.ranks || [];
-
+ 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    // Reset rank whenever game changes
     setFormData(prev => ({ ...prev, [name]: value, ...(name === "game" ? { rank: "" } : {}) }));
   };
-
+ 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus("loading");
@@ -359,10 +362,44 @@ function JoinForm() {
       setStatus("error");
     }
   };
-
-  const inputClass = "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-purple-500/60 focus:bg-purple-500/5 transition-all duration-200";
+ 
+  const inputClass =
+    "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm " +
+    "focus:outline-none focus:border-purple-500/60 focus:bg-purple-500/5 transition-all duration-200";
   const labelClass = "block text-white/60 text-xs font-bold tracking-widest uppercase mb-2";
-
+ 
+  // ── No games open → show a friendly closed message instead of an empty form ──
+  if (!loadingGames && gameList.length === 0) {
+    return (
+      <div className="bg-white/5 border border-white/10 rounded-3xl p-8 md:p-12 text-center">
+        <div className="w-16 h-16 rounded-full bg-purple-500/15 border border-purple-500/25 flex items-center justify-center mx-auto mb-6">
+          {/* Lock icon */}
+          <svg className="w-7 h-7 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round"
+              d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+          </svg>
+        </div>
+        <h3 className="text-white text-2xl font-black uppercase mb-3"
+          style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+          Registrations Closed
+        </h3>
+        <p className="text-gray-400 max-w-sm mx-auto leading-relaxed">
+          We're not currently recruiting for any game. Follow us on Discord and Instagram to be the first to know when spots open up.
+        </p>
+        <div className="flex items-center justify-center gap-4 mt-8">
+          <a href="https://discord.com/invite/rXannpAynS" target="_blank" rel="noreferrer"
+            className="inline-flex items-center gap-2 bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 font-bold px-5 py-2.5 rounded-xl text-sm tracking-wider uppercase transition-all duration-200">
+            Join Discord
+          </a>
+          <a href="https://www.instagram.com/nblesport/" target="_blank" rel="noreferrer"
+            className="inline-flex items-center gap-2 bg-pink-500/15 hover:bg-pink-500/25 border border-pink-500/30 text-pink-300 font-bold px-5 py-2.5 rounded-xl text-sm tracking-wider uppercase transition-all duration-200">
+            Instagram
+          </a>
+        </div>
+      </div>
+    );
+  }
+ 
   return (
     <div className="bg-white/5 border border-white/10 rounded-3xl p-8 md:p-10">
       {status === "success" ? (
@@ -372,9 +409,11 @@ function JoinForm() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h3 className="text-white text-2xl font-black uppercase mb-3" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>Application Sent!</h3>
+          <h3 className="text-white text-2xl font-black uppercase mb-3"
+            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>Application Sent!</h3>
           <p className="text-gray-400">We'll review your application and get back to you soon.</p>
-          <button onClick={() => setStatus("idle")} className="mt-8 text-purple-400 text-sm font-bold tracking-wider uppercase hover:text-purple-300 transition-colors">
+          <button onClick={() => setStatus("idle")}
+            className="mt-8 text-purple-400 text-sm font-bold tracking-wider uppercase hover:text-purple-300 transition-colors">
             Submit Another →
           </button>
         </div>
@@ -383,61 +422,70 @@ function JoinForm() {
           <div className="grid md:grid-cols-2 gap-6">
             <div>
               <label className={labelClass}>Username</label>
-              <input type="text" name="username" value={formData.username} onChange={handleChange} required placeholder="Your username" className={inputClass} />
+              <input type="text" name="username" value={formData.username} onChange={handleChange}
+                required placeholder="Your username" className={inputClass} />
             </div>
             <div>
               <label className={labelClass}>In-Game Username</label>
-              <input type="text" name="ingame_username" value={formData.ingame_username} onChange={handleChange} required placeholder="Your in-game name" className={inputClass} />
+              <input type="text" name="ingame_username" value={formData.ingame_username} onChange={handleChange}
+                required placeholder="Your in-game name" className={inputClass} />
             </div>
-
-            {/* Game — loaded from DB */}
+ 
+            {/* Game — only registration_open games */}
             <div>
               <label className={labelClass}>Game</label>
-              <select name="game" value={formData.game} onChange={handleChange} required className={inputClass + " cursor-pointer"}>
+              <select name="game" value={formData.game} onChange={handleChange} required
+                className={inputClass + " cursor-pointer"}>
                 <option value="" disabled>
-                  {gameList.length === 0 ? "Loading games…" : "Select a game"}
+                  {loadingGames ? "Loading…" : "Select a game"}
                 </option>
                 {gameList.map(g => (
                   <option key={g.slug} value={g.slug} className="bg-[#1a0030]">{g.title}</option>
                 ))}
               </select>
             </div>
-
+ 
             <div>
               <label className={labelClass}>Discord Username</label>
-              <input type="text" name="discord_username" value={formData.discord_username} onChange={handleChange} required placeholder="username#0000" className={inputClass} />
+              <input type="text" name="discord_username" value={formData.discord_username} onChange={handleChange}
+                required placeholder="username#0000" className={inputClass} />
             </div>
-
-            {/* Rank — loaded from selected game's rank list */}
+ 
+            {/* Rank — driven by selected game's rank list */}
             <div>
               <label className={labelClass}>Rank</label>
               <select name="rank" value={formData.rank} onChange={handleChange} required
                 disabled={!formData.game || ranks.length === 0}
                 className={inputClass + " cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"}>
                 <option value="" disabled>
-                  {!formData.game ? "Select a game first" : ranks.length === 0 ? "No ranks defined" : "Select your rank"}
+                  {!formData.game
+                    ? "Select a game first"
+                    : ranks.length === 0
+                    ? "No ranks defined"
+                    : "Select your rank"}
                 </option>
                 {ranks.map(r => (
                   <option key={r} value={r} className="bg-[#1a0030]">{r}</option>
                 ))}
               </select>
             </div>
-
+ 
             <div>
               <label className={labelClass}>Email</label>
-              <input type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="your@email.com" className={inputClass} />
+              <input type="email" name="email" value={formData.email} onChange={handleChange}
+                required placeholder="your@email.com" className={inputClass} />
             </div>
           </div>
-
+ 
           {status === "error" && (
             <p className="mt-4 text-red-400 text-sm text-center">Something went wrong. Please try again.</p>
           )}
-
+ 
           <div className="mt-8">
-            <button type="submit" disabled={status === "loading" || gameList.length === 0}
+            <button type="submit" disabled={status === "loading"}
               className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-black py-4 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 hover:shadow-2xl hover:shadow-purple-500/40 hover:-translate-y-0.5"
               style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: "1rem" }}>
-              {status === "loading" ? "Submitting..." : "Apply Now"}
+              {status === "loading" ? "Submitting…" : "Apply Now"}
             </button>
           </div>
         </form>

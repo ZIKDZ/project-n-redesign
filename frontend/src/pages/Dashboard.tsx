@@ -534,103 +534,603 @@ function NewsSection() {
 }
 
 // ── Players section ───────────────────────────────────────────────────────────
+// Drop this into Dashboard.tsx, replacing the existing PlayersSection function.
+// Also add `games` to the import at the top if not already there:
+//   import { auth, joins, matches, news, players, teams, games } from '../utils/api'
+
+const STATUS_COLORS: Record<string, 'green' | 'yellow' | 'gray'> = {
+  active: 'green',
+  suspended: 'yellow',
+  inactive: 'gray',
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  active: 'Active',
+  suspended: 'Suspended',
+  inactive: 'Inactive',
+}
+
+type PlayerData = {
+  id: number
+  username: string
+  ingame_username: string
+  avatar: string
+  bio: string
+  game: string
+  game_id: number | null
+  game_title: string
+  role: string
+  rank: string
+  status: string
+  team: string | null
+  team_id: number | null
+  discord_username: string
+  first_name: string
+  last_name: string
+  age: number | null
+  email: string
+  phone: string
+  address: string
+  joined_at: string
+}
+
+const EMPTY_PLAYER: Omit<PlayerData, 'id' | 'joined_at'> = {
+  username: '',
+  ingame_username: '',
+  avatar: '',
+  bio: '',
+  game: '',
+  game_id: null,
+  game_title: '',
+  role: 'player',
+  rank: '',
+  status: 'active',
+  team: null,
+  team_id: null,
+  discord_username: '',
+  first_name: '',
+  last_name: '',
+  age: null,
+  email: '',
+  phone: '',
+  address: '',
+}
+
+function PlayerModal({
+  initial,
+  isEdit,
+  gamesList,
+  teamsList,
+  onSave,
+  onClose,
+}: {
+  initial: typeof EMPTY_PLAYER & { id?: number }
+  isEdit: boolean
+  gamesList: any[]
+  teamsList: any[]
+  onSave: (data: any, avatarFile: File | null) => Promise<void>
+  onClose: () => void
+}) {
+  const [tab, setTab] = useState<'profile' | 'personal'>('profile')
+  const [form, setForm] = useState(initial)
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState(initial.avatar || '')
+  const [saving, setSaving] = useState(false)
+  const avatarRef = useRef<HTMLInputElement>(null)
+
+  // When game changes, reset rank
+  const handleGameChange = (slug: string) => {
+    setForm(p => ({ ...p, game: slug, game_id: null, rank: '' }))
+  }
+
+  const selectedGame = gamesList.find(g => g.slug === form.game)
+  const ranks: string[] = selectedGame?.ranks || []
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null
+    setAvatarFile(file)
+    if (file) setAvatarPreview(URL.createObjectURL(file))
+    else setAvatarPreview(initial.avatar || '')
+  }
+
+  const handleSubmit = async () => {
+    if (!form.username) return
+    setSaving(true)
+    try {
+      await onSave(form, avatarFile)
+      onClose()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const inputClass = 'bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500/60 w-full placeholder-white/20'
+  const labelClass = 'block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1'
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(4px)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div
+        className="bg-[#13001f] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl shadow-purple-900/30 flex flex-col"
+        style={{ maxHeight: 'min(88vh, 660px)' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-white/8">
+          <div className="flex items-center gap-3">
+            {/* Avatar */}
+            <div
+              className="w-12 h-12 rounded-xl border-2 border-dashed border-white/15 flex items-center justify-center overflow-hidden cursor-pointer hover:border-purple-500/50 transition-colors shrink-0"
+              onClick={() => avatarRef.current?.click()}
+              title="Click to change avatar"
+            >
+              {avatarPreview
+                ? <img src={avatarPreview} className="w-full h-full object-cover" alt="avatar" />
+                : <span className="text-white/20 text-lg font-black">
+                    {form.username ? form.username[0].toUpperCase() : '?'}
+                  </span>
+              }
+            </div>
+            <input ref={avatarRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
+            <div>
+              <h3 className="text-white font-black text-base uppercase tracking-wide" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                {isEdit ? `Edit — ${initial.username}` : 'Add Player'}
+              </h3>
+              <p className="text-white/25 text-[10px] tracking-widest">
+                {isEdit ? 'Update player information' : 'Fill in player details'}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors text-xl">✕</button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 px-6 pt-3 pb-1">
+          {(['profile', 'personal'] as const).map(t => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black tracking-widest uppercase transition-all duration-150 ${
+                tab === t
+                  ? 'bg-purple-600/25 text-purple-300 border border-purple-500/30'
+                  : 'text-white/30 hover:text-white/60'
+              }`}
+            >
+              {t === 'profile' ? '⚡ Profile' : '👤 Personal'}
+            </button>
+          ))}
+        </div>
+
+        {/* Body */}
+        <div
+          className="overflow-y-auto flex-1 px-6 py-3"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {tab === 'profile' && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>Username *</label>
+                <input placeholder="e.g. NebX" value={form.username}
+                  onChange={e => setForm(p => ({ ...p, username: e.target.value }))}
+                  className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>In-Game Username *</label>
+                <input placeholder="e.g. Neb#1234" value={form.ingame_username}
+                  onChange={e => setForm(p => ({ ...p, ingame_username: e.target.value }))}
+                  className={inputClass} />
+              </div>
+
+              {/* Game */}
+              <div>
+                <label className={labelClass}>Game</label>
+                <select value={form.game} onChange={e => handleGameChange(e.target.value)}
+                  className={inputClass + ' cursor-pointer'}>
+                  <option value="" className="bg-[#1a0030]">Select game</option>
+                  {gamesList.map(g => (
+                    <option key={g.slug} value={g.slug} className="bg-[#1a0030]">{g.title}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Rank — from game */}
+              <div>
+                <label className={labelClass}>Rank</label>
+                {ranks.length > 0 ? (
+                  <select value={form.rank} onChange={e => setForm(p => ({ ...p, rank: e.target.value }))}
+                    disabled={!form.game}
+                    className={inputClass + ' cursor-pointer disabled:opacity-40'}>
+                    <option value="" className="bg-[#1a0030]">Select rank</option>
+                    {ranks.map(r => <option key={r} value={r} className="bg-[#1a0030]">{r}</option>)}
+                  </select>
+                ) : (
+                  <input placeholder="e.g. Diamond" value={form.rank}
+                    onChange={e => setForm(p => ({ ...p, rank: e.target.value }))}
+                    className={inputClass} />
+                )}
+              </div>
+
+              {/* Role */}
+              <div>
+                <label className={labelClass}>Role</label>
+                <select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}
+                  className={inputClass + ' cursor-pointer'}>
+                  {[['player','Player'],['captain','Captain'],['coach','Coach'],['substitute','Substitute'],['content_creator','Content Creator']].map(([v, l]) => (
+                    <option key={v} value={v} className="bg-[#1a0030]">{l}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className={labelClass}>Status</label>
+                <select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}
+                  className={inputClass + ' cursor-pointer'}>
+                  <option value="active" className="bg-[#1a0030]">Active</option>
+                  <option value="suspended" className="bg-[#1a0030]">Suspended</option>
+                  <option value="inactive" className="bg-[#1a0030]">Inactive</option>
+                </select>
+              </div>
+
+              {/* Team */}
+              <div className="col-span-2">
+                <label className={labelClass}>Team</label>
+                <select value={form.team_id ?? ''} onChange={e => setForm(p => ({ ...p, team_id: e.target.value ? Number(e.target.value) : null }))}
+                  className={inputClass + ' cursor-pointer'}>
+                  <option value="" className="bg-[#1a0030]">No team</option>
+                  {teamsList.map((t: any) => (
+                    <option key={t.id} value={t.id} className="bg-[#1a0030]">{t.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Discord */}
+              <div className="col-span-2">
+                <label className={labelClass}>Discord Username</label>
+                <input placeholder="e.g. nebx#0000" value={form.discord_username}
+                  onChange={e => setForm(p => ({ ...p, discord_username: e.target.value }))}
+                  className={inputClass} />
+              </div>
+
+              {/* Bio */}
+              <div className="col-span-2">
+                <label className={labelClass}>Bio</label>
+                <textarea placeholder="Short player bio…" value={form.bio}
+                  onChange={e => setForm(p => ({ ...p, bio: e.target.value }))}
+                  className={inputClass + ' h-16 resize-none'} />
+              </div>
+
+              {/* Avatar hint */}
+              <div className="col-span-2">
+                <p className="text-white/20 text-[10px]">
+                  💡 Click the avatar circle at the top to upload a photo
+                </p>
+              </div>
+            </div>
+          )}
+
+          {tab === 'personal' && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>First Name</label>
+                <input placeholder="e.g. Yacine" value={form.first_name}
+                  onChange={e => setForm(p => ({ ...p, first_name: e.target.value }))}
+                  className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Last Name</label>
+                <input placeholder="e.g. Benzema" value={form.last_name}
+                  onChange={e => setForm(p => ({ ...p, last_name: e.target.value }))}
+                  className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Age</label>
+                <input type="number" min="10" max="99" placeholder="e.g. 21" value={form.age ?? ''}
+                  onChange={e => setForm(p => ({ ...p, age: e.target.value ? Number(e.target.value) : null }))}
+                  className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Email</label>
+                <input type="email" placeholder="e.g. player@email.com" value={form.email}
+                  onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+                  className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Phone</label>
+                <input placeholder="e.g. +213 555 123456" value={form.phone}
+                  onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
+                  className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Address</label>
+                <input placeholder="e.g. Algiers, Algeria" value={form.address}
+                  onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
+                  className={inputClass} />
+              </div>
+              <div className="col-span-2 pt-2">
+                <p className="text-white/15 text-[10px] tracking-wide">
+                  🔒 Personal information is only visible to staff members and is never shared publicly.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-3 px-6 py-4 border-t border-white/8">
+          <button
+            onClick={handleSubmit}
+            disabled={saving || !form.username}
+            className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black px-6 py-2.5 rounded-xl text-xs tracking-widest uppercase transition-all duration-200"
+            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+          >
+            {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Player'}
+          </button>
+          <ActionButton variant="ghost" onClick={onClose}>Cancel</ActionButton>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Status dropdown — click-based so there's no hover-gap disappearing bug ────
+function StatusDropdown({
+  currentStatus,
+  onSelect,
+}: {
+  currentStatus: string
+  onSelect: (status: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const OPTIONS: [string, string, string][] = [
+    ['active',    'bg-green-400',  'Active'],
+    ['suspended', 'bg-yellow-400', 'Suspend'],
+    ['inactive',  'bg-gray-500',   'Deactivate'],
+  ]
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white text-xs font-bold px-3 py-2 rounded-lg tracking-wider uppercase transition-all duration-200 flex items-center gap-1.5"
+      >
+        {/* Current status dot */}
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+          currentStatus === 'active'
+            ? 'bg-green-400'
+            : currentStatus === 'suspended'
+            ? 'bg-yellow-400'
+            : 'bg-gray-500'
+        }`} />
+        {STATUS_LABELS[currentStatus] ?? 'Status'}
+        <span className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`}>▾</span>
+      </button>
+
+      {open && (
+        <div
+          className="absolute right-0 top-full z-30 bg-[#1a0030] border border-white/12 rounded-xl shadow-2xl shadow-black/50 overflow-hidden min-w-[140px]"
+          style={{ marginTop: '4px' }}
+        >
+          {OPTIONS.map(([val, dotColor, label]) => (
+            <button
+              key={val}
+              onClick={() => { onSelect(val); setOpen(false) }}
+              className={`flex items-center gap-2.5 w-full text-left px-4 py-2.5 text-xs font-bold tracking-wider uppercase transition-colors hover:bg-purple-500/15 ${
+                currentStatus === val ? 'text-purple-400 bg-purple-500/10' : 'text-white/55'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PlayersSection() {
-  const [data, setData] = useState<any[]>([])
+  const [data, setData] = useState<PlayerData[]>([])
+  const [gamesList, setGamesList] = useState<any[]>([])
   const [teamsList, setTeamsList] = useState<any[]>([])
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ username: '', ingame_username: '', game: 'rocket_league', role: 'player', rank: '', discord_username: '', email: '', team_id: '', bio: '' })
+  const [showAdd, setShowAdd] = useState(false)
+  const [editing, setEditing] = useState<PlayerData | null>(null)
+  const [filterStatus, setFilterStatus] = useState('')
+  const [filterGame, setFilterGame] = useState('')
 
   const load = () => {
-    (players.listAll() as Promise<any>).then(r => setData(r.players || [])).catch(() => {})
+    ;(players.listAll() as Promise<any>).then(r => setData(r.players || [])).catch(() => {})
+    ;(games.listAll() as Promise<any>).then(r => setGamesList(r.games || [])).catch(() => {})
     ;(teams.listAll() as Promise<any>).then(r => setTeamsList(r.teams || [])).catch(() => {})
   }
 
   useEffect(() => { load() }, [])
 
-  const save = async () => {
-    await players.create({ ...form, team_id: form.team_id ? Number(form.team_id) : null })
-    setShowForm(false)
-    setForm({ username: '', ingame_username: '', game: 'rocket_league', role: 'player', rank: '', discord_username: '', email: '', team_id: '', bio: '' })
+  const getCsrf = () =>
+    document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1] || ''
+
+  // Always send as multipart so the avatar field is never lost
+  const buildFormData = (form: any, avatarFile: File | null) => {
+    const fd = new FormData()
+    Object.entries(form).forEach(([k, v]) => {
+      if (v !== null && v !== undefined) fd.append(k, String(v))
+    })
+    if (avatarFile) fd.append('avatar', avatarFile)
+    return fd
+  }
+
+  const handleAdd = async (form: any, avatarFile: File | null) => {
+    const fd = buildFormData(form, avatarFile)
+    await fetch('/api/players/create/', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'X-CSRFToken': getCsrf() },
+      body: fd,
+    })
     load()
   }
 
-  const remove = async (id: number) => {
-    if (!confirm('Remove this player?')) return
+  const handleEdit = async (form: any, avatarFile: File | null) => {
+    if (!editing) return
+    const fd = buildFormData(form, avatarFile)
+    await fetch(`/api/players/${editing.id}/`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'X-CSRFToken': getCsrf() },
+      body: fd,
+    })
+    load()
+  }
+
+  const remove = async (id: number, name: string) => {
+    if (!confirm(`Permanently remove ${name}? This cannot be undone.`)) return
     await players.delete(id)
     load()
   }
 
-  const toggleActive = async (id: number, is_active: boolean) => {
-    await players.update(id, { is_active: !is_active })
+  const quickStatus = async (id: number, status: string) => {
+    await players.update(id, { status })
     load()
   }
 
-  const inputClass = 'bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500/60 w-full'
+  // Filtered list
+  const displayed = data.filter(p => {
+    if (filterStatus && p.status !== filterStatus) return false
+    if (filterGame && p.game !== filterGame) return false
+    return true
+  })
 
   return (
     <div>
       <SectionHeader
         title="Players"
-        action={<ActionButton onClick={() => setShowForm(v => !v)}>+ Add Player</ActionButton>}
+        action={
+          <div className="flex items-center gap-2">
+            <select value={filterGame} onChange={e => setFilterGame(e.target.value)}
+              className="bg-white/5 border border-white/10 text-white text-xs px-3 py-2 rounded-lg cursor-pointer">
+              <option value="">All Games</option>
+              {gamesList.map(g => <option key={g.slug} value={g.slug} className="bg-[#1a0030]">{g.title}</option>)}
+            </select>
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+              className="bg-white/5 border border-white/10 text-white text-xs px-3 py-2 rounded-lg cursor-pointer">
+              <option value="">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="suspended">Suspended</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            <ActionButton onClick={() => setShowAdd(true)}>+ Add Player</ActionButton>
+          </div>
+        }
       />
 
-      {showForm && (
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-6 grid grid-cols-2 md:grid-cols-3 gap-4">
-          {[
-            { key: 'username', ph: 'Username' },
-            { key: 'ingame_username', ph: 'In-game name' },
-            { key: 'rank', ph: 'Rank' },
-            { key: 'discord_username', ph: 'Discord' },
-            { key: 'email', ph: 'Email' },
-          ].map(f => (
-            <input key={f.key} placeholder={f.ph} value={(form as any)[f.key]}
-              onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} className={inputClass} />
-          ))}
-          {[
-            { key: 'game', opts: [['rocket_league','Rocket League'],['valorant','Valorant'],['fortnite','Fortnite']] },
-            { key: 'role', opts: [['player','Player'],['captain','Captain'],['coach','Coach'],['substitute','Substitute'],['content_creator','Content Creator']] },
-          ].map(s => (
-            <select key={s.key} value={(form as any)[s.key]} onChange={e => setForm(p => ({ ...p, [s.key]: e.target.value }))}
-              className={inputClass + ' cursor-pointer'}>
-              {s.opts.map(([v, l]) => <option key={v} value={v} className="bg-[#1a0030]">{l}</option>)}
-            </select>
-          ))}
-          <select value={form.team_id} onChange={e => setForm(p => ({ ...p, team_id: e.target.value }))}
-            className={inputClass + ' cursor-pointer'}>
-            <option value="" className="bg-[#1a0030]">No team</option>
-            {teamsList.map((t: any) => <option key={t.id} value={t.id} className="bg-[#1a0030]">{t.name}</option>)}
-          </select>
-          <textarea placeholder="Bio (optional)" value={form.bio} onChange={e => setForm(p => ({ ...p, bio: e.target.value }))}
-            className={inputClass + ' col-span-full h-20 resize-none'} />
-          <div className="col-span-full flex gap-3">
-            <ActionButton onClick={save}>Save Player</ActionButton>
-            <ActionButton variant="ghost" onClick={() => setShowForm(false)}>Cancel</ActionButton>
-          </div>
-        </div>
-      )}
+      <div className="space-y-2">
+        {displayed.length === 0 && (
+          <p className="text-white/30 text-sm py-4">No players found.</p>
+        )}
+        {displayed.map((p: PlayerData) => (
+          <div
+            key={p.id}
+            className={`bg-white/5 border border-white/8 rounded-2xl px-5 py-4 flex items-center gap-4 transition-opacity ${
+              p.status === 'inactive' ? 'opacity-40' : p.status === 'suspended' ? 'opacity-70' : ''
+            }`}
+          >
+            {/* Avatar */}
+            <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0 border border-white/10 bg-purple-900/30 flex items-center justify-center">
+              {p.avatar
+                ? (
+                  <img
+                    src={p.avatar.startsWith('http') ? p.avatar : p.avatar}
+                    className="w-full h-full object-cover"
+                    alt={p.username}
+                    onError={e => {
+                      // If image fails, hide it so fallback letter shows
+                      (e.currentTarget as HTMLImageElement).style.display = 'none'
+                      const parent = e.currentTarget.parentElement
+                      if (parent) {
+                        const span = document.createElement('span')
+                        span.className = 'text-purple-300 text-sm font-black'
+                        span.textContent = p.username[0]?.toUpperCase() ?? '?'
+                        parent.appendChild(span)
+                      }
+                    }}
+                  />
+                )
+                : <span className="text-purple-300 text-sm font-black">{p.username[0]?.toUpperCase() ?? '?'}</span>
+              }
+            </div>
 
-      <div className="space-y-3">
-        {data.length === 0 && <p className="text-white/30 text-sm">No players yet.</p>}
-        {data.map((p: any) => (
-          <div key={p.id} className={`bg-white/5 border border-white/8 rounded-2xl px-6 py-4 flex items-center gap-4 ${!p.is_active ? 'opacity-40' : ''}`}>
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-1">
-                <span className="text-white font-bold">{p.username}</span>
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                <span className="text-white font-bold text-sm">{p.username}</span>
+                <Badge color={STATUS_COLORS[p.status] || 'gray'}>{STATUS_LABELS[p.status]}</Badge>
                 <Badge color="purple">{p.role}</Badge>
-                <Badge color="gray">{p.game.replace('_', ' ')}</Badge>
+                {p.game_title && <Badge color="gray">{p.game_title}</Badge>}
                 {p.team && <Badge color="yellow">{p.team}</Badge>}
               </div>
-              <p className="text-white/40 text-xs">{p.ingame_username} · {p.rank} {p.discord_username && `· ${p.discord_username}`}</p>
+              <p className="text-white/35 text-xs truncate">
+                {p.ingame_username}
+                {p.rank && ` · ${p.rank}`}
+                {p.discord_username && ` · ${p.discord_username}`}
+              </p>
             </div>
-            <div className="flex gap-2">
-              <ActionButton variant="ghost" onClick={() => toggleActive(p.id, p.is_active)}>
-                {p.is_active ? 'Deactivate' : 'Activate'}
-              </ActionButton>
-              <ActionButton variant="danger" onClick={() => remove(p.id)}>Delete</ActionButton>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Status quick-toggle dropdown — click-based to avoid hover gap bug */}
+              <StatusDropdown
+                currentStatus={p.status}
+                onSelect={status => quickStatus(p.id, status)}
+              />
+
+              {/* Manage button */}
+              <ActionButton onClick={() => setEditing(p)}>Manage</ActionButton>
+
+              {/* Remove */}
+              <ActionButton variant="danger" onClick={() => remove(p.id, p.username)}>Remove</ActionButton>
             </div>
           </div>
         ))}
       </div>
+
+      {/* Add Modal */}
+      {showAdd && (
+        <PlayerModal
+          initial={EMPTY_PLAYER as any}
+          isEdit={false}
+          gamesList={gamesList}
+          teamsList={teamsList}
+          onSave={handleAdd}
+          onClose={() => setShowAdd(false)}
+        />
+      )}
+
+      {/* Edit Modal */}
+      {editing && (
+        <PlayerModal
+          initial={editing}
+          isEdit={true}
+          gamesList={gamesList}
+          teamsList={teamsList}
+          onSave={handleEdit}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </div>
   )
 }
@@ -723,9 +1223,10 @@ const EMPTY_GAME_FORM = {
   slug: '',
   publisher: '',
   genre: '',
-  banner: '',           // ← was banner_url
+  banner: '',
   overlay_color: '',
   is_active: true,
+  registration_open: false,
   display_order: -1 as number,
   ranks: [] as string[],
 }
@@ -790,7 +1291,7 @@ function GameFormModal({
             className="text-white font-black text-lg uppercase tracking-wide"
             style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
           >
-            {isEdit ? 'Edit Game' : 'Add Game'}
+            {isEdit ? 'Manage Game' : 'Add Game'}
           </h3>
           <button onClick={onClose} className="text-white/30 hover:text-white transition-colors text-xl">✕</button>
         </div>
@@ -800,7 +1301,6 @@ function GameFormModal({
           className="overflow-y-auto flex-1 px-6 py-2"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {/* Hide webkit scrollbar */}
           <style>{`.no-scroll::-webkit-scrollbar { display: none; }`}</style>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -846,13 +1346,13 @@ function GameFormModal({
               <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">Banner Image URL</label>
               <input
                 placeholder="https://…"
-                value={form.banner}                  // ← was form.banner_url
-                onChange={e => setForm(p => ({ ...p, banner: e.target.value }))}   // ← was banner_url
+                value={form.banner}
+                onChange={e => setForm(p => ({ ...p, banner: e.target.value }))}
                 className={inputClass}
               />
-              {form.banner && (                       // ← was form.banner_url
+              {form.banner && (
                 <img
-                  src={form.banner}                  // ← was form.banner_url
+                  src={form.banner}
                   alt="preview"
                   className="mt-2 w-full h-20 object-cover rounded-xl border border-white/10 opacity-80"
                 />
@@ -900,20 +1400,48 @@ function GameFormModal({
                 {ranksText.split('\n').filter(r => r.trim()).length} rank(s) defined
               </p>
             </div>
-            <div className="md:col-span-2 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setForm(p => ({ ...p, is_active: !p.is_active }))}
-                className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${form.is_active ? 'bg-purple-600' : 'bg-white/10'}`}
-              >
-                <span
-                  className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
-                  style={{ left: form.is_active ? '16px' : '2px' }}
-                />
-              </button>
-              <span className="text-white/50 text-[10px] font-bold tracking-widest uppercase">
-                {form.is_active ? 'Active' : 'Inactive'}
-              </span>
+
+            {/* ── Visibility toggles ── */}
+            <div className="md:col-span-2 grid grid-cols-2 gap-3">
+              {/* Active toggle */}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setForm(p => ({ ...p, is_active: !p.is_active }))}
+                  className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${form.is_active ? 'bg-purple-600' : 'bg-white/10'}`}
+                >
+                  <span
+                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
+                    style={{ left: form.is_active ? '16px' : '2px' }}
+                  />
+                </button>
+                <div>
+                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">
+                    {form.is_active ? 'Active' : 'Inactive'}
+                  </p>
+                  <p className="text-white/20 text-[10px]">Shown in games showcase</p>
+                </div>
+              </div>
+
+              {/* Registration open toggle */}
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setForm(p => ({ ...p, registration_open: !p.registration_open }))}
+                  className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${form.registration_open ? 'bg-green-600' : 'bg-white/10'}`}
+                >
+                  <span
+                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
+                    style={{ left: form.registration_open ? '16px' : '2px' }}
+                  />
+                </button>
+                <div>
+                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">
+                    {form.registration_open ? 'Recruiting' : 'Closed'}
+                  </p>
+                  <p className="text-white/20 text-[10px]">Shown in join form</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -971,11 +1499,6 @@ function GamesSection() {
     load()
   }
 
-  const toggleActive = async (id: number, is_active: boolean) => {
-    await games.update(id, { is_active: !is_active })
-    load()
-  }
-
   return (
     <div>
       <SectionHeader
@@ -990,7 +1513,7 @@ function GamesSection() {
             key={g.id}
             className={`bg-white/5 border border-white/8 rounded-2xl p-5 flex items-center gap-4 transition-opacity ${!g.is_active ? 'opacity-50' : ''}`}
           >
-            {/* Banner — fixed size, real image or letter fallback */}
+            {/* Banner */}
             <div className="w-24 h-16 rounded-xl shrink-0 overflow-hidden border border-white/10">
               {g.banner
                 ? <img src={g.banner} alt={g.title} className="w-full h-full object-cover" />
@@ -1005,6 +1528,8 @@ function GamesSection() {
                 <span className="text-white font-bold">{g.title}</span>
                 <Badge color="purple">{g.slug}</Badge>
                 {!g.is_active && <Badge color="gray">Inactive</Badge>}
+                {g.is_active && g.registration_open  && <Badge color="green">Recruiting</Badge>}
+                {g.is_active && !g.registration_open && <Badge color="gray">Closed</Badge>}
               </div>
               <p className="text-white/40 text-xs">
                 {[g.genre, g.publisher].filter(Boolean).join(' · ')}
@@ -1014,10 +1539,7 @@ function GamesSection() {
             </div>
 
             <div className="flex gap-2 shrink-0">
-              <ActionButton variant="ghost" onClick={() => openEdit(g)}>Edit</ActionButton>
-              <ActionButton variant="ghost" onClick={() => toggleActive(g.id, g.is_active)}>
-                {g.is_active ? 'Deactivate' : 'Activate'}
-              </ActionButton>
+              <ActionButton variant="ghost" onClick={() => openEdit(g)}>Manage</ActionButton>
               <ActionButton variant="danger" onClick={() => remove(g.id)}>Delete</ActionButton>
             </div>
           </div>

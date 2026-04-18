@@ -7,15 +7,26 @@ from .models import Game
 
 @require_http_methods(['GET'])
 def list_games(request):
-    """Public — active games only."""
+    """Public — active games only (full showcase list)."""
     qs = Game.objects.filter(is_active=True)
+    return JsonResponse({'games': [g.to_dict() for g in qs]})
+
+
+@require_http_methods(['GET'])
+def list_games_open(request):
+    """Public — games currently open for registration (join-form list).
+
+    Filters to is_active=True AND registration_open=True so the join form
+    never shows a game that is inactive or has closed recruitment.
+    """
+    qs = Game.objects.filter(is_active=True, registration_open=True)
     return JsonResponse({'games': [g.to_dict() for g in qs]})
 
 
 @login_required
 @require_http_methods(['GET'])
 def list_games_all(request):
-    """Staff — all games including inactive."""
+    """Staff — all games including inactive, with full field set."""
     qs = Game.objects.all()
     return JsonResponse({'games': [g.to_dict() for g in qs]})
 
@@ -46,6 +57,7 @@ def create_game(request):
                 overlay_color=data.get('overlay_color', ''),
                 ranks=ranks,
                 is_active=data.get('is_active', 'true').lower() != 'false',
+                registration_open=data.get('registration_open', 'false').lower() == 'true',
                 display_order=int(data.get('display_order', 0)),
             )
             if banner_file:
@@ -66,6 +78,7 @@ def create_game(request):
                 overlay_color=data.get('overlay_color', ''),
                 ranks=data.get('ranks', []),
                 is_active=data.get('is_active', True),
+                registration_open=data.get('registration_open', False),
                 display_order=data.get('display_order', 0),
             )
 
@@ -94,6 +107,8 @@ def update_game(request, pk):
                     setattr(game, field, data[field])
             if 'is_active' in data:
                 game.is_active = data['is_active'].lower() != 'false'
+            if 'registration_open' in data:
+                game.registration_open = data['registration_open'].lower() == 'true'
             if 'display_order' in data:
                 game.display_order = int(data['display_order'])
             if 'ranks' in data:
@@ -109,7 +124,7 @@ def update_game(request, pk):
         else:
             data = json.loads(request.body)
             for field in ['title', 'slug', 'publisher', 'genre', 'banner_url', 'logo_url',
-                          'overlay_color', 'ranks', 'is_active', 'display_order']:
+                          'overlay_color', 'ranks', 'is_active', 'registration_open', 'display_order']:
                 if field in data:
                     setattr(game, field, data[field])
 
