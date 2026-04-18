@@ -510,7 +510,7 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-[#0d0014] text-white overflow-x-hidden" style={{ fontFamily: "'Barlow', sans-serif" }}>
 
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "bg-[#0d0014]/95 backdrop-blur-md border-b border-white/10 shadow-lg shadow-purple-900/20" : "bg-transparent"}`}>
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "bg-[#0d0014]/95 backdrop-blur-md shadow-lg shadow-purple-900/30" : "bg-transparent"}`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <a href="#" className="flex items-center gap-3 group">
             <NBLLogoFull size={40} className="group-hover:scale-110 transition-transform duration-200" />
