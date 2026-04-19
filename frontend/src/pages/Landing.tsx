@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { joins, matches as matchesApi, news as newsApi, games as gamesApi } from "../utils/api";
+import { joins, matches as matchesApi, news as newsApi, games as gamesApi, spotlight } from "../utils/api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface GameData {
@@ -333,24 +333,22 @@ function JoinForm() {
     username: "", ingame_username: "", game: "", discord_username: "", rank: "", email: "",
   });
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
- 
-  // Load ONLY games open for registration
+
   useEffect(() => {
     (gamesApi.listOpen() as Promise<any>)
       .then(r => setGameList(r.games || []))
       .catch(() => setGameList([]))
       .finally(() => setLoadingGames(false));
   }, []);
- 
+
   const selectedGame = gameList.find(g => g.slug === formData.game);
   const ranks = selectedGame?.ranks || [];
- 
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    // Reset rank whenever game changes
     setFormData(prev => ({ ...prev, [name]: value, ...(name === "game" ? { rank: "" } : {}) }));
   };
- 
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus("loading");
@@ -362,25 +360,22 @@ function JoinForm() {
       setStatus("error");
     }
   };
- 
+
   const inputClass =
     "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm " +
     "focus:outline-none focus:border-purple-500/60 focus:bg-purple-500/5 transition-all duration-200";
   const labelClass = "block text-white/60 text-xs font-bold tracking-widest uppercase mb-2";
- 
-  // ── No games open → show a friendly closed message instead of an empty form ──
+
   if (!loadingGames && gameList.length === 0) {
     return (
       <div className="bg-white/5 border border-white/10 rounded-3xl p-8 md:p-12 text-center">
         <div className="w-16 h-16 rounded-full bg-purple-500/15 border border-purple-500/25 flex items-center justify-center mx-auto mb-6">
-          {/* Lock icon */}
           <svg className="w-7 h-7 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round"
               d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
           </svg>
         </div>
-        <h3 className="text-white text-2xl font-black uppercase mb-3"
-          style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+        <h3 className="text-white text-2xl font-black uppercase mb-3" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
           Registrations Closed
         </h3>
         <p className="text-gray-400 max-w-sm mx-auto leading-relaxed">
@@ -399,7 +394,7 @@ function JoinForm() {
       </div>
     );
   }
- 
+
   return (
     <div className="bg-white/5 border border-white/10 rounded-3xl p-8 md:p-10">
       {status === "success" ? (
@@ -409,8 +404,7 @@ function JoinForm() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h3 className="text-white text-2xl font-black uppercase mb-3"
-            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>Application Sent!</h3>
+          <h3 className="text-white text-2xl font-black uppercase mb-3" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>Application Sent!</h3>
           <p className="text-gray-400">We'll review your application and get back to you soon.</p>
           <button onClick={() => setStatus("idle")}
             className="mt-8 text-purple-400 text-sm font-bold tracking-wider uppercase hover:text-purple-300 transition-colors">
@@ -430,8 +424,6 @@ function JoinForm() {
               <input type="text" name="ingame_username" value={formData.ingame_username} onChange={handleChange}
                 required placeholder="Your in-game name" className={inputClass} />
             </div>
- 
-            {/* Game — only registration_open games */}
             <div>
               <label className={labelClass}>Game</label>
               <select name="game" value={formData.game} onChange={handleChange} required
@@ -444,43 +436,33 @@ function JoinForm() {
                 ))}
               </select>
             </div>
- 
             <div>
               <label className={labelClass}>Discord Username</label>
               <input type="text" name="discord_username" value={formData.discord_username} onChange={handleChange}
                 required placeholder="username#0000" className={inputClass} />
             </div>
- 
-            {/* Rank — driven by selected game's rank list */}
             <div>
               <label className={labelClass}>Rank</label>
               <select name="rank" value={formData.rank} onChange={handleChange} required
                 disabled={!formData.game || ranks.length === 0}
                 className={inputClass + " cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"}>
                 <option value="" disabled>
-                  {!formData.game
-                    ? "Select a game first"
-                    : ranks.length === 0
-                    ? "No ranks defined"
-                    : "Select your rank"}
+                  {!formData.game ? "Select a game first" : ranks.length === 0 ? "No ranks defined" : "Select your rank"}
                 </option>
                 {ranks.map(r => (
                   <option key={r} value={r} className="bg-[#1a0030]">{r}</option>
                 ))}
               </select>
             </div>
- 
             <div>
               <label className={labelClass}>Email</label>
               <input type="email" name="email" value={formData.email} onChange={handleChange}
                 required placeholder="your@email.com" className={inputClass} />
             </div>
           </div>
- 
           {status === "error" && (
             <p className="mt-4 text-red-400 text-sm text-center">Something went wrong. Please try again.</p>
           )}
- 
           <div className="mt-8">
             <button type="submit" disabled={status === "loading"}
               className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-black py-4 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 hover:shadow-2xl hover:shadow-purple-500/40 hover:-translate-y-0.5"
@@ -545,6 +527,205 @@ function MatchSchedule() {
   );
 }
 
+// ── Spotlight Hero — full card replacing the rocket car ───────────────────────
+function SpotlightHero() {
+  const [slides, setSlides] = useState<any[]>([]);
+  const [current, setCurrent] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    (spotlight.list() as Promise<any>)
+      .then(r => { setSlides(r.slides || []); setLoaded(true); })
+      .catch(() => setLoaded(true));
+  }, []);
+
+  // Auto-advance for images
+  useEffect(() => {
+    if (!slides.length) return;
+    const slide = slides[current];
+    if (slide?.media_type === "image") {
+      timerRef.current = setTimeout(() => {
+        setCurrent(prev => (prev + 1) % slides.length);
+      }, (slide.duration || 8) * 1000);
+    }
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [current, slides]);
+
+  // Restart video on slide change
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.load();
+      videoRef.current.play().catch(() => {});
+    }
+  }, [current]);
+
+  const advance = () => setCurrent(prev => (prev + 1) % slides.length);
+  const slide = slides[current];
+
+  // ── Dot navigation ────────────────────────────────────────────────────────
+  const Dots = () => (
+    <>
+      {slides.length > 1 && (
+        <div className="absolute bottom-3 right-4 flex gap-1.5 z-10">
+          {slides.map((_: any, i: number) => (
+            <button
+              key={i}
+              onClick={e => { e.stopPropagation(); e.preventDefault(); setCurrent(i); }}
+              className={`rounded-full transition-all duration-300 ${
+                i === current
+                  ? "w-5 h-1.5 bg-purple-400"
+                  : "w-1.5 h-1.5 bg-white/30 hover:bg-white/60"
+              }`}
+            />
+          ))}
+        </div>
+      )}
+    </>
+  );
+
+  // ── Fallback: static branded card (shown while loading or no slides) ──────
+  if (!loaded || !slides.length) {
+    return (
+      <div
+        className="animate-float w-full max-w-lg rounded-3xl overflow-hidden border border-white/20 shadow-2xl shadow-purple-900/40"
+        style={{
+          background: "rgba(10,0,20,0.65)",
+          backdropFilter: "blur(16px)",
+        }}
+      >
+        {/* Decorative top bar */}
+        <div className="h-1.5 w-full bg-gradient-to-r from-purple-600 via-violet-500 to-purple-400" />
+
+        <div className="p-8 flex flex-col items-center gap-6">
+          {/* Logo glow */}
+          <div className="relative">
+            <div className="absolute inset-0 rounded-full bg-purple-500/30 blur-2xl scale-150" />
+            <div className="relative w-24 h-24 rounded-2xl bg-gradient-to-br from-violet-600 to-purple-500 flex items-center justify-center border border-purple-400/30 shadow-lg shadow-purple-500/40">
+              <NBLLogoFull size={56} />
+            </div>
+          </div>
+
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-2 mb-3">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+              <span className="text-purple-300/80 text-xs font-bold tracking-widest uppercase">Season Active</span>
+            </div>
+            <h3
+              className="text-white font-black text-3xl uppercase mb-1"
+              style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+            >
+              NBL<span className="text-purple-400">ESPORT</span>
+            </h3>
+            <p className="text-white/40 text-sm tracking-wider">Compete · Build · Dominate</p>
+          </div>
+
+          {/* Game pills */}
+          <div className="flex items-center gap-2 flex-wrap justify-center">
+            {[
+              { label: "Rocket League", color: "#60b8ff" },
+              { label: "Valorant",      color: "#ff7080" },
+              { label: "Fortnite",      color: "#ffd700" },
+            ].map(g => (
+              <span
+                key={g.label}
+                className="text-[11px] font-bold tracking-widest uppercase px-3 py-1 rounded-full"
+                style={{
+                  background: `${g.color}18`,
+                  color: g.color,
+                  border: `1px solid ${g.color}40`,
+                }}
+              >
+                {g.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Media content ─────────────────────────────────────────────────────────
+  const MediaContent = (
+    <div
+      className="animate-float w-full max-w-lg rounded-3xl overflow-hidden border border-white/20 shadow-2xl shadow-purple-900/50"
+      style={{
+        background: "rgba(10,0,20,0.55)",
+        backdropFilter: "blur(12px)",
+      }}
+    >
+      {/* Coloured top accent */}
+      <div className="h-1 w-full bg-gradient-to-r from-purple-600 via-violet-500 to-purple-400" />
+
+      <div className="relative" style={{ height: "300px" }}>
+        {slide.media_type === "video" ? (
+          <video
+            ref={videoRef}
+            className="w-full h-full object-cover"
+            autoPlay
+            muted
+            playsInline
+            onEnded={advance}
+            style={{ display: "block" }}
+          >
+            <source src={slide.media_url} />
+          </video>
+        ) : (
+          <img
+            src={slide.media_url}
+            alt={slide.title || "Spotlight"}
+            className="w-full h-full object-cover"
+          />
+        )}
+
+        {/* Bottom fade */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: "linear-gradient(to top, rgba(10,0,20,0.90) 0%, rgba(10,0,20,0.15) 55%, transparent 100%)",
+          }}
+        />
+
+        {/* Pill label */}
+        <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm border border-white/15 rounded-full px-3 py-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+          <span className="text-white/80 text-[10px] font-bold tracking-widest uppercase">
+            {slide.pill_label}
+          </span>
+        </div>
+
+        {/* Slide counter / dots */}
+        <Dots />
+
+        {/* Title overlay at bottom */}
+        {slide.title && (
+          <div className="absolute bottom-3 left-4 right-8">
+            <p
+              className="text-white font-black text-lg leading-tight uppercase truncate"
+              style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+            >
+              {slide.title}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // Wrap in <a> if slide has a click-through href
+  if (slide.href) {
+    return (
+      <a href={slide.href} target="_blank" rel="noreferrer" className="block w-full max-w-lg">
+        {MediaContent}
+      </a>
+    );
+  }
+
+  return <div className="w-full max-w-lg">{MediaContent}</div>;
+}
+
+// ── Landing page ──────────────────────────────────────────────────────────────
 export default function Landing() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -594,18 +775,25 @@ export default function Landing() {
         )}
       </nav>
 
-      {/* HERO */}
+      {/* ── HERO ─────────────────────────────────────────────────────────── */}
       <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+        {/* Background */}
         <div className="absolute inset-0">
           <img src="/images/hero-bg.jpg" alt="" className="w-full h-full object-cover opacity-40" />
           <div className="absolute inset-0 bg-gradient-to-b from-[#0d0014]/60 via-[#0d0014]/20 to-[#0d0014]" />
           <div className="absolute inset-0 bg-gradient-to-r from-[#0d0014]/80 via-transparent to-[#0d0014]/80" />
         </div>
+
+        {/* Ambient glows */}
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl animate-pulse" />
         <div className="absolute bottom-1/3 right-1/4 w-64 h-64 bg-violet-500/15 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1s" }} />
+
+        {/* Grid overlay */}
         <div className="absolute inset-0 opacity-5" style={{ backgroundImage: "linear-gradient(rgba(168,85,247,1) 1px, transparent 1px), linear-gradient(90deg, rgba(168,85,247,1) 1px, transparent 1px)", backgroundSize: "60px 60px" }} />
 
         <div className="relative z-10 max-w-7xl mx-auto px-6 pt-24 pb-12 grid md:grid-cols-2 gap-12 items-center">
+
+          {/* LEFT — copy */}
           <div>
             <div className="inline-flex items-center gap-2 bg-purple-500/20 border border-purple-500/40 rounded-full px-4 py-2 mb-8">
               <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
@@ -626,34 +814,19 @@ export default function Landing() {
               <a href="#join" className="group relative bg-purple-600 hover:bg-purple-500 text-white font-bold px-8 py-4 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 hover:shadow-2xl hover:shadow-purple-500/40 hover:-translate-y-0.5">
                 Join the Team
               </a>
-              <a href="#about" className="border border-white/20 hover:border-purple-500/60 text-white font-bold px-8 py-4 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 hover:bg-purple-500/10 hover:-translate-y-0.5">Learn More</a>
+              <a href="#about" className="border border-white/20 hover:border-purple-500/60 text-white font-bold px-8 py-4 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 hover:bg-purple-500/10 hover:-translate-y-0.5">
+                Learn More
+              </a>
             </div>
           </div>
 
-          <div className="relative flex justify-center items-center">
-            <img src="/images/rocket-car.png" alt="Rocket League Car" className="w-full max-w-lg object-contain drop-shadow-2xl animate-float" />
-            <div className="absolute bottom-4 left-0 right-0 mx-auto w-max bg-white/5 backdrop-blur-md border border-white/20 rounded-2xl p-4 shadow-2xl">
-              <div className="text-xs text-purple-400 font-bold tracking-widest uppercase mb-3 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" /> Match Day · Rocket League
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="text-center">
-                  <div className="w-10 h-10 rounded-lg bg-purple-500/30 border border-purple-500/50 flex items-center justify-center mb-1"><NBLLogoFull size={28} /></div>
-                  <span className="text-white text-xs font-bold">NBL</span>
-                </div>
-                <div className="text-purple-300 font-black text-xl" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>VS</div>
-                <div className="text-center">
-                  <div className="w-10 h-10 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center mb-1"><span className="text-lg">🎮</span></div>
-                  <span className="text-white text-xs font-bold">RIVAL</span>
-                </div>
-                <div className="text-xs text-gray-400 ml-2">
-                  <div>Mission: Victory</div>
-                  <div className="text-purple-400 font-semibold">For the win →</div>
-                </div>
-              </div>
-            </div>
+          {/* RIGHT — Spotlight card (replaces rocket car) */}
+          <div className="flex justify-center items-center">
+            <SpotlightHero />
           </div>
         </div>
+
+        {/* Scroll indicator */}
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-bounce">
           <span className="text-gray-500 text-xs tracking-widest uppercase">Scroll</span>
           <svg className="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -679,10 +852,7 @@ export default function Landing() {
 
       <div className="max-w-7xl mx-auto px-6"><div className="h-px bg-gradient-to-r from-transparent via-purple-500/40 to-transparent" /></div>
 
-      {/* GAMES — dynamic from DB */}
       <GamesSection />
-
-      {/* SCHEDULE */}
       <MatchSchedule />
 
       {/* ABOUT */}
@@ -696,12 +866,21 @@ export default function Landing() {
             </h2>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
-            <PillarCard icon={<svg className="w-7 h-7 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 0 1 3 3h-15a3 3 0 0 1 3-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 0 1-.982-3.172M9.497 14.25a7.454 7.454 0 0 0 .981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 0 0 7.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 0 0 2.748 1.35m8.272-6.842V4.5c0 2.108-.966 3.99-2.48 5.228m2.48-5.492a46.32 46.32 0 0 1 2.916.52 6.003 6.003 0 0 1-5.395 4.972m0 0a6.726 6.726 0 0 1-2.749 1.35m0 0a6.772 6.772 0 0 1-3.044 0" /></svg>}
-              title="Compete in Tournaments" description="We field competitive rosters across Valorant, Fortnite, and Rocket League — pushing for victory in every match day, every season." />
-            <PillarCard icon={<svg className="w-7 h-7 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" /></svg>}
-              title="Build & Support Teams" description="We scout raw talent and cultivate champions. Our coaching staff provides structured training, VOD review, and mental performance support." />
-            <PillarCard icon={<svg className="w-7 h-7 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>}
-              title="Create Opportunities" description="From players to streamers and content creators — we open doors. NBLEsport is a launchpad for the next generation of esports professionals across Algeria." />
+            <PillarCard
+              icon={<svg className="w-7 h-7 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 0 1 3 3h-15a3 3 0 0 1 3-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 0 1-.982-3.172M9.497 14.25a7.454 7.454 0 0 0 .981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 0 0 7.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 0 0 2.748 1.35m8.272-6.842V4.5c0 2.108-.966 3.99-2.48 5.228m2.48-5.492a46.32 46.32 0 0 1 2.916.52 6.003 6.003 0 0 1-5.395 4.972m0 0a6.726 6.726 0 0 1-2.749 1.35m0 0a6.772 6.772 0 0 1-3.044 0" /></svg>}
+              title="Compete in Tournaments"
+              description="We field competitive rosters across Valorant, Fortnite, and Rocket League — pushing for victory in every match day, every season."
+            />
+            <PillarCard
+              icon={<svg className="w-7 h-7 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" /></svg>}
+              title="Build & Support Teams"
+              description="We scout raw talent and cultivate champions. Our coaching staff provides structured training, VOD review, and mental performance support."
+            />
+            <PillarCard
+              icon={<svg className="w-7 h-7 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>}
+              title="Create Opportunities"
+              description="From players to streamers and content creators — we open doors. NBLEsport is a launchpad for the next generation of esports professionals across Algeria."
+            />
           </div>
         </div>
       </section>
@@ -723,10 +902,9 @@ export default function Landing() {
         </div>
       </div>
 
-      {/* NEWS */}
       <LiveNewsSection />
 
-      {/* JOIN — with dynamic games */}
+      {/* JOIN */}
       <section id="join" className="py-24 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-950/20 to-[#0d0014]" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-3xl" />

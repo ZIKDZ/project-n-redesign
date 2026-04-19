@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     'apps.players',
     'apps.teams',
     'apps.games',
+    'apps.spotlight',
 ]
 
 MIDDLEWARE = [

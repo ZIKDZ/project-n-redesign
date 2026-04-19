@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../App'
-import { auth, joins, matches, news, players, teams, games } from '../utils/api'
+import { auth, joins, matches, news, players, teams, games, spotlight } from '../utils/api'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Section = 'overview' | 'joins' | 'matches' | 'news' | 'players' | 'teams' | 'games'
+type Section = 'overview' | 'joins' | 'matches' | 'news' | 'players' | 'teams' | 'games' | 'spotlight'
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 const NAV_ITEMS: { id: Section; label: string; icon: string }[] = [
@@ -15,6 +15,7 @@ const NAV_ITEMS: { id: Section; label: string; icon: string }[] = [
   { id: 'players',   label: 'Players',       icon: '◉' },
   { id: 'teams',     label: 'Teams',         icon: '◈' },
   { id: 'games',     label: 'Games',         icon: '🎮' },
+  { id: 'spotlight', label: 'Spotlight',     icon: '▶' },
 ]
 
 // ── Small reusable components ─────────────────────────────────────────────────
@@ -52,7 +53,7 @@ function SectionHeader({ title, action }: { title: string; action?: React.ReactN
   )
 }
 
-function ActionButton({ onClick, children, variant = 'primary' }: { onClick: () => void; children: React.ReactNode; variant?: 'primary' | 'danger' | 'ghost' }) {
+function ActionButton({ onClick, children, variant = 'primary', disabled }: { onClick: () => void; children: React.ReactNode; variant?: 'primary' | 'danger' | 'ghost'; disabled?: boolean }) {
   const styles = {
     primary: 'bg-purple-600 hover:bg-purple-500 text-white',
     danger:  'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30',
@@ -61,7 +62,8 @@ function ActionButton({ onClick, children, variant = 'primary' }: { onClick: () 
   return (
     <button
       onClick={onClick}
-      className={`text-xs font-bold px-4 py-2 rounded-lg tracking-wider uppercase transition-all duration-200 ${styles[variant]}`}
+      disabled={disabled}
+      className={`text-xs font-bold px-4 py-2 rounded-lg tracking-wider uppercase transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed ${styles[variant]}`}
     >
       {children}
     </button>
@@ -534,10 +536,6 @@ function NewsSection() {
 }
 
 // ── Players section ───────────────────────────────────────────────────────────
-// Drop this into Dashboard.tsx, replacing the existing PlayersSection function.
-// Also add `games` to the import at the top if not already there:
-//   import { auth, joins, matches, news, players, teams, games } from '../utils/api'
-
 const STATUS_COLORS: Record<string, 'green' | 'yellow' | 'gray'> = {
   active: 'green',
   suspended: 'yellow',
@@ -618,7 +616,6 @@ function PlayerModal({
   const [saving, setSaving] = useState(false)
   const avatarRef = useRef<HTMLInputElement>(null)
 
-  // When game changes, reset rank
   const handleGameChange = (slug: string) => {
     setForm(p => ({ ...p, game: slug, game_id: null, rank: '' }))
   }
@@ -659,10 +656,8 @@ function PlayerModal({
         className="bg-[#13001f] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl shadow-purple-900/30 flex flex-col"
         style={{ maxHeight: 'min(88vh, 660px)' }}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-white/8">
           <div className="flex items-center gap-3">
-            {/* Avatar */}
             <div
               className="w-12 h-12 rounded-xl border-2 border-dashed border-white/15 flex items-center justify-center overflow-hidden cursor-pointer hover:border-purple-500/50 transition-colors shrink-0"
               onClick={() => avatarRef.current?.click()}
@@ -688,7 +683,6 @@ function PlayerModal({
           <button onClick={onClose} className="text-white/30 hover:text-white transition-colors text-xl">✕</button>
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-1 px-6 pt-3 pb-1">
           {(['profile', 'personal'] as const).map(t => (
             <button
@@ -705,11 +699,7 @@ function PlayerModal({
           ))}
         </div>
 
-        {/* Body */}
-        <div
-          className="overflow-y-auto flex-1 px-6 py-3"
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-        >
+        <div className="overflow-y-auto flex-1 px-6 py-3" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {tab === 'profile' && (
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -724,8 +714,6 @@ function PlayerModal({
                   onChange={e => setForm(p => ({ ...p, ingame_username: e.target.value }))}
                   className={inputClass} />
               </div>
-
-              {/* Game */}
               <div>
                 <label className={labelClass}>Game</label>
                 <select value={form.game} onChange={e => handleGameChange(e.target.value)}
@@ -736,8 +724,6 @@ function PlayerModal({
                   ))}
                 </select>
               </div>
-
-              {/* Rank — from game */}
               <div>
                 <label className={labelClass}>Rank</label>
                 {ranks.length > 0 ? (
@@ -753,8 +739,6 @@ function PlayerModal({
                     className={inputClass} />
                 )}
               </div>
-
-              {/* Role */}
               <div>
                 <label className={labelClass}>Role</label>
                 <select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}
@@ -764,8 +748,6 @@ function PlayerModal({
                   ))}
                 </select>
               </div>
-
-              {/* Status */}
               <div>
                 <label className={labelClass}>Status</label>
                 <select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))}
@@ -775,8 +757,6 @@ function PlayerModal({
                   <option value="inactive" className="bg-[#1a0030]">Inactive</option>
                 </select>
               </div>
-
-              {/* Team */}
               <div className="col-span-2">
                 <label className={labelClass}>Team</label>
                 <select value={form.team_id ?? ''} onChange={e => setForm(p => ({ ...p, team_id: e.target.value ? Number(e.target.value) : null }))}
@@ -787,24 +767,18 @@ function PlayerModal({
                   ))}
                 </select>
               </div>
-
-              {/* Discord */}
               <div className="col-span-2">
                 <label className={labelClass}>Discord Username</label>
                 <input placeholder="e.g. nebx#0000" value={form.discord_username}
                   onChange={e => setForm(p => ({ ...p, discord_username: e.target.value }))}
                   className={inputClass} />
               </div>
-
-              {/* Bio */}
               <div className="col-span-2">
                 <label className={labelClass}>Bio</label>
                 <textarea placeholder="Short player bio…" value={form.bio}
                   onChange={e => setForm(p => ({ ...p, bio: e.target.value }))}
                   className={inputClass + ' h-16 resize-none'} />
               </div>
-
-              {/* Avatar hint */}
               <div className="col-span-2">
                 <p className="text-white/20 text-[10px]">
                   💡 Click the avatar circle at the top to upload a photo
@@ -860,7 +834,6 @@ function PlayerModal({
           )}
         </div>
 
-        {/* Footer */}
         <div className="flex gap-3 px-6 py-4 border-t border-white/8">
           <button
             onClick={handleSubmit}
@@ -877,7 +850,6 @@ function PlayerModal({
   )
 }
 
-// ── Status dropdown — click-based so there's no hover-gap disappearing bug ────
 function StatusDropdown({
   currentStatus,
   onSelect,
@@ -909,7 +881,6 @@ function StatusDropdown({
         onClick={() => setOpen(v => !v)}
         className="bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white text-xs font-bold px-3 py-2 rounded-lg tracking-wider uppercase transition-all duration-200 flex items-center gap-1.5"
       >
-        {/* Current status dot */}
         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
           currentStatus === 'active'
             ? 'bg-green-400'
@@ -964,7 +935,6 @@ function PlayersSection() {
   const getCsrf = () =>
     document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1] || ''
 
-  // Always send as multipart so the avatar field is never lost
   const buildFormData = (form: any, avatarFile: File | null) => {
     const fd = new FormData()
     Object.entries(form).forEach(([k, v]) => {
@@ -1008,7 +978,6 @@ function PlayersSection() {
     load()
   }
 
-  // Filtered list
   const displayed = data.filter(p => {
     if (filterStatus && p.status !== filterStatus) return false
     if (filterGame && p.game !== filterGame) return false
@@ -1049,7 +1018,6 @@ function PlayersSection() {
               p.status === 'inactive' ? 'opacity-40' : p.status === 'suspended' ? 'opacity-70' : ''
             }`}
           >
-            {/* Avatar */}
             <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0 border border-white/10 bg-purple-900/30 flex items-center justify-center">
               {p.avatar
                 ? (
@@ -1058,7 +1026,6 @@ function PlayersSection() {
                     className="w-full h-full object-cover"
                     alt={p.username}
                     onError={e => {
-                      // If image fails, hide it so fallback letter shows
                       (e.currentTarget as HTMLImageElement).style.display = 'none'
                       const parent = e.currentTarget.parentElement
                       if (parent) {
@@ -1073,8 +1040,6 @@ function PlayersSection() {
                 : <span className="text-purple-300 text-sm font-black">{p.username[0]?.toUpperCase() ?? '?'}</span>
               }
             </div>
-
-            {/* Info */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-0.5">
                 <span className="text-white font-bold text-sm">{p.username}</span>
@@ -1089,26 +1054,18 @@ function PlayersSection() {
                 {p.discord_username && ` · ${p.discord_username}`}
               </p>
             </div>
-
-            {/* Actions */}
             <div className="flex items-center gap-2 shrink-0">
-              {/* Status quick-toggle dropdown — click-based to avoid hover gap bug */}
               <StatusDropdown
                 currentStatus={p.status}
                 onSelect={status => quickStatus(p.id, status)}
               />
-
-              {/* Manage button */}
               <ActionButton onClick={() => setEditing(p)}>Manage</ActionButton>
-
-              {/* Remove */}
               <ActionButton variant="danger" onClick={() => remove(p.id, p.username)}>Remove</ActionButton>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Add Modal */}
       {showAdd && (
         <PlayerModal
           initial={EMPTY_PLAYER as any}
@@ -1120,7 +1077,6 @@ function PlayersSection() {
         />
       )}
 
-      {/* Edit Modal */}
       {editing && (
         <PlayerModal
           initial={editing}
@@ -1136,7 +1092,6 @@ function PlayersSection() {
 }
 
 // ── Teams (Rosters) section ────────────────────────────────────────────────────
-
 const GAME_COLORS_TEAM: Record<string, { bg: string; accent: string }> = {
   rocket_league: { bg: 'rgba(96,184,255,0.12)',  accent: '#60b8ff' },
   valorant:      { bg: 'rgba(255,112,128,0.12)', accent: '#ff7080' },
@@ -1176,39 +1131,22 @@ function RosterCard({
       className="relative border border-white/10 rounded-2xl overflow-hidden flex flex-col transition-all duration-200 hover:border-purple-500/30"
       style={{ background: '#0f0020' }}
     >
-      {/* Banner */}
       <div className="h-28 relative shrink-0" style={{ background: bg }}>
         {team.banner_url ? (
-          <img
-            src={team.banner_url}
-            alt={team.name}
-            className="w-full h-full object-cover opacity-60"
-          />
+          <img src={team.banner_url} alt={team.name} className="w-full h-full object-cover opacity-60" />
         ) : (
           <div className="w-full h-full flex items-center justify-center" style={{ background: bg }}>
-            <span
-              className="font-black text-5xl select-none"
-              style={{ color: accent, opacity: 0.25, fontFamily: "'Barlow Condensed', sans-serif" }}
-            >
+            <span className="font-black text-5xl select-none" style={{ color: accent, opacity: 0.25, fontFamily: "'Barlow Condensed', sans-serif" }}>
               {initials}
             </span>
           </div>
         )}
-
-        {/* Gradient fade */}
-        <div
-          className="absolute inset-0"
-          style={{ background: 'linear-gradient(to top, #0f0020 0%, transparent 60%)' }}
-        />
-
-        {/* Visibility badge */}
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, #0f0020 0%, transparent 60%)' }} />
         {team.visibility === 'hidden' && (
           <span className="absolute top-2 right-2 text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded-full bg-black/50 text-white/40 border border-white/10">
             Hidden
           </span>
         )}
-
-        {/* Logo / letter avatar */}
         <div
           className="absolute bottom-0 left-4 translate-y-1/2 w-12 h-12 rounded-xl border-2 border-[#0f0020] flex items-center justify-center overflow-hidden shrink-0"
           style={{ background: bg }}
@@ -1216,26 +1154,17 @@ function RosterCard({
           {team.logo_url ? (
             <img src={team.logo_url} alt="" className="w-full h-full object-cover" />
           ) : (
-            <span
-              className="font-black text-xl select-none"
-              style={{ color: accent, fontFamily: "'Barlow Condensed', sans-serif" }}
-            >
+            <span className="font-black text-xl select-none" style={{ color: accent, fontFamily: "'Barlow Condensed', sans-serif" }}>
               {initials}
             </span>
           )}
         </div>
       </div>
 
-      {/* Body */}
       <div className="pt-8 px-4 pb-4 flex flex-col flex-1 gap-3">
-
-        {/* Name + game badge */}
         <div>
           <div className="flex items-start justify-between gap-2">
-            <h3
-              className="text-white font-black text-base leading-tight uppercase"
-              style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-            >
+            <h3 className="text-white font-black text-base leading-tight uppercase" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
               {team.name}
             </h3>
             <span
@@ -1250,7 +1179,6 @@ function RosterCard({
           )}
         </div>
 
-        {/* Capacity bar */}
         <div>
           <div className="flex justify-between items-center mb-1">
             <span className="text-white/30 text-[10px] font-bold tracking-widest uppercase">Roster</span>
@@ -1258,24 +1186,16 @@ function RosterCard({
           </div>
           <div className="flex gap-1">
             {Array.from({ length: totalSlots }).map((_, i) => (
-              <div
-                key={i}
-                className="h-1 flex-1 rounded-full"
-                style={{ background: i < filled ? accent : 'rgba(255,255,255,0.08)' }}
-              />
+              <div key={i} className="h-1 flex-1 rounded-full" style={{ background: i < filled ? accent : 'rgba(255,255,255,0.08)' }} />
             ))}
           </div>
         </div>
 
-        {/* IGL */}
         {team.igl && (
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold tracking-widest uppercase text-white/30">IGL</span>
             <div className="flex items-center gap-1.5">
-              <div
-                className="w-5 h-5 rounded-md overflow-hidden flex items-center justify-center text-[10px] font-black"
-                style={{ background: bg, color: accent }}
-              >
+              <div className="w-5 h-5 rounded-md overflow-hidden flex items-center justify-center text-[10px] font-black" style={{ background: bg, color: accent }}>
                 {team.igl.avatar
                   ? <img src={team.igl.avatar} className="w-full h-full object-cover" alt="" />
                   : team.igl.username[0]?.toUpperCase()
@@ -1286,7 +1206,6 @@ function RosterCard({
           </div>
         )}
 
-        {/* Player avatars row */}
         {mainPlayers.length > 0 ? (
           <div className="flex items-center gap-1 flex-wrap">
             {mainPlayers.map((p: any) => (
@@ -1303,27 +1222,18 @@ function RosterCard({
               </div>
             ))}
             {subs.length > 0 && (
-              <span className="text-[10px] text-white/25 font-bold pl-1">
-                +{subs.length} sub{subs.length > 1 ? 's' : ''}
-              </span>
+              <span className="text-[10px] text-white/25 font-bold pl-1">+{subs.length} sub{subs.length > 1 ? 's' : ''}</span>
             )}
           </div>
         ) : (
           <p className="text-white/20 text-[10px] tracking-wider">No players assigned yet</p>
         )}
 
-        {/* Actions */}
         <div className="flex gap-2 mt-auto pt-2 border-t border-white/5">
-          <button
-            onClick={onManage}
-            className="flex-1 bg-white/5 hover:bg-purple-500/15 border border-white/10 hover:border-purple-500/30 text-white/60 hover:text-white text-[10px] font-black py-2 rounded-lg tracking-widest uppercase transition-all duration-200"
-          >
+          <button onClick={onManage} className="flex-1 bg-white/5 hover:bg-purple-500/15 border border-white/10 hover:border-purple-500/30 text-white/60 hover:text-white text-[10px] font-black py-2 rounded-lg tracking-widest uppercase transition-all duration-200">
             Manage
           </button>
-          <button
-            onClick={onDelete}
-            className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400/70 hover:text-red-400 text-[10px] font-black px-3 py-2 rounded-lg tracking-widest uppercase transition-all duration-200"
-          >
+          <button onClick={onDelete} className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400/70 hover:text-red-400 text-[10px] font-black px-3 py-2 rounded-lg tracking-widest uppercase transition-all duration-200">
             Delete
           </button>
         </div>
@@ -1345,7 +1255,6 @@ function RosterModal({
   onSave: (data: any) => Promise<void>
   onClose: () => void
 }) {
-  // ✅ use destructured useState — consistent with the rest of the file
   const [form, setForm] = useState({
     name:        initial.name        || '',
     game:        initial.game        || 'rocket_league',
@@ -1359,9 +1268,7 @@ function RosterModal({
   })
   const [saving, setSaving] = useState(false)
 
-  const gamePlayers = playersList.filter(
-    p => p.game === form.game && p.status === 'active'
-  )
+  const gamePlayers = playersList.filter(p => p.game === form.game && p.status === 'active')
 
   const inputClass = 'bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500/60 w-full placeholder-white/20'
   const labelClass = 'block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1'
@@ -1370,11 +1277,7 @@ function RosterModal({
     if (!form.name || !form.game) return
     setSaving(true)
     try {
-      await onSave({
-        ...form,
-        igl_id:      form.igl_id || null,
-        max_players: Number(form.max_players),
-      })
+      await onSave({ ...form, igl_id: form.igl_id || null, max_players: Number(form.max_players) })
       onClose()
     } catch (e) {
       console.error(e)
@@ -1393,186 +1296,97 @@ function RosterModal({
         className="bg-[#13001f] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl shadow-purple-900/30 flex flex-col"
         style={{ maxHeight: 'min(88vh, 640px)' }}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-white/8">
           <div>
-            <h3
-              className="text-white font-black text-base uppercase tracking-wide"
-              style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-            >
+            <h3 className="text-white font-black text-base uppercase tracking-wide" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
               {isEdit ? `Edit — ${initial.name}` : 'Create Roster'}
             </h3>
             <p className="text-white/25 text-[10px] tracking-widest">
               {isEdit ? 'Update roster details' : 'Set up a new team roster'}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-white/30 hover:text-white transition-colors text-xl"
-          >
-            ✕
-          </button>
+          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors text-xl">✕</button>
         </div>
 
-        {/* Scrollable body */}
-        <div
-          className="overflow-y-auto flex-1 px-6 py-4"
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-        >
+        <div className="overflow-y-auto flex-1 px-6 py-4" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           <div className="grid grid-cols-2 gap-3">
-
-            {/* Name */}
             <div className="col-span-2">
               <label className={labelClass}>Roster Name *</label>
-              <input
-                placeholder="e.g. NBL Valorant Main"
-                value={form.name}
-                onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                className={inputClass}
-              />
+              <input placeholder="e.g. NBL Valorant Main" value={form.name}
+                onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className={inputClass} />
             </div>
-
-            {/* Game */}
             <div>
               <label className={labelClass}>Game *</label>
-              <select
-                value={form.game}
-                onChange={e => setForm(p => ({ ...p, game: e.target.value, igl_id: '' }))}
-                className={inputClass + ' cursor-pointer'}
-              >
+              <select value={form.game} onChange={e => setForm(p => ({ ...p, game: e.target.value, igl_id: '' }))}
+                className={inputClass + ' cursor-pointer'}>
                 <option value="rocket_league" className="bg-[#1a0030]">Rocket League</option>
                 <option value="valorant"      className="bg-[#1a0030]">Valorant</option>
                 <option value="fortnite"      className="bg-[#1a0030]">Fortnite</option>
               </select>
             </div>
-
-            {/* Max Players */}
             <div>
               <label className={labelClass}>Max Players</label>
-              <input
-                type="number"
-                min="1"
-                max="20"
-                value={form.max_players}
-                onChange={e => setForm(p => ({ ...p, max_players: Number(e.target.value) }))}
-                className={inputClass}
-              />
+              <input type="number" min="1" max="20" value={form.max_players}
+                onChange={e => setForm(p => ({ ...p, max_players: Number(e.target.value) }))} className={inputClass} />
             </div>
-
-            {/* IGL */}
             <div className="col-span-2">
               <label className={labelClass}>In-Game Leader (IGL)</label>
-              <select
-                value={form.igl_id}
-                onChange={e => setForm(p => ({ ...p, igl_id: e.target.value }))}
-                className={inputClass + ' cursor-pointer'}
-              >
+              <select value={form.igl_id} onChange={e => setForm(p => ({ ...p, igl_id: e.target.value }))}
+                className={inputClass + ' cursor-pointer'}>
                 <option value="" className="bg-[#1a0030]">No IGL assigned</option>
                 {gamePlayers.map(p => (
-                  <option key={p.id} value={p.id} className="bg-[#1a0030]">
-                    {p.username} ({p.role})
-                  </option>
+                  <option key={p.id} value={p.id} className="bg-[#1a0030]">{p.username} ({p.role})</option>
                 ))}
               </select>
               {gamePlayers.length === 0 && (
-                <p className="text-white/20 text-[10px] mt-1">
-                  No active {GAME_LABEL_TEAM[form.game] ?? form.game} players found. Add players first.
-                </p>
+                <p className="text-white/20 text-[10px] mt-1">No active {GAME_LABEL_TEAM[form.game] ?? form.game} players found.</p>
               )}
             </div>
-
-            {/* Banner URL */}
             <div className="col-span-2">
               <label className={labelClass}>Banner Image URL</label>
-              <input
-                placeholder="https://…"
-                value={form.banner_url}
-                onChange={e => setForm(p => ({ ...p, banner_url: e.target.value }))}
-                className={inputClass}
-              />
+              <input placeholder="https://…" value={form.banner_url}
+                onChange={e => setForm(p => ({ ...p, banner_url: e.target.value }))} className={inputClass} />
               {form.banner_url && (
-                <img
-                  src={form.banner_url}
-                  alt="preview"
-                  className="mt-2 w-full h-16 object-cover rounded-xl border border-white/10 opacity-70"
-                />
+                <img src={form.banner_url} alt="preview" className="mt-2 w-full h-16 object-cover rounded-xl border border-white/10 opacity-70" />
               )}
             </div>
-
-            {/* Logo URL */}
             <div className="col-span-2">
               <label className={labelClass}>Logo / Icon URL</label>
-              <input
-                placeholder="https://…"
-                value={form.logo_url}
-                onChange={e => setForm(p => ({ ...p, logo_url: e.target.value }))}
-                className={inputClass}
-              />
+              <input placeholder="https://…" value={form.logo_url}
+                onChange={e => setForm(p => ({ ...p, logo_url: e.target.value }))} className={inputClass} />
             </div>
-
-            {/* Description */}
             <div className="col-span-2">
               <label className={labelClass}>Description</label>
-              <textarea
-                placeholder="Short description about this roster…"
-                value={form.description}
+              <textarea placeholder="Short description about this roster…" value={form.description}
                 onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                className={inputClass + ' h-16 resize-none'}
-              />
+                className={inputClass + ' h-16 resize-none'} />
             </div>
-
-            {/* Visibility + Active toggles */}
             <div className="col-span-2 grid grid-cols-2 gap-3">
-
-              {/* Visibility */}
               <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setForm(p => ({
-                    ...p,
-                    visibility: p.visibility === 'public' ? 'hidden' : 'public',
-                  }))}
-                  className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${
-                    form.visibility === 'public' ? 'bg-green-600' : 'bg-white/10'
-                  }`}
-                >
-                  <span
-                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
-                    style={{ left: form.visibility === 'public' ? '16px' : '2px' }}
-                  />
+                <button type="button"
+                  onClick={() => setForm(p => ({ ...p, visibility: p.visibility === 'public' ? 'hidden' : 'public' }))}
+                  className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${form.visibility === 'public' ? 'bg-green-600' : 'bg-white/10'}`}>
+                  <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
+                    style={{ left: form.visibility === 'public' ? '16px' : '2px' }} />
                 </button>
                 <div>
-                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">
-                    {form.visibility === 'public' ? 'Public' : 'Hidden'}
-                  </p>
+                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">{form.visibility === 'public' ? 'Public' : 'Hidden'}</p>
                   <p className="text-white/20 text-[10px]">Visible on public site</p>
                 </div>
               </div>
-
-              {/* Active */}
               <div className="flex items-center gap-3">
-                <button
-                  type="button"
+                <button type="button"
                   onClick={() => setForm(p => ({ ...p, is_active: !p.is_active }))}
-                  className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${
-                    form.is_active ? 'bg-purple-600' : 'bg-white/10'
-                  }`}
-                >
-                  <span
-                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
-                    style={{ left: form.is_active ? '16px' : '2px' }}
-                  />
+                  className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${form.is_active ? 'bg-purple-600' : 'bg-white/10'}`}>
+                  <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
+                    style={{ left: form.is_active ? '16px' : '2px' }} />
                 </button>
                 <div>
-                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">
-                    {form.is_active ? 'Active' : 'Inactive'}
-                  </p>
+                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">{form.is_active ? 'Active' : 'Inactive'}</p>
                   <p className="text-white/20 text-[10px]">Roster is competing</p>
                 </div>
               </div>
             </div>
-
-            {/* Info note */}
             <div className="col-span-2">
               <p className="text-white/15 text-[10px] tracking-wide">
                 Players are assigned to rosters via the Players section. The IGL must be an active player for this game.
@@ -1581,14 +1395,10 @@ function RosterModal({
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex gap-3 px-6 py-4 border-t border-white/8">
-          <button
-            onClick={handleSubmit}
-            disabled={saving || !form.name}
+          <button onClick={handleSubmit} disabled={saving || !form.name}
             className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black px-6 py-2.5 rounded-xl text-xs tracking-widest uppercase transition-all duration-200"
-            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-          >
+            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
             {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Roster'}
           </button>
           <ActionButton variant="ghost" onClick={onClose}>Cancel</ActionButton>
@@ -1599,13 +1409,12 @@ function RosterModal({
 }
 
 function TeamsSection() {
-  // ✅ destructured hooks — same as every other section in this file
-  const [data, setData]             = useState<any[]>([])
+  const [data, setData]               = useState<any[]>([])
   const [playersList, setPlayersList] = useState<any[]>([])
-  const [showAdd, setShowAdd]       = useState(false)
-  const [editing, setEditing]       = useState<any | null>(null)
-  const [filterGame, setFilterGame] = useState('')
-  const [filterVis, setFilterVis]   = useState('')
+  const [showAdd, setShowAdd]         = useState(false)
+  const [editing, setEditing]         = useState<any | null>(null)
+  const [filterGame, setFilterGame]   = useState('')
+  const [filterVis, setFilterVis]     = useState('')
 
   const load = () => {
     ;(teams.listAll()   as Promise<any>).then(r => setData(r.teams     || [])).catch(() => {})
@@ -1614,18 +1423,9 @@ function TeamsSection() {
 
   useEffect(() => { load() }, [])
 
-  const handleAdd = async (payload: any) => {
-    await teams.create(payload)
-    load()
-  }
-
-  const handleEdit = async (payload: any) => {
-    if (!editing) return
-    await teams.update(editing.id, payload)
-    load()
-  }
-
-  const remove = async (id: number, name: string) => {
+  const handleAdd  = async (payload: any) => { await teams.create(payload); load() }
+  const handleEdit = async (payload: any) => { if (!editing) return; await teams.update(editing.id, payload); load() }
+  const remove     = async (id: number, name: string) => {
     if (!confirm(`Delete roster "${name}"? Players will not be removed.`)) return
     await teams.delete(id)
     load()
@@ -1643,21 +1443,15 @@ function TeamsSection() {
         title="Rosters"
         action={
           <div className="flex items-center gap-2">
-            <select
-              value={filterGame}
-              onChange={e => setFilterGame(e.target.value)}
-              className="bg-white/5 border border-white/10 text-white text-xs px-3 py-2 rounded-lg cursor-pointer"
-            >
+            <select value={filterGame} onChange={e => setFilterGame(e.target.value)}
+              className="bg-white/5 border border-white/10 text-white text-xs px-3 py-2 rounded-lg cursor-pointer">
               <option value="">All Games</option>
               <option value="rocket_league">Rocket League</option>
               <option value="valorant">Valorant</option>
               <option value="fortnite">Fortnite</option>
             </select>
-            <select
-              value={filterVis}
-              onChange={e => setFilterVis(e.target.value)}
-              className="bg-white/5 border border-white/10 text-white text-xs px-3 py-2 rounded-lg cursor-pointer"
-            >
+            <select value={filterVis} onChange={e => setFilterVis(e.target.value)}
+              className="bg-white/5 border border-white/10 text-white text-xs px-3 py-2 rounded-lg cursor-pointer">
               <option value="">All</option>
               <option value="public">Public</option>
               <option value="hidden">Hidden</option>
@@ -1670,44 +1464,23 @@ function TeamsSection() {
       {displayed.length === 0 ? (
         <div className="text-center py-16 border border-white/5 rounded-2xl">
           <p className="text-white/20 text-sm tracking-wider">No rosters found.</p>
-          <button
-            onClick={() => setShowAdd(true)}
-            className="mt-4 text-purple-400 text-xs font-bold tracking-widest uppercase hover:text-purple-300 transition-colors"
-          >
+          <button onClick={() => setShowAdd(true)} className="mt-4 text-purple-400 text-xs font-bold tracking-widest uppercase hover:text-purple-300 transition-colors">
             Create your first roster →
           </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {displayed.map(t => (
-            <RosterCard
-              key={t.id}
-              team={t}
-              onManage={() => setEditing(t)}
-              onDelete={() => remove(t.id, t.name)}
-            />
+            <RosterCard key={t.id} team={t} onManage={() => setEditing(t)} onDelete={() => remove(t.id, t.name)} />
           ))}
         </div>
       )}
 
       {showAdd && (
-        <RosterModal
-          initial={{}}
-          isEdit={false}
-          playersList={playersList}
-          onSave={handleAdd}
-          onClose={() => setShowAdd(false)}
-        />
+        <RosterModal initial={{}} isEdit={false} playersList={playersList} onSave={handleAdd} onClose={() => setShowAdd(false)} />
       )}
-
       {editing && (
-        <RosterModal
-          initial={editing}
-          isEdit={true}
-          playersList={playersList}
-          onSave={handleEdit}
-          onClose={() => setEditing(null)}
-        />
+        <RosterModal initial={editing} isEdit={true} playersList={playersList} onSave={handleEdit} onClose={() => setEditing(null)} />
       )}
     </div>
   )
@@ -1781,160 +1554,91 @@ function GameFormModal({
         className="bg-[#13001f] rounded-3xl w-full max-w-xl shadow-2xl shadow-purple-900/30 flex flex-col"
         style={{ maxHeight: 'min(85vh, 600px)' }}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-3">
-          <h3
-            className="text-white font-black text-lg uppercase tracking-wide"
-            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-          >
+          <h3 className="text-white font-black text-lg uppercase tracking-wide" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
             {isEdit ? 'Manage Game' : 'Add Game'}
           </h3>
           <button onClick={onClose} className="text-white/30 hover:text-white transition-colors text-xl">✕</button>
         </div>
 
-        {/* Scrollable body — scrollbar hidden */}
-        <div
-          className="overflow-y-auto flex-1 px-6 py-2"
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-        >
-          <style>{`.no-scroll::-webkit-scrollbar { display: none; }`}</style>
-
+        <div className="overflow-y-auto flex-1 px-6 py-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">Title *</label>
-              <input
-                placeholder="e.g. Rocket League"
-                value={form.title}
-                onChange={handleTitleChange}
-                className={inputClass}
-              />
+              <input placeholder="e.g. Rocket League" value={form.title} onChange={handleTitleChange} className={inputClass} />
             </div>
             <div>
               <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">
                 Slug * {!isEdit && <span className="normal-case text-white/20">(auto)</span>}
               </label>
-              <input
-                placeholder="e.g. RL"
-                value={form.slug}
+              <input placeholder="e.g. RL" value={form.slug}
                 onChange={e => setForm(p => ({ ...p, slug: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') }))}
-                className={inputClass}
-              />
+                className={inputClass} />
             </div>
             <div>
               <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">Publisher</label>
-              <input
-                placeholder="e.g. Psyonix"
-                value={form.publisher}
-                onChange={e => setForm(p => ({ ...p, publisher: e.target.value }))}
-                className={inputClass}
-              />
+              <input placeholder="e.g. Psyonix" value={form.publisher}
+                onChange={e => setForm(p => ({ ...p, publisher: e.target.value }))} className={inputClass} />
             </div>
             <div>
               <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">Genre</label>
-              <input
-                placeholder="e.g. Tactical FPS"
-                value={form.genre}
-                onChange={e => setForm(p => ({ ...p, genre: e.target.value }))}
-                className={inputClass}
-              />
+              <input placeholder="e.g. Tactical FPS" value={form.genre}
+                onChange={e => setForm(p => ({ ...p, genre: e.target.value }))} className={inputClass} />
             </div>
             <div className="md:col-span-2">
               <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">Banner Image URL</label>
-              <input
-                placeholder="https://…"
-                value={form.banner}
-                onChange={e => setForm(p => ({ ...p, banner: e.target.value }))}
-                className={inputClass}
-              />
+              <input placeholder="https://…" value={form.banner}
+                onChange={e => setForm(p => ({ ...p, banner: e.target.value }))} className={inputClass} />
               {form.banner && (
-                <img
-                  src={form.banner}
-                  alt="preview"
-                  className="mt-2 w-full h-20 object-cover rounded-xl border border-white/10 opacity-80"
-                />
+                <img src={form.banner} alt="preview" className="mt-2 w-full h-20 object-cover rounded-xl border border-white/10 opacity-80" />
               )}
             </div>
             <div>
               <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">Overlay Color</label>
-              <input
-                placeholder="rgba(0,48,135,0.4)"
-                value={form.overlay_color}
-                onChange={e => setForm(p => ({ ...p, overlay_color: e.target.value }))}
-                className={inputClass}
-              />
+              <input placeholder="rgba(0,48,135,0.4)" value={form.overlay_color}
+                onChange={e => setForm(p => ({ ...p, overlay_color: e.target.value }))} className={inputClass} />
             </div>
             <div>
               <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">
                 Display Order
-                {form.display_order === -1 && (
-                  <span className="normal-case text-white/20 ml-1">(auto → {autoOrder})</span>
-                )}
+                {form.display_order === -1 && <span className="normal-case text-white/20 ml-1">(auto → {autoOrder})</span>}
               </label>
-              <input
-                type="number"
-                min="0"
-                placeholder={`auto (${autoOrder})`}
+              <input type="number" min="0" placeholder={`auto (${autoOrder})`}
                 value={form.display_order === -1 ? '' : form.display_order}
-                onChange={e => setForm(p => ({
-                  ...p,
-                  display_order: e.target.value === '' ? -1 : parseInt(e.target.value) || 0,
-                }))}
-                className={inputClass}
-              />
+                onChange={e => setForm(p => ({ ...p, display_order: e.target.value === '' ? -1 : parseInt(e.target.value) || 0 }))}
+                className={inputClass} />
             </div>
             <div className="md:col-span-2">
               <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">
                 Ranks <span className="normal-case text-white/20">(one per line)</span>
               </label>
-              <textarea
-                placeholder={"Bronze I\nBronze II\nSilver I\nGold I\n…"}
-                value={ranksText}
+              <textarea placeholder={"Bronze I\nBronze II\nSilver I\nGold I\n…"} value={ranksText}
                 onChange={e => setRanksText(e.target.value)}
-                className={inputClass + ' h-24 resize-none font-mono text-xs'}
-              />
+                className={inputClass + ' h-24 resize-none font-mono text-xs'} />
               <p className="text-white/20 text-[10px] mt-1">
                 {ranksText.split('\n').filter(r => r.trim()).length} rank(s) defined
               </p>
             </div>
-
-            {/* ── Visibility toggles ── */}
             <div className="md:col-span-2 grid grid-cols-2 gap-3">
-              {/* Active toggle */}
               <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setForm(p => ({ ...p, is_active: !p.is_active }))}
-                  className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${form.is_active ? 'bg-purple-600' : 'bg-white/10'}`}
-                >
-                  <span
-                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
-                    style={{ left: form.is_active ? '16px' : '2px' }}
-                  />
+                <button type="button" onClick={() => setForm(p => ({ ...p, is_active: !p.is_active }))}
+                  className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${form.is_active ? 'bg-purple-600' : 'bg-white/10'}`}>
+                  <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
+                    style={{ left: form.is_active ? '16px' : '2px' }} />
                 </button>
                 <div>
-                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">
-                    {form.is_active ? 'Active' : 'Inactive'}
-                  </p>
+                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">{form.is_active ? 'Active' : 'Inactive'}</p>
                   <p className="text-white/20 text-[10px]">Shown in games showcase</p>
                 </div>
               </div>
-
-              {/* Registration open toggle */}
               <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setForm(p => ({ ...p, registration_open: !p.registration_open }))}
-                  className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${form.registration_open ? 'bg-green-600' : 'bg-white/10'}`}
-                >
-                  <span
-                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
-                    style={{ left: form.registration_open ? '16px' : '2px' }}
-                  />
+                <button type="button" onClick={() => setForm(p => ({ ...p, registration_open: !p.registration_open }))}
+                  className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${form.registration_open ? 'bg-green-600' : 'bg-white/10'}`}>
+                  <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
+                    style={{ left: form.registration_open ? '16px' : '2px' }} />
                 </button>
                 <div>
-                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">
-                    {form.registration_open ? 'Recruiting' : 'Closed'}
-                  </p>
+                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">{form.registration_open ? 'Recruiting' : 'Closed'}</p>
                   <p className="text-white/20 text-[10px]">Shown in join form</p>
                 </div>
               </div>
@@ -1942,14 +1646,10 @@ function GameFormModal({
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex gap-3 px-6 py-4">
-          <button
-            onClick={handleSubmit}
-            disabled={saving || !form.title || !form.slug}
+          <button onClick={handleSubmit} disabled={saving || !form.title || !form.slug}
             className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black px-6 py-2 rounded-xl text-xs tracking-widest uppercase transition-all duration-200"
-            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-          >
+            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
             {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Game'}
           </button>
           <ActionButton variant="ghost" onClick={onClose}>Cancel</ActionButton>
@@ -1970,26 +1670,12 @@ function GamesSection() {
 
   useEffect(() => { load() }, [])
 
-  const nextOrder = data.length > 0
-    ? Math.max(...data.map((g: any) => g.display_order ?? 0)) + 1
-    : 0
+  const nextOrder = data.length > 0 ? Math.max(...data.map((g: any) => g.display_order ?? 0)) + 1 : 0
 
-  const handleAdd = async (payload: any) => {
-    await games.create(payload)
-    load()
-  }
-
-  const handleEdit = async (payload: any) => {
-    if (!editingGame) return
-    await games.update((editingGame as any).id, payload)
-    load()
-  }
-
-  const openEdit = (g: any) => {
-    setEditingGame({ ...EMPTY_GAME_FORM, ...g })
-  }
-
-  const remove = async (id: number) => {
+  const handleAdd  = async (payload: any) => { await games.create(payload); load() }
+  const handleEdit = async (payload: any) => { if (!editingGame) return; await games.update((editingGame as any).id, payload); load() }
+  const openEdit   = (g: any) => setEditingGame({ ...EMPTY_GAME_FORM, ...g })
+  const remove     = async (id: number) => {
     if (!confirm('Delete this game? This will affect related join requests.')) return
     await games.delete(id)
     load()
@@ -2005,11 +1691,7 @@ function GamesSection() {
       <div className="space-y-3">
         {data.length === 0 && <p className="text-white/30 text-sm">No games yet.</p>}
         {data.map((g: any) => (
-          <div
-            key={g.id}
-            className={`bg-white/5 border border-white/8 rounded-2xl p-5 flex items-center gap-4 transition-opacity ${!g.is_active ? 'opacity-50' : ''}`}
-          >
-            {/* Banner */}
+          <div key={g.id} className={`bg-white/5 border border-white/8 rounded-2xl p-5 flex items-center gap-4 transition-opacity ${!g.is_active ? 'opacity-50' : ''}`}>
             <div className="w-24 h-16 rounded-xl shrink-0 overflow-hidden border border-white/10">
               {g.banner
                 ? <img src={g.banner} alt={g.title} className="w-full h-full object-cover" />
@@ -2018,7 +1700,6 @@ function GamesSection() {
                   </div>
               }
             </div>
-
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 mb-1 flex-wrap">
                 <span className="text-white font-bold">{g.title}</span>
@@ -2033,7 +1714,6 @@ function GamesSection() {
                 {` · Order: ${g.display_order}`}
               </p>
             </div>
-
             <div className="flex gap-2 shrink-0">
               <ActionButton variant="ghost" onClick={() => openEdit(g)}>Manage</ActionButton>
               <ActionButton variant="danger" onClick={() => remove(g.id)}>Delete</ActionButton>
@@ -2043,24 +1723,349 @@ function GamesSection() {
       </div>
 
       {showAddModal && (
-        <GameFormModal
-          initial={EMPTY_GAME_FORM}
-          isEdit={false}
-          onSave={handleAdd}
-          onClose={() => setShowAddModal(false)}
-          autoOrder={nextOrder}
+        <GameFormModal initial={EMPTY_GAME_FORM} isEdit={false} onSave={handleAdd} onClose={() => setShowAddModal(false)} autoOrder={nextOrder} />
+      )}
+      {editingGame && (
+        <GameFormModal initial={editingGame} isEdit={true} onSave={handleEdit} onClose={() => setEditingGame(null)} autoOrder={nextOrder} />
+      )}
+    </div>
+  )
+}
+
+// ── Spotlight section ─────────────────────────────────────────────────────────
+function SpotlightSection() {
+  const [data, setData] = useState<any[]>([])
+  const [showForm, setShowForm] = useState(false)
+  const [editingSlide, setEditingSlide] = useState<any | null>(null)
+
+  const load = () => {
+    ;(spotlight.listAll() as Promise<any>).then(r => setData(r.slides || [])).catch(() => {})
+  }
+
+  useEffect(() => { load() }, [])
+
+  const getCsrf = () =>
+    document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1] || ''
+
+  const remove = async (id: number, name: string) => {
+    if (!confirm(`Delete "${name || 'this slide'}"?`)) return
+    await spotlight.delete(id)
+    load()
+  }
+
+  const toggleActive = async (id: number, is_active: boolean) => {
+    await spotlight.update(id, { is_active: !is_active })
+    load()
+  }
+
+  return (
+    <div>
+      <SectionHeader
+        title="Spotlight"
+        action={
+          <ActionButton onClick={() => { setEditingSlide(null); setShowForm(v => !v) }}>
+            {showForm ? 'Cancel' : '+ Add Slide'}
+          </ActionButton>
+        }
+      />
+
+      <p className="text-white/30 text-xs mb-6 tracking-wide">
+        These slides cycle inside the hero floating card on the landing page. Supports videos (mp4/webm) and images. Click-through links are optional.
+      </p>
+
+      {(showForm || editingSlide) && (
+        <SlideFormCard
+          initial={editingSlide}
+          getCsrf={getCsrf}
+          onSaved={() => { setShowForm(false); setEditingSlide(null); load() }}
+          onCancel={() => { setShowForm(false); setEditingSlide(null) }}
+          nextOrder={data.length}
         />
       )}
 
-      {editingGame && (
-        <GameFormModal
-          initial={editingGame}
-          isEdit={true}
-          onSave={handleEdit}
-          onClose={() => setEditingGame(null)}
-          autoOrder={nextOrder}
-        />
-      )}
+      <div className="space-y-3 mt-4">
+        {data.length === 0 && !showForm && !editingSlide && (
+          <div className="bg-white/5 border border-white/8 rounded-2xl p-8 text-center">
+            <p className="text-white/30 text-sm mb-2">No spotlight slides yet.</p>
+            <p className="text-white/15 text-xs">Add a video or image to replace the default floating card on the landing page.</p>
+          </div>
+        )}
+        {data.map((s: any) => (
+          <div
+            key={s.id}
+            className={`bg-white/5 border border-white/8 rounded-2xl p-5 flex items-center gap-4 transition-opacity ${!s.is_active ? 'opacity-40' : ''}`}
+          >
+            {/* Thumbnail */}
+            <div className="w-24 h-16 rounded-xl overflow-hidden shrink-0 border border-white/10 bg-black/30 flex items-center justify-center">
+              {s.media_url ? (
+                s.media_type === 'video'
+                  ? (
+                    <div className="flex flex-col items-center gap-1">
+                      <span className="text-purple-400 text-xl">▶</span>
+                      <span className="text-white/30 text-[9px] tracking-widest uppercase">Video</span>
+                    </div>
+                  )
+                  : <img src={s.media_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-white/20 text-xs">No media</span>
+              )}
+            </div>
+
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 mb-1 flex-wrap">
+                <span className="text-white font-bold text-sm truncate">{s.title || `Slide #${s.id}`}</span>
+                <Badge color={s.media_type === 'video' ? 'purple' : 'yellow'}>{s.media_type}</Badge>
+                {!s.is_active && <Badge color="gray">Hidden</Badge>}
+              </div>
+              <p className="text-white/35 text-xs truncate">
+                {s.pill_label}
+                {s.href && <span className="ml-2 text-purple-400/60">→ {s.href.slice(0, 40)}…</span>}
+                <span className="ml-2 text-white/20">{s.duration}s · order {s.display_order}</span>
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2 shrink-0">
+              <ActionButton variant="ghost" onClick={() => toggleActive(s.id, s.is_active)}>
+                {s.is_active ? 'Hide' : 'Show'}
+              </ActionButton>
+              <ActionButton onClick={() => { setShowForm(false); setEditingSlide(s) }}>Edit</ActionButton>
+              <ActionButton variant="danger" onClick={() => remove(s.id, s.title)}>Delete</ActionButton>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Slide form (add / edit) ───────────────────────────────────────────────────
+function SlideFormCard({
+  initial,
+  getCsrf,
+  onSaved,
+  onCancel,
+  nextOrder,
+}: {
+  initial: any
+  getCsrf: () => string
+  onSaved: () => void
+  onCancel: () => void
+  nextOrder: number
+}) {
+  const isEdit = !!initial?.id
+  const [mediaType, setMediaType] = useState<'video' | 'image'>(initial?.media_type || 'video')
+  const [form, setForm] = useState({
+    title:         initial?.title      || '',
+    video_url:     initial?.media_type === 'video' ? (initial?.media_url || '') : '',
+    image_url:     initial?.media_type === 'image' ? (initial?.media_url || '') : '',
+    href:          initial?.href        || '',
+    pill_label:    initial?.pill_label  || 'MATCH DAY · ROCKET LEAGUE',
+    duration:      initial?.duration    || 8,
+    is_active:     initial?.is_active  !== false,
+    display_order: initial?.display_order ?? nextOrder,
+  })
+  const [file, setFile] = useState<File | null>(null)
+  const [saving, setSaving] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const inputClass = 'bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500/60 w-full placeholder-white/20'
+  const labelClass = 'block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1'
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const fd = new FormData()
+      fd.append('media_type',    mediaType)
+      fd.append('title',         form.title)
+      fd.append('href',          form.href)
+      fd.append('pill_label',    form.pill_label)
+      fd.append('duration',      String(form.duration))
+      fd.append('is_active',     form.is_active ? 'true' : 'false')
+      fd.append('display_order', String(form.display_order))
+
+      if (mediaType === 'video') {
+        fd.append('video_url', form.video_url)
+        if (file) fd.append('video_file', file)
+      } else {
+        fd.append('image_url', form.image_url)
+        if (file) fd.append('image_file', file)
+      }
+
+      const url    = isEdit ? `/api/spotlight/${initial.id}/` : '/api/spotlight/create/'
+      const method = isEdit ? 'PATCH' : 'POST'
+
+      await fetch(url, {
+        method,
+        credentials: 'include',
+        headers: { 'X-CSRFToken': getCsrf() },
+        body: fd,
+      })
+      onSaved()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-white/5 border border-purple-500/20 rounded-2xl p-6 mb-4">
+      <h3
+        className="text-white font-black text-sm uppercase tracking-wide mb-4"
+        style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+      >
+        {isEdit ? 'Edit Slide' : 'New Spotlight Slide'}
+      </h3>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+        {/* Internal title */}
+        <div className="md:col-span-2">
+          <label className={labelClass}>Internal Title (staff only)</label>
+          <input
+            placeholder="e.g. Season 5 Trailer"
+            value={form.title}
+            onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
+            className={inputClass}
+          />
+        </div>
+
+        {/* Media type tabs */}
+        <div className="md:col-span-2">
+          <label className={labelClass}>Media Type</label>
+          <div className="flex gap-2">
+            {(['video', 'image'] as const).map(t => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => { setMediaType(t); setFile(null) }}
+                className={`px-4 py-1.5 rounded-lg text-xs font-black tracking-widest uppercase transition-all duration-150 ${
+                  mediaType === t
+                    ? 'bg-purple-600/25 text-purple-300 border border-purple-500/30'
+                    : 'text-white/30 hover:text-white/60 bg-white/5 border border-white/10'
+                }`}
+              >
+                {t === 'video' ? '▶ Video' : '🖼 Image'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* URL input */}
+        <div>
+          <label className={labelClass}>{mediaType === 'video' ? 'Video URL (.mp4 / .webm)' : 'Image URL'}</label>
+          <input
+            placeholder={mediaType === 'video' ? 'https://cdn.example.com/video.mp4' : 'https://cdn.example.com/banner.jpg'}
+            value={mediaType === 'video' ? form.video_url : form.image_url}
+            onChange={e => setForm(p =>
+              mediaType === 'video'
+                ? { ...p, video_url: e.target.value }
+                : { ...p, image_url: e.target.value }
+            )}
+            className={inputClass}
+          />
+        </div>
+
+        {/* File upload */}
+        <div>
+          <label className={labelClass}>Or Upload File</label>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-500/40 text-white/50 hover:text-white text-xs font-bold px-3 py-2 rounded-lg tracking-wider uppercase transition-all duration-200"
+            >
+              {file ? 'Change' : 'Choose File'}
+            </button>
+            {file && <span className="text-white/30 text-xs truncate max-w-[140px]">{file.name}</span>}
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept={mediaType === 'video' ? 'video/mp4,video/webm' : 'image/*'}
+            onChange={e => setFile(e.target.files?.[0] || null)}
+            className="hidden"
+          />
+        </div>
+
+        {/* Pill label */}
+        <div>
+          <label className={labelClass}>Pill Label</label>
+          <input
+            placeholder="MATCH DAY · ROCKET LEAGUE"
+            value={form.pill_label}
+            onChange={e => setForm(p => ({ ...p, pill_label: e.target.value }))}
+            className={inputClass}
+          />
+        </div>
+
+        {/* Click-through link */}
+        <div>
+          <label className={labelClass}>Click-Through URL (optional)</label>
+          <input
+            placeholder="https://…"
+            value={form.href}
+            onChange={e => setForm(p => ({ ...p, href: e.target.value }))}
+            className={inputClass}
+          />
+        </div>
+
+        {/* Duration */}
+        <div>
+          <label className={labelClass}>Duration (seconds, images only)</label>
+          <input
+            type="number"
+            min={2}
+            max={60}
+            value={form.duration}
+            onChange={e => setForm(p => ({ ...p, duration: Number(e.target.value) }))}
+            className={inputClass}
+          />
+        </div>
+
+        {/* Order */}
+        <div>
+          <label className={labelClass}>Display Order</label>
+          <input
+            type="number"
+            min={0}
+            value={form.display_order}
+            onChange={e => setForm(p => ({ ...p, display_order: Number(e.target.value) }))}
+            className={inputClass}
+          />
+        </div>
+
+        {/* Active toggle */}
+        <div className="md:col-span-2 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setForm(p => ({ ...p, is_active: !p.is_active }))}
+            className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${form.is_active ? 'bg-purple-600' : 'bg-white/10'}`}
+          >
+            <span
+              className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
+              style={{ left: form.is_active ? '16px' : '2px' }}
+            />
+          </button>
+          <span className="text-white/40 text-[10px] font-bold tracking-widest uppercase">
+            {form.is_active ? 'Visible on site' : 'Hidden'}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex gap-3 mt-5">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white font-black px-6 py-2.5 rounded-xl text-xs tracking-widest uppercase transition-all"
+          style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+        >
+          {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Slide'}
+        </button>
+        <ActionButton variant="ghost" onClick={onCancel}>Cancel</ActionButton>
+      </div>
     </div>
   )
 }
@@ -2079,13 +2084,14 @@ export default function Dashboard() {
   }
 
   const SECTIONS: Record<Section, React.ReactNode> = {
-    overview: <Overview />,
-    joins:    <JoinsSection />,
-    matches:  <MatchesSection />,
-    news:     <NewsSection />,
-    players:  <PlayersSection />,
-    teams:    <TeamsSection />,
-    games:    <GamesSection />,
+    overview:  <Overview />,
+    joins:     <JoinsSection />,
+    matches:   <MatchesSection />,
+    news:      <NewsSection />,
+    players:   <PlayersSection />,
+    teams:     <TeamsSection />,
+    games:     <GamesSection />,
+    spotlight: <SpotlightSection />,
   }
 
   return (

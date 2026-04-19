@@ -135,3 +135,23 @@ export const teams = {
   delete: (id: number) =>
     request(`/api/teams/${id}/delete/`, { method: 'DELETE' }),
 }
+
+// ── Spotlight slides ──────────────────────────────────────────────────────────
+export const spotlight = {
+  /** Public — active slides in display order */
+  list: () =>
+    request('/api/spotlight/'),
+
+  /** Staff — all slides including hidden */
+  listAll: () =>
+    request('/api/spotlight/all/'),
+
+  create: (data: object) =>
+    request('/api/spotlight/create/', { method: 'POST', body: JSON.stringify(data) }),
+
+  update: (id: number, data: object) =>
+    request(`/api/spotlight/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  delete: (id: number) =>
+    request(`/api/spotlight/${id}/delete/`, { method: 'DELETE' }),
+}
