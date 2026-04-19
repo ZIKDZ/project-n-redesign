@@ -3,7 +3,7 @@ import { useState, useEffect, createContext, useContext } from 'react'
 import { auth } from './utils/api'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
+import Dashboard from './pages/dashboard/Dashboard'
 import RosterPage from './pages/RosterPage'
 
 // ── Auth context ──────────────────────────────────────────────────────────────
