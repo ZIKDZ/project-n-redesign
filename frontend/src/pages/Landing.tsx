@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { joins, matches as matchesApi, news as newsApi, games as gamesApi, spotlight } from "../utils/api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -67,10 +68,10 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
 }
 
 // ── Dynamic Game Card ─────────────────────────────────────────────────────────
-function GameCard({ game }: { game: GameData }) {
+function GameCard({ game, onRoster }: { game: GameData; onRoster: () => void }) {
   const overlayColor = game.overlay_color || 'rgba(80,0,160,0.35)';
   return (
-    <div className="group relative border border-white/10 rounded-2xl overflow-hidden hover:-translate-y-1 transition-all duration-300 cursor-pointer" style={{ background: "#13001f" }}>
+    <div className="group relative border border-white/10 rounded-2xl overflow-hidden hover:-translate-y-1 transition-all duration-300 flex flex-col" style={{ background: "#13001f" }}>
       <div className="h-40 relative" style={{ overflow: "hidden", borderRadius: "16px 16px 0 0" }}>
         {game.banner ? (
           <img src={game.banner} alt={game.title}
@@ -85,14 +86,30 @@ function GameCard({ game }: { game: GameData }) {
         )}
         <div className="absolute inset-0" style={{ background: `linear-gradient(to top, #13001f 0%, ${overlayColor} 50%, transparent 100%)` }} />
       </div>
-      <div className="p-5">
+      <div className="p-5 flex flex-col flex-1">
         <h3 className="text-white font-bold text-lg mb-1 tracking-wide" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>{game.title}</h3>
         <p className="text-white/40 text-xs mb-4">
           {[game.genre, game.publisher].filter(Boolean).join(' · ')}
         </p>
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-green-500/15 text-green-400 border border-green-500/25 uppercase tracking-wider">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />Active
-        </span>
+        <div className="flex items-center justify-between mt-auto gap-3 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-green-500/15 text-green-400 border border-green-500/25 uppercase tracking-wider shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />Active
+          </span>
+          <button
+            onClick={onRoster}
+            className="inline-flex items-center gap-1.5 text-xs font-black px-4 py-2 rounded-xl uppercase tracking-widest transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg group/btn shrink-0"
+            style={{
+              background: overlayColor.replace(/[\d.]+\)$/, '0.3)'),
+              color: "rgba(255,255,255,0.85)",
+              border: "1px solid rgba(255,255,255,0.2)",
+            }}
+          >
+            Meet the Roster
+            <svg className="w-3 h-3 group-hover/btn:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -100,6 +117,7 @@ function GameCard({ game }: { game: GameData }) {
 
 // ── Games Section (dynamic) ───────────────────────────────────────────────────
 function GamesSection() {
+  const navigate = useNavigate();
   const [gameList, setGameList] = useState<GameData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -134,7 +152,13 @@ function GamesSection() {
           <p className="text-center text-white/30 text-lg tracking-wider uppercase py-12">No active games yet.</p>
         ) : (
           <div className={`grid gap-6 ${gameList.length === 1 ? 'max-w-sm mx-auto' : gameList.length === 2 ? 'sm:grid-cols-2 max-w-2xl mx-auto' : 'sm:grid-cols-2 md:grid-cols-3'}`}>
-            {gameList.map(g => <GameCard key={g.id} game={g} />)}
+            {gameList.map(g => (
+              <GameCard
+                key={g.id}
+                game={g}
+                onRoster={() => navigate(`/roster/${g.slug}`)}
+              />
+            ))}
           </div>
         )}
       </div>
