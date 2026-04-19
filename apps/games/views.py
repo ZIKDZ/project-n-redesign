@@ -14,11 +14,7 @@ def list_games(request):
 
 @require_http_methods(['GET'])
 def list_games_open(request):
-    """Public — games currently open for registration (join-form list).
-
-    Filters to is_active=True AND registration_open=True so the join form
-    never shows a game that is inactive or has closed recruitment.
-    """
+    """Public — games currently open for registration (join-form list)."""
     qs = Game.objects.filter(is_active=True, registration_open=True)
     return JsonResponse({'games': [g.to_dict() for g in qs]})
 
@@ -39,7 +35,7 @@ def create_game(request):
         if request.content_type and 'multipart' in request.content_type:
             data = request.POST
             banner_file = request.FILES.get('banner')
-            logo_file = request.FILES.get('logo')
+            logo_file   = request.FILES.get('logo')
 
             ranks_raw = data.get('ranks', '[]')
             try:
@@ -47,25 +43,28 @@ def create_game(request):
             except json.JSONDecodeError:
                 ranks = [r.strip() for r in ranks_raw.split(',') if r.strip()]
 
-            game = Game.objects.create(
+            game = Game(
                 title=data['title'],
                 slug=data['slug'],
                 publisher=data.get('publisher', ''),
                 genre=data.get('genre', ''),
-                banner_url=data.get('banner_url', ''),
-                logo_url=data.get('logo_url', ''),
+                # Only store the URL fallback when no file is uploaded
+                banner_url=data.get('banner_url', '') if not banner_file else '',
+                logo_url=data.get('logo_url', '')     if not logo_file   else '',
                 overlay_color=data.get('overlay_color', ''),
                 ranks=ranks,
                 is_active=data.get('is_active', 'true').lower() != 'false',
                 registration_open=data.get('registration_open', 'false').lower() == 'true',
                 display_order=int(data.get('display_order', 0)),
             )
+            # Assign files BEFORE the first save so Django's storage backend
+            # writes them and populates game.banner.name / game.logo.name.
             if banner_file:
                 game.banner = banner_file
             if logo_file:
                 game.logo = logo_file
-            if banner_file or logo_file:
-                game.save()
+            game.save()
+
         else:
             data = json.loads(request.body)
             game = Game.objects.create(
@@ -98,13 +97,19 @@ def update_game(request, pk):
         game = Game.objects.get(pk=pk)
 
         if request.content_type and 'multipart' in request.content_type:
-            data = request.POST
-            banner_file = request.FILES.get('banner')
-            logo_file = request.FILES.get('logo')
+            # Django does NOT auto-parse multipart for PUT/PATCH — do it manually.
+            from django.http.multipartparser import MultiPartParser
+            parser = MultiPartParser(request.META, request, request.upload_handlers)
+            post_data, files = parser.parse()
 
-            for field in ['title', 'slug', 'publisher', 'genre', 'banner_url', 'logo_url', 'overlay_color']:
+            data        = post_data
+            banner_file = files.get('banner')
+            logo_file   = files.get('logo')
+
+            for field in ['title', 'slug', 'publisher', 'genre', 'overlay_color']:
                 if field in data:
                     setattr(game, field, data[field])
+
             if 'is_active' in data:
                 game.is_active = data['is_active'].lower() != 'false'
             if 'registration_open' in data:
@@ -117,14 +122,30 @@ def update_game(request, pk):
                     game.ranks = json.loads(ranks_raw)
                 except json.JSONDecodeError:
                     game.ranks = [r.strip() for r in ranks_raw.split(',') if r.strip()]
+
+            # Handle banner
             if banner_file:
-                game.banner = banner_file
+                # New file uploaded — store it and clear any stale URL
+                game.banner     = banner_file
+                game.banner_url = ''
+            elif 'banner_url' in data:
+                # URL provided (and no file) — store the URL, clear the file field
+                game.banner_url = data['banner_url']
+                game.banner     = None
+
+            # Handle logo
             if logo_file:
-                game.logo = logo_file
+                game.logo     = logo_file
+                game.logo_url = ''
+            elif 'logo_url' in data:
+                game.logo_url = data['logo_url']
+                game.logo     = None
+
         else:
             data = json.loads(request.body)
-            for field in ['title', 'slug', 'publisher', 'genre', 'banner_url', 'logo_url',
-                          'overlay_color', 'ranks', 'is_active', 'registration_open', 'display_order']:
+            for field in ['title', 'slug', 'publisher', 'genre', 'banner_url',
+                          'logo_url', 'overlay_color', 'ranks', 'is_active',
+                          'registration_open', 'display_order']:
                 if field in data:
                     setattr(game, field, data[field])
 

@@ -1022,7 +1022,7 @@ function PlayersSection() {
               {p.avatar
                 ? (
                   <img
-                    src={p.avatar.startsWith('http') ? p.avatar : p.avatar}
+                    src={p.avatar}
                     className="w-full h-full object-cover"
                     alt={p.username}
                     onError={e => {
@@ -1104,6 +1104,7 @@ const GAME_LABEL_TEAM: Record<string, string> = {
   fortnite:      'Fortnite',
 }
 
+// ── Roster Card ───────────────────────────────────────────────────────────────
 function RosterCard({
   team,
   onManage,
@@ -1131,12 +1132,14 @@ function RosterCard({
       className="relative border border-white/10 rounded-2xl overflow-hidden flex flex-col transition-all duration-200 hover:border-purple-500/30"
       style={{ background: '#0f0020' }}
     >
+      {/* Banner */}
       <div className="h-28 relative shrink-0" style={{ background: bg }}>
         {team.banner_url ? (
           <img src={team.banner_url} alt={team.name} className="w-full h-full object-cover opacity-60" />
         ) : (
           <div className="w-full h-full flex items-center justify-center" style={{ background: bg }}>
-            <span className="font-black text-5xl select-none" style={{ color: accent, opacity: 0.25, fontFamily: "'Barlow Condensed', sans-serif" }}>
+            <span className="font-black text-5xl select-none"
+              style={{ color: accent, opacity: 0.25, fontFamily: "'Barlow Condensed', sans-serif" }}>
               {initials}
             </span>
           </div>
@@ -1147,6 +1150,7 @@ function RosterCard({
             Hidden
           </span>
         )}
+        {/* Logo */}
         <div
           className="absolute bottom-0 left-4 translate-y-1/2 w-12 h-12 rounded-xl border-2 border-[#0f0020] flex items-center justify-center overflow-hidden shrink-0"
           style={{ background: bg }}
@@ -1154,7 +1158,8 @@ function RosterCard({
           {team.logo_url ? (
             <img src={team.logo_url} alt="" className="w-full h-full object-cover" />
           ) : (
-            <span className="font-black text-xl select-none" style={{ color: accent, fontFamily: "'Barlow Condensed', sans-serif" }}>
+            <span className="font-black text-xl select-none"
+              style={{ color: accent, fontFamily: "'Barlow Condensed', sans-serif" }}>
               {initials}
             </span>
           )}
@@ -1164,7 +1169,8 @@ function RosterCard({
       <div className="pt-8 px-4 pb-4 flex flex-col flex-1 gap-3">
         <div>
           <div className="flex items-start justify-between gap-2">
-            <h3 className="text-white font-black text-base leading-tight uppercase" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            <h3 className="text-white font-black text-base leading-tight uppercase"
+              style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
               {team.name}
             </h3>
             <span
@@ -1179,6 +1185,7 @@ function RosterCard({
           )}
         </div>
 
+        {/* Roster bar */}
         <div>
           <div className="flex justify-between items-center mb-1">
             <span className="text-white/30 text-[10px] font-bold tracking-widest uppercase">Roster</span>
@@ -1186,16 +1193,19 @@ function RosterCard({
           </div>
           <div className="flex gap-1">
             {Array.from({ length: totalSlots }).map((_, i) => (
-              <div key={i} className="h-1 flex-1 rounded-full" style={{ background: i < filled ? accent : 'rgba(255,255,255,0.08)' }} />
+              <div key={i} className="h-1 flex-1 rounded-full"
+                style={{ background: i < filled ? accent : 'rgba(255,255,255,0.08)' }} />
             ))}
           </div>
         </div>
 
+        {/* IGL */}
         {team.igl && (
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold tracking-widest uppercase text-white/30">IGL</span>
             <div className="flex items-center gap-1.5">
-              <div className="w-5 h-5 rounded-md overflow-hidden flex items-center justify-center text-[10px] font-black" style={{ background: bg, color: accent }}>
+              <div className="w-5 h-5 rounded-md overflow-hidden flex items-center justify-center text-[10px] font-black"
+                style={{ background: bg, color: accent }}>
                 {team.igl.avatar
                   ? <img src={team.igl.avatar} className="w-full h-full object-cover" alt="" />
                   : team.igl.username[0]?.toUpperCase()
@@ -1206,6 +1216,7 @@ function RosterCard({
           </div>
         )}
 
+        {/* Player avatars */}
         {mainPlayers.length > 0 ? (
           <div className="flex items-center gap-1 flex-wrap">
             {mainPlayers.map((p: any) => (
@@ -1222,7 +1233,9 @@ function RosterCard({
               </div>
             ))}
             {subs.length > 0 && (
-              <span className="text-[10px] text-white/25 font-bold pl-1">+{subs.length} sub{subs.length > 1 ? 's' : ''}</span>
+              <span className="text-[10px] text-white/25 font-bold pl-1">
+                +{subs.length} sub{subs.length > 1 ? 's' : ''}
+              </span>
             )}
           </div>
         ) : (
@@ -1230,10 +1243,12 @@ function RosterCard({
         )}
 
         <div className="flex gap-2 mt-auto pt-2 border-t border-white/5">
-          <button onClick={onManage} className="flex-1 bg-white/5 hover:bg-purple-500/15 border border-white/10 hover:border-purple-500/30 text-white/60 hover:text-white text-[10px] font-black py-2 rounded-lg tracking-widest uppercase transition-all duration-200">
+          <button onClick={onManage}
+            className="flex-1 bg-white/5 hover:bg-purple-500/15 border border-white/10 hover:border-purple-500/30 text-white/60 hover:text-white text-[10px] font-black py-2 rounded-lg tracking-widest uppercase transition-all duration-200">
             Manage
           </button>
-          <button onClick={onDelete} className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400/70 hover:text-red-400 text-[10px] font-black px-3 py-2 rounded-lg tracking-widest uppercase transition-all duration-200">
+          <button onClick={onDelete}
+            className="bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400/70 hover:text-red-400 text-[10px] font-black px-3 py-2 rounded-lg tracking-widest uppercase transition-all duration-200">
             Delete
           </button>
         </div>
@@ -1242,6 +1257,7 @@ function RosterCard({
   )
 }
 
+// ── Roster Modal ──────────────────────────────────────────────────────────────
 function RosterModal({
   initial,
   isEdit,
@@ -1249,23 +1265,32 @@ function RosterModal({
   onSave,
   onClose,
 }: {
-  initial: any
-  isEdit: boolean
+  initial:     any
+  isEdit:      boolean
   playersList: any[]
-  onSave: (data: any) => Promise<void>
-  onClose: () => void
+  onSave:      (fd: FormData) => Promise<void>
+  onClose:     () => void
 }) {
   const [form, setForm] = useState({
     name:        initial.name        || '',
     game:        initial.game        || 'rocket_league',
     description: initial.description || '',
-    banner_url:  initial.banner_url  || '',
-    logo_url:    initial.logo_url    || '',
     max_players: initial.max_players ?? 5,
     igl_id:      initial.igl_id      ?? '',
     visibility:  initial.visibility  || 'public',
     is_active:   initial.is_active   ?? true,
   })
+
+  // Banner state
+  const [bannerFile,    setBannerFile]    = useState<File | null>(null)
+  const [bannerPreview, setBannerPreview] = useState<string>(initial.banner_url || '')
+  const bannerRef = useRef<HTMLInputElement>(null)
+
+  // Logo state
+  const [logoFile,    setLogoFile]    = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string>(initial.logo_url || '')
+  const logoRef = useRef<HTMLInputElement>(null)
+
   const [saving, setSaving] = useState(false)
 
   const gamePlayers = playersList.filter(p => p.game === form.game && p.status === 'active')
@@ -1273,11 +1298,45 @@ function RosterModal({
   const inputClass = 'bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500/60 w-full placeholder-white/20'
   const labelClass = 'block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1'
 
+  const handleBannerFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null
+    setBannerFile(file)
+    setBannerPreview(file ? URL.createObjectURL(file) : (initial.banner_url || ''))
+  }
+
+  const handleLogoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null
+    setLogoFile(file)
+    setLogoPreview(file ? URL.createObjectURL(file) : (initial.logo_url || ''))
+  }
+
+  const removeBanner = () => {
+    setBannerFile(null)
+    setBannerPreview(initial.banner_url || '')
+    if (bannerRef.current) bannerRef.current.value = ''
+  }
+
+  const removeLogo = () => {
+    setLogoFile(null)
+    setLogoPreview(initial.logo_url || '')
+    if (logoRef.current) logoRef.current.value = ''
+  }
+
   const handleSubmit = async () => {
     if (!form.name || !form.game) return
     setSaving(true)
     try {
-      await onSave({ ...form, igl_id: form.igl_id || null, max_players: Number(form.max_players) })
+      const fd = new FormData()
+      fd.append('name',        form.name)
+      fd.append('game',        form.game)
+      fd.append('description', form.description)
+      fd.append('max_players', String(Number(form.max_players)))
+      fd.append('igl_id',      form.igl_id ? String(form.igl_id) : '')
+      fd.append('visibility',  form.visibility)
+      fd.append('is_active',   form.is_active ? 'true' : 'false')
+      if (bannerFile) fd.append('banner', bannerFile)
+      if (logoFile)   fd.append('logo',   logoFile)
+      await onSave(fd)
       onClose()
     } catch (e) {
       console.error(e)
@@ -1285,6 +1344,73 @@ function RosterModal({
       setSaving(false)
     }
   }
+
+  // Small reusable image-upload widget
+    const ImageUploadField = ({
+    label,
+    preview,
+    file,
+    inputRef,
+    accept,
+    onChange,
+    onRemove,
+    shape = 'banner',
+  }: {
+    label:    string
+    preview:  string
+    file:     File | null
+    inputRef: React.RefObject<HTMLInputElement | null>
+    accept:   string
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+    onRemove: () => void
+    shape?:   'banner' | 'logo'
+  }) => (
+    <div className="col-span-2">
+      <label className={labelClass}>{label}</label>
+      <div className="flex items-start gap-4">
+        {/* Preview box */}
+        <div
+          className={`border-2 border-dashed border-white/10 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:border-purple-500/50 transition-colors ${
+            shape === 'logo' ? 'w-14 h-14 rounded-xl' : 'w-36 h-20 rounded-xl'
+          }`}
+          onClick={() => inputRef.current?.click()}
+          title="Click to upload"
+        >
+          {preview ? (
+            <img src={preview} className="w-full h-full object-cover" alt={label} />
+          ) : (
+            <div className="flex flex-col items-center gap-1 text-white/20">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M13.5 12h.008v.008H13.5V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+              </svg>
+              <span className="text-[9px]">Upload</span>
+            </div>
+          )}
+        </div>
+        {/* Controls */}
+        <div className="flex-1 space-y-1.5">
+          <input ref={inputRef} type="file" accept={accept} onChange={onChange} className="hidden" />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className="bg-white/5 border border-white/10 hover:border-purple-500/40 text-white/60 hover:text-white text-[10px] font-bold px-3 py-1.5 rounded-lg tracking-wider uppercase transition-all duration-200"
+            >
+              {file ? 'Change' : 'Choose File'}
+            </button>
+            {file && (
+              <button type="button" onClick={onRemove}
+                className="text-red-400/60 hover:text-red-400 text-[10px] transition-colors">
+                Remove
+              </button>
+            )}
+          </div>
+          {file && <p className="text-white/30 text-[10px] truncate max-w-[200px]">{file.name}</p>}
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div
@@ -1294,11 +1420,13 @@ function RosterModal({
     >
       <div
         className="bg-[#13001f] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl shadow-purple-900/30 flex flex-col"
-        style={{ maxHeight: 'min(88vh, 640px)' }}
+        style={{ maxHeight: 'min(88vh, 680px)' }}
       >
+        {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-white/8">
           <div>
-            <h3 className="text-white font-black text-base uppercase tracking-wide" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            <h3 className="text-white font-black text-base uppercase tracking-wide"
+              style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
               {isEdit ? `Edit — ${initial.name}` : 'Create Roster'}
             </h3>
             <p className="text-white/25 text-[10px] tracking-widest">
@@ -1308,59 +1436,90 @@ function RosterModal({
           <button onClick={onClose} className="text-white/30 hover:text-white transition-colors text-xl">✕</button>
         </div>
 
+        {/* Body */}
         <div className="overflow-y-auto flex-1 px-6 py-4" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           <div className="grid grid-cols-2 gap-3">
+
+            {/* Name */}
             <div className="col-span-2">
               <label className={labelClass}>Roster Name *</label>
               <input placeholder="e.g. NBL Valorant Main" value={form.name}
                 onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className={inputClass} />
             </div>
+
+            {/* Game */}
             <div>
               <label className={labelClass}>Game *</label>
-              <select value={form.game} onChange={e => setForm(p => ({ ...p, game: e.target.value, igl_id: '' }))}
+              <select value={form.game}
+                onChange={e => setForm(p => ({ ...p, game: e.target.value, igl_id: '' }))}
                 className={inputClass + ' cursor-pointer'}>
                 <option value="rocket_league" className="bg-[#1a0030]">Rocket League</option>
                 <option value="valorant"      className="bg-[#1a0030]">Valorant</option>
                 <option value="fortnite"      className="bg-[#1a0030]">Fortnite</option>
               </select>
             </div>
+
+            {/* Max players */}
             <div>
               <label className={labelClass}>Max Players</label>
               <input type="number" min="1" max="20" value={form.max_players}
-                onChange={e => setForm(p => ({ ...p, max_players: Number(e.target.value) }))} className={inputClass} />
+                onChange={e => setForm(p => ({ ...p, max_players: Number(e.target.value) }))}
+                className={inputClass} />
             </div>
+
+            {/* IGL */}
             <div className="col-span-2">
               <label className={labelClass}>In-Game Leader (IGL)</label>
-              <select value={form.igl_id} onChange={e => setForm(p => ({ ...p, igl_id: e.target.value }))}
+              <select value={form.igl_id}
+                onChange={e => setForm(p => ({ ...p, igl_id: e.target.value }))}
                 className={inputClass + ' cursor-pointer'}>
                 <option value="" className="bg-[#1a0030]">No IGL assigned</option>
                 {gamePlayers.map(p => (
-                  <option key={p.id} value={p.id} className="bg-[#1a0030]">{p.username} ({p.role})</option>
+                  <option key={p.id} value={p.id} className="bg-[#1a0030]">
+                    {p.username} ({p.role})
+                  </option>
                 ))}
               </select>
               {gamePlayers.length === 0 && (
-                <p className="text-white/20 text-[10px] mt-1">No active {GAME_LABEL_TEAM[form.game] ?? form.game} players found.</p>
+                <p className="text-white/20 text-[10px] mt-1">
+                  No active {GAME_LABEL_TEAM[form.game] ?? form.game} players found.
+                </p>
               )}
             </div>
-            <div className="col-span-2">
-              <label className={labelClass}>Banner Image URL</label>
-              <input placeholder="https://…" value={form.banner_url}
-                onChange={e => setForm(p => ({ ...p, banner_url: e.target.value }))} className={inputClass} />
-              {form.banner_url && (
-                <img src={form.banner_url} alt="preview" className="mt-2 w-full h-16 object-cover rounded-xl border border-white/10 opacity-70" />
-              )}
-            </div>
-            <div className="col-span-2">
-              <label className={labelClass}>Logo / Icon URL</label>
-              <input placeholder="https://…" value={form.logo_url}
-                onChange={e => setForm(p => ({ ...p, logo_url: e.target.value }))} className={inputClass} />
-            </div>
+
+            {/* Banner upload */}
+            <ImageUploadField
+              label="Banner Image"
+              preview={bannerPreview}
+              file={bannerFile}
+              inputRef={bannerRef}
+              accept="image/*"
+              onChange={handleBannerFile}
+              onRemove={removeBanner}
+              shape="banner"
+            />
+
+            {/* Logo upload */}
+            <ImageUploadField
+              label="Logo / Icon"
+              preview={logoPreview}
+              file={logoFile}
+              inputRef={logoRef}
+              accept="image/*"
+              onChange={handleLogoFile}
+              onRemove={removeLogo}
+              shape="logo"
+            />
+
+            {/* Description */}
             <div className="col-span-2">
               <label className={labelClass}>Description</label>
               <textarea placeholder="Short description about this roster…" value={form.description}
                 onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
                 className={inputClass + ' h-16 resize-none'} />
             </div>
+
+            {/* Toggles */}
             <div className="col-span-2 grid grid-cols-2 gap-3">
               <div className="flex items-center gap-3">
                 <button type="button"
@@ -1370,7 +1529,9 @@ function RosterModal({
                     style={{ left: form.visibility === 'public' ? '16px' : '2px' }} />
                 </button>
                 <div>
-                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">{form.visibility === 'public' ? 'Public' : 'Hidden'}</p>
+                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">
+                    {form.visibility === 'public' ? 'Public' : 'Hidden'}
+                  </p>
                   <p className="text-white/20 text-[10px]">Visible on public site</p>
                 </div>
               </div>
@@ -1382,11 +1543,14 @@ function RosterModal({
                     style={{ left: form.is_active ? '16px' : '2px' }} />
                 </button>
                 <div>
-                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">{form.is_active ? 'Active' : 'Inactive'}</p>
+                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">
+                    {form.is_active ? 'Active' : 'Inactive'}
+                  </p>
                   <p className="text-white/20 text-[10px]">Roster is competing</p>
                 </div>
               </div>
             </div>
+
             <div className="col-span-2">
               <p className="text-white/15 text-[10px] tracking-wide">
                 Players are assigned to rosters via the Players section. The IGL must be an active player for this game.
@@ -1395,6 +1559,7 @@ function RosterModal({
           </div>
         </div>
 
+        {/* Footer */}
         <div className="flex gap-3 px-6 py-4 border-t border-white/8">
           <button onClick={handleSubmit} disabled={saving || !form.name}
             className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black px-6 py-2.5 rounded-xl text-xs tracking-widest uppercase transition-all duration-200"
@@ -1408,13 +1573,17 @@ function RosterModal({
   )
 }
 
+// ── Teams Section ─────────────────────────────────────────────────────────────
 function TeamsSection() {
-  const [data, setData]               = useState<any[]>([])
+  const [data,        setData]       = useState<any[]>([])
   const [playersList, setPlayersList] = useState<any[]>([])
-  const [showAdd, setShowAdd]         = useState(false)
-  const [editing, setEditing]         = useState<any | null>(null)
-  const [filterGame, setFilterGame]   = useState('')
-  const [filterVis, setFilterVis]     = useState('')
+  const [showAdd,     setShowAdd]    = useState(false)
+  const [editing,     setEditing]    = useState<any | null>(null)
+  const [filterGame,  setFilterGame] = useState('')
+  const [filterVis,   setFilterVis]  = useState('')
+
+  const getCsrf = () =>
+    document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1] || ''
 
   const load = () => {
     ;(teams.listAll()   as Promise<any>).then(r => setData(r.teams     || [])).catch(() => {})
@@ -1423,9 +1592,28 @@ function TeamsSection() {
 
   useEffect(() => { load() }, [])
 
-  const handleAdd  = async (payload: any) => { await teams.create(payload); load() }
-  const handleEdit = async (payload: any) => { if (!editing) return; await teams.update(editing.id, payload); load() }
-  const remove     = async (id: number, name: string) => {
+  const handleAdd = async (fd: FormData) => {
+    await fetch('/api/teams/create/', {
+      method:      'POST',
+      credentials: 'include',
+      headers:     { 'X-CSRFToken': getCsrf() },
+      body:        fd,
+    })
+    load()
+  }
+
+  const handleEdit = async (fd: FormData) => {
+    if (!editing) return
+    await fetch(`/api/teams/${editing.id}/`, {
+      method:      'PATCH',
+      credentials: 'include',
+      headers:     { 'X-CSRFToken': getCsrf() },
+      body:        fd,
+    })
+    load()
+  }
+
+  const remove = async (id: number, name: string) => {
     if (!confirm(`Delete roster "${name}"? Players will not be removed.`)) return
     await teams.delete(id)
     load()
@@ -1464,23 +1652,28 @@ function TeamsSection() {
       {displayed.length === 0 ? (
         <div className="text-center py-16 border border-white/5 rounded-2xl">
           <p className="text-white/20 text-sm tracking-wider">No rosters found.</p>
-          <button onClick={() => setShowAdd(true)} className="mt-4 text-purple-400 text-xs font-bold tracking-widest uppercase hover:text-purple-300 transition-colors">
+          <button onClick={() => setShowAdd(true)}
+            className="mt-4 text-purple-400 text-xs font-bold tracking-widest uppercase hover:text-purple-300 transition-colors">
             Create your first roster →
           </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {displayed.map(t => (
-            <RosterCard key={t.id} team={t} onManage={() => setEditing(t)} onDelete={() => remove(t.id, t.name)} />
+            <RosterCard key={t.id} team={t}
+              onManage={() => setEditing(t)}
+              onDelete={() => remove(t.id, t.name)} />
           ))}
         </div>
       )}
 
       {showAdd && (
-        <RosterModal initial={{}} isEdit={false} playersList={playersList} onSave={handleAdd} onClose={() => setShowAdd(false)} />
+        <RosterModal initial={{}} isEdit={false} playersList={playersList}
+          onSave={handleAdd} onClose={() => setShowAdd(false)} />
       )}
       {editing && (
-        <RosterModal initial={editing} isEdit={true} playersList={playersList} onSave={handleEdit} onClose={() => setEditing(null)} />
+        <RosterModal initial={editing} isEdit={true} playersList={playersList}
+          onSave={handleEdit} onClose={() => setEditing(null)} />
       )}
     </div>
   )
@@ -1571,7 +1764,7 @@ function GameFormModal({
               <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">
                 Slug * {!isEdit && <span className="normal-case text-white/20">(auto)</span>}
               </label>
-              <input placeholder="e.g. RL" value={form.slug}
+              <input placeholder="e.g. rocket_league" value={form.slug}
                 onChange={e => setForm(p => ({ ...p, slug: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') }))}
                 className={inputClass} />
             </div>
