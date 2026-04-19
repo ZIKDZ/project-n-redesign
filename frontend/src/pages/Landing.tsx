@@ -548,7 +548,7 @@ function MatchSchedule() {
         ) : (
           <div className="flex flex-col gap-3 mb-10">
             {displayed.map((m: any) => (
-              <MatchCard key={m.id} rival={m.rival} type={m.match_type} game={m.game}
+              <MatchCard key={m.id} rival={m.rival} rivalLogo={m.rival_logo} type={m.match_type} game={m.game}
                 date={m.date} time={m.time} status={m.status} score={m.score} winner={m.winner} />
             ))}
           </div>
