@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { players as playersApi, teams as teamsApi, games as gamesApi } from "../utils/api";
+import { teams as teamsApi, games as gamesApi } from "../utils/api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface PlayerData {
@@ -128,7 +128,6 @@ function PlayerCard({
             background: `radial-gradient(ellipse at center, ${accentColor}15 0%, transparent 70%)`,
           }}
         >
-          {/* Grid pattern */}
           <div
             className="absolute inset-0 opacity-5"
             style={{
@@ -173,12 +172,10 @@ function PlayerCard({
             </span>
           </div>
 
-          {/* IGL crown if captain */}
           {player.role === "captain" && (
             <div className="absolute top-3 right-3 text-yellow-400 text-lg">👑</div>
           )}
 
-          {/* Bottom gradient */}
           <div
             className="absolute bottom-0 left-0 right-0 h-20"
             style={{
@@ -203,12 +200,9 @@ function PlayerCard({
             )}
           </div>
 
-          {/* Rank */}
           {player.rank && (
             <div className="flex items-center gap-2 mb-3">
-              <span className="text-white/25 text-[10px] font-bold tracking-widest uppercase">
-                Rank
-              </span>
+              <span className="text-white/25 text-[10px] font-bold tracking-widest uppercase">Rank</span>
               <span
                 className="text-xs font-bold px-2 py-0.5 rounded-full"
                 style={{
@@ -222,14 +216,12 @@ function PlayerCard({
             </div>
           )}
 
-          {/* Bio */}
           {player.bio && (
             <p className="text-white/40 text-xs leading-relaxed line-clamp-2 mb-3">
               {player.bio}
             </p>
           )}
 
-          {/* Footer */}
           <div className="flex items-center justify-between pt-3 border-t border-white/5">
             {player.team && (
               <span className="text-white/25 text-[10px] tracking-widest uppercase">
@@ -269,7 +261,6 @@ function RosterSection({
         className="relative rounded-2xl overflow-hidden mb-8 border border-white/10"
         style={{ background: "rgba(255,255,255,0.03)" }}
       >
-        {/* Banner */}
         <div className="relative h-32 overflow-hidden">
           {team.banner_url ? (
             <img
@@ -283,11 +274,9 @@ function RosterSection({
           <div
             className="absolute inset-0"
             style={{
-              background:
-                "linear-gradient(to right, rgba(13,0,20,0.9), rgba(13,0,20,0.3))",
+              background: "linear-gradient(to right, rgba(13,0,20,0.9), rgba(13,0,20,0.3))",
             }}
           />
-          {/* decorative text */}
           <span
             className="absolute right-8 top-1/2 -translate-y-1/2 font-black text-[80px] leading-none select-none"
             style={{
@@ -300,7 +289,6 @@ function RosterSection({
         </div>
 
         <div className="flex items-end gap-5 px-6 pb-5 -mt-8 relative">
-          {/* Logo */}
           <div
             className="w-16 h-16 rounded-xl border-2 flex items-center justify-center overflow-hidden shrink-0 shadow-lg"
             style={{
@@ -314,10 +302,7 @@ function RosterSection({
             ) : (
               <span
                 className="font-black text-2xl"
-                style={{
-                  color: accentColor,
-                  fontFamily: "'Barlow Condensed', sans-serif",
-                }}
+                style={{ color: accentColor, fontFamily: "'Barlow Condensed', sans-serif" }}
               >
                 {initials}
               </span>
@@ -402,7 +387,6 @@ export default function RosterPage() {
 
   const [game, setGame] = useState<GameData | null>(null);
   const [teams, setTeams] = useState<TeamData[]>([]);
-  const [unassigned, setUnassigned] = useState<PlayerData[]>([]);
   const [loading, setLoading] = useState(true);
   const [scrolled, setScrolled] = useState(false);
 
@@ -419,27 +403,15 @@ export default function RosterPage() {
     Promise.all([
       gamesApi.list() as Promise<any>,
       teamsApi.list(gameSlug) as Promise<any>,
-      playersApi.list({ game: gameSlug }) as Promise<any>,
     ])
-      .then(([gamesRes, teamsRes, playersRes]) => {
+      .then(([gamesRes, teamsRes]) => {
         const foundGame = gamesRes.games?.find((g: GameData) => g.slug === gameSlug);
         if (!foundGame) {
           navigate("/", { replace: true });
           return;
         }
         setGame(foundGame);
-
-        const gameTeams: TeamData[] = teamsRes.teams || [];
-        setTeams(gameTeams);
-
-        const assignedIds = new Set(
-          gameTeams.flatMap((t: TeamData) => [
-            ...t.players.map((p: PlayerData) => p.id),
-            ...t.substitutes.map((p: PlayerData) => p.id),
-          ])
-        );
-        const all: PlayerData[] = playersRes.players || [];
-        setUnassigned(all.filter((p) => !assignedIds.has(p.id)));
+        setTeams(teamsRes.teams || []);
       })
       .catch(() => navigate("/", { replace: true }))
       .finally(() => setLoading(false));
@@ -452,9 +424,10 @@ export default function RosterPage() {
     return "#a855f7";
   })();
 
-  const totalPlayers =
-    teams.reduce((sum, t) => sum + t.players.length + t.substitutes.length, 0) +
-    unassigned.length;
+  const totalPlayers = teams.reduce(
+    (sum, t) => sum + t.players.length + t.substitutes.length,
+    0
+  );
 
   if (loading) {
     return (
@@ -465,13 +438,9 @@ export default function RosterPage() {
         <div className="text-center">
           <div
             className="w-14 h-14 rounded-full border-2 animate-spin mx-auto mb-4"
-            style={{
-              borderColor: `${accentColor} transparent transparent transparent`,
-            }}
+            style={{ borderColor: `${accentColor} transparent transparent transparent` }}
           />
-          <p className="text-white/30 tracking-widest uppercase text-sm">
-            Loading Roster…
-          </p>
+          <p className="text-white/30 tracking-widest uppercase text-sm">Loading Roster…</p>
         </div>
       </div>
     );
@@ -504,11 +473,7 @@ export default function RosterPage() {
         style={{
           background: scrolled ? "rgba(13,0,20,0.95)" : "transparent",
           backdropFilter: scrolled ? "blur(12px)" : "none",
-          // ✅ use opacity on a pseudo-border via box-shadow to avoid the
-          //    abrupt white-line flash that border-bottom causes
-          boxShadow: scrolled
-            ? "0 1px 0 0 rgba(255,255,255,0.06)"
-            : "0 1px 0 0 rgba(255,255,255,0)",
+          boxShadow: scrolled ? "0 1px 0 0 rgba(255,255,255,0.06)" : "0 1px 0 0 rgba(255,255,255,0)",
         }}
       >
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-4">
@@ -518,10 +483,7 @@ export default function RosterPage() {
           >
             <svg
               className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
@@ -546,9 +508,7 @@ export default function RosterPage() {
         )}
         <div
           className="absolute inset-0"
-          style={{
-            background: `linear-gradient(135deg, ${accentColor}20 0%, transparent 60%)`,
-          }}
+          style={{ background: `linear-gradient(135deg, ${accentColor}20 0%, transparent 60%)` }}
         />
         <div
           className="absolute inset-0"
@@ -578,10 +538,7 @@ export default function RosterPage() {
               border: `1px solid ${accentColor}40`,
             }}
           >
-            <span
-              className="w-1.5 h-1.5 rounded-full animate-pulse"
-              style={{ background: accentColor }}
-            />
+            <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: accentColor }} />
             Active Roster · {game.genre || "Esports"}
           </div>
 
@@ -592,9 +549,7 @@ export default function RosterPage() {
             <span className="text-white">Meet the </span>
             <span
               className="text-transparent bg-clip-text"
-              style={{
-                backgroundImage: `linear-gradient(135deg, ${accentColor}, white)`,
-              }}
+              style={{ backgroundImage: `linear-gradient(135deg, ${accentColor}, white)` }}
             >
               {game.title}
             </span>
@@ -607,8 +562,8 @@ export default function RosterPage() {
           <div className="hero-text-delay2 flex flex-wrap items-center justify-center gap-3">
             {[
               { label: "Active Players", val: totalPlayers },
-              { label: "Rosters", val: teams.length },
-            ].map((s) => (
+              { label: "Rosters",        val: teams.length },
+            ].map(s => (
               <div
                 key={s.label}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-full border text-sm font-bold"
@@ -624,9 +579,7 @@ export default function RosterPage() {
                 >
                   {s.val}
                 </span>
-                <span className="text-white/40 text-xs tracking-widest uppercase">
-                  {s.label}
-                </span>
+                <span className="text-white/40 text-xs tracking-widest uppercase">{s.label}</span>
               </div>
             ))}
           </div>
@@ -635,8 +588,7 @@ export default function RosterPage() {
 
       {/* ── Content ──────────────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-6 pb-24 pt-4">
-        {teams.length === 0 && unassigned.length === 0 ? (
-          // ✅ Empty state — no back button here, nav already handles it
+        {teams.length === 0 ? (
           <div
             className="text-center py-24 rounded-3xl border border-white/8 mt-8"
             style={{ background: "rgba(255,255,255,0.02)" }}
@@ -648,14 +600,10 @@ export default function RosterPage() {
               <svg
                 className="w-9 h-9"
                 style={{ color: accentColor }}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={1.5}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}
               >
                 <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                  strokeLinecap="round" strokeLinejoin="round"
                   d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"
                 />
               </svg>
@@ -667,53 +615,13 @@ export default function RosterPage() {
               Roster Coming Soon
             </h3>
             <p className="text-white/30 max-w-sm mx-auto text-sm leading-relaxed">
-              We're building our {game.title} lineup. Stay tuned for player
-              announcements.
+              We're building our {game.title} lineup. Stay tuned for player announcements.
             </p>
           </div>
         ) : (
-          <>
-            {teams.map((team) => (
-              <RosterSection key={team.id} team={team} accentColor={accentColor} />
-            ))}
-
-            {unassigned.length > 0 && (
-              <div>
-                <div className="flex items-center gap-4 mb-8">
-                  <div
-                    className="h-px flex-1"
-                    style={{
-                      background: `linear-gradient(to right, ${accentColor}30, transparent)`,
-                    }}
-                  />
-                  <span className="text-white/30 text-xs font-bold tracking-widest uppercase px-4">
-                    Solo Players
-                  </span>
-                  <div
-                    className="h-px flex-1"
-                    style={{
-                      background: `linear-gradient(to left, ${accentColor}30, transparent)`,
-                    }}
-                  />
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                  {unassigned
-                    .sort(
-                      (a, b) =>
-                        ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role)
-                    )
-                    .map((p, i) => (
-                      <PlayerCard
-                        key={p.id}
-                        player={p}
-                        accentColor={accentColor}
-                        index={i}
-                      />
-                    ))}
-                </div>
-              </div>
-            )}
-          </>
+          teams.map(team => (
+            <RosterSection key={team.id} team={team} accentColor={accentColor} />
+          ))
         )}
       </div>
 
@@ -726,10 +634,7 @@ export default function RosterPage() {
           >
             <svg
               className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
@@ -737,10 +642,7 @@ export default function RosterPage() {
           </button>
           <span
             className="font-black text-sm uppercase tracking-widest"
-            style={{
-              color: accentColor,
-              fontFamily: "'Barlow Condensed', sans-serif",
-            }}
+            style={{ color: accentColor, fontFamily: "'Barlow Condensed', sans-serif" }}
           >
             NBL<span className="text-white">ESPORT</span>
           </span>
