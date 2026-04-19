@@ -214,8 +214,8 @@ const GAME_COLORS: Record<string, string> = {
   fortnite: "#ffd700",
 };
 
-function MatchCard({ rival, type, game, date, time, status, score, winner, gameColor }: {
-  rival: string; type: string; game: string;
+function MatchCard({ rival, rivalLogo, type, game, date, time, status, score, winner, gameColor }: {
+  rival: string; rivalLogo?: string; type: string; game: string;
   date: string; time: string; status: "upcoming" | "live" | "completed";
   score?: string; winner?: "nbl" | "rival" | "draw" | "";
   gameColor?: string;
@@ -223,21 +223,24 @@ function MatchCard({ rival, type, game, date, time, status, score, winner, gameC
   const color = gameColor || GAME_COLORS[game] || "#a855f7";
   const nblLoser = status === "completed" && winner === "rival";
   const rivalLoser = status === "completed" && winner === "nbl";
-
+ 
   const formattedDate = (() => {
     try {
       return new Date(date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
     } catch { return date; }
   })();
-
+ 
   return (
     <div className="group flex items-center gap-5 bg-white/5 border border-white/8 hover:border-purple-500/35 rounded-2xl px-7 py-6 transition-all duration-200">
+      {/* NBL side */}
       <div className={`flex flex-col items-center gap-2 min-w-[100px] transition-opacity duration-200 ${nblLoser ? "opacity-40" : ""}`}>
         <div className={`w-14 h-14 rounded-xl bg-gradient-to-br from-violet-600 to-purple-500 flex items-center justify-center ${winner === "nbl" ? "ring-2 ring-purple-400/60" : ""}`}>
           <img src="/images/logo.svg" alt="NBL" width={32} height={32} style={{ filter: "brightness(0) invert(1)" }} />
         </div>
         <span className="text-white text-xs font-bold tracking-widest uppercase">NBL Esports</span>
       </div>
+ 
+      {/* Centre */}
       <div className="flex-1 text-center">
         {status === "completed" ? (
           <>
@@ -251,18 +254,29 @@ function MatchCard({ rival, type, game, date, time, status, score, winner, gameC
           </>
         )}
       </div>
+ 
+      {/* Rival side */}
       <div className={`flex flex-col items-center gap-2 min-w-[100px] transition-opacity duration-200 ${rivalLoser ? "opacity-40" : ""}`}>
-        <div className={`w-14 h-14 rounded-xl bg-gradient-to-br from-pink-600 to-pink-500 flex items-center justify-center text-white font-black text-2xl ${winner === "rival" ? "ring-2 ring-pink-400/60" : ""}`}>
-          {rival.charAt(0).toUpperCase()}
+        <div className={`w-14 h-14 rounded-xl overflow-hidden flex items-center justify-center ${winner === "rival" ? "ring-2 ring-pink-400/60" : ""}`}
+          style={{ background: rivalLogo ? "rgba(255,255,255,0.05)" : "linear-gradient(135deg,#db2777,#ec4899)" }}>
+          {rivalLogo ? (
+            <img src={rivalLogo} alt={rival} className="w-full h-full object-contain p-1.5" />
+          ) : (
+            <span className="text-white font-black text-2xl">{rival.charAt(0).toUpperCase()}</span>
+          )}
         </div>
         <span className="text-white text-xs font-bold tracking-widest uppercase text-center">{rival}</span>
       </div>
+ 
+      {/* Meta */}
       <div className="ml-auto text-right min-w-[130px]">
         <span className="inline-flex items-center text-xs font-bold px-3 py-1 rounded-full mb-2 uppercase tracking-wider"
           style={{ background: `${color}20`, color, border: `1px solid ${color}40` }}>{game.replace('_', ' ')}</span>
         <div className="text-white font-bold text-sm">{formattedDate}</div>
         <div className="text-purple-400 text-sm mt-0.5">{time}</div>
       </div>
+ 
+      {/* Status badge */}
       {status === "live" && (
         <span className="ml-4 inline-flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 uppercase tracking-widest" style={{ minWidth: "110px" }}>
           <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />Live
