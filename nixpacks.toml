@@ -1,17 +1,18 @@
 [phases.setup]
-nixPkgs = ["nodejs_20"]
+# Install Python 3.12 + pip + Node 20
+nixPkgs = ["python312", "python312Packages.pip", "nodejs_20"]
 
 [phases.install]
-cmds = [
+commands = [
   "pip install -r requirements.txt",
   "cd frontend && npm ci"
 ]
 
 [phases.build]
-cmds = [
+commands = [
   "cd frontend && npm run build",
   "python manage.py collectstatic --noinput"
 ]
 
 [start]
-cmd = "gunicorn config.wsgi --workers 2 --threads 2 --timeout 60 --bind 0.0.0.0:$PORT"
+cmd = "gunicorn config.wsgi:application --workers 2 --threads 2 --bind 0.0.0.0:$PORT"
