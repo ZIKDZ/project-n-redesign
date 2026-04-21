@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../App'
 import { auth } from '../../utils/api'
+import { asset } from '../../utils/asset'
 
 // ── Section imports ───────────────────────────────────────────────────────────
 import Overview         from './components/sections/Overview'
@@ -64,7 +65,7 @@ export default function Dashboard() {
         <div className="px-6 py-5 border-b border-white/8">
           <a href="/" className="flex items-center gap-3">
             <img
-              src="/static/images/logo.svg"
+              src={asset("images/logo.svg")}
               alt=""
               className="w-8 h-8"
               style={{ filter: 'brightness(0) invert(1)' }}

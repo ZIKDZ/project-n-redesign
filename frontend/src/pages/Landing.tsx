@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { joins, matches as matchesApi, news as newsApi, games as gamesApi, spotlight } from "../utils/api";
+import { asset } from '../utils/asset'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface GameData {
@@ -23,7 +24,7 @@ function NBLLogoFull({ size = 48, className = "", color = "white" }: { size?: nu
     color === "black" ? "brightness(0)" :
     "brightness(0) invert(1) sepia(1) saturate(5) hue-rotate(240deg)";
   return (
-    <img src="/static/images/logo.svg" alt="NBLEsport logo" width={size} height={size}
+    <img src={asset("images/logo.svg")} alt="NBLEsport logo" width={size} height={size}
       className={className} style={{ objectFit: "contain", filter }} />
   );
 }
@@ -235,7 +236,7 @@ function MatchCard({ rival, rivalLogo, type, game, date, time, status, score, wi
       {/* NBL side */}
       <div className={`flex flex-col items-center gap-2 min-w-[100px] transition-opacity duration-200 ${nblLoser ? "opacity-40" : ""}`}>
         <div className={`w-14 h-14 rounded-xl bg-gradient-to-br from-violet-600 to-purple-500 flex items-center justify-center ${winner === "nbl" ? "ring-2 ring-purple-400/60" : ""}`}>
-          <img src="/static/images/logo.svg" alt="NBL" width={32} height={32} style={{ filter: "brightness(0) invert(1)" }} />
+          <img src={asset("images/logo.svg")} alt="NBL" width={32} height={32} style={{ filter: "brightness(0) invert(1)" }} />
         </div>
         <span className="text-white text-xs font-bold tracking-widest uppercase">NBL Esports</span>
       </div>

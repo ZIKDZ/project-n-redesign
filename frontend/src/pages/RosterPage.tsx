@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { teams as teamsApi, games as gamesApi } from "../utils/api";
+import { asset } from '../utils/asset'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface PlayerData {
