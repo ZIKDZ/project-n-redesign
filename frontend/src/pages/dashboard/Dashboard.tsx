@@ -64,7 +64,7 @@ export default function Dashboard() {
         <div className="px-6 py-5 border-b border-white/8">
           <a href="/" className="flex items-center gap-3">
             <img
-              src="/images/logo.svg"
+              src="/static/images/logo.svg"
               alt=""
               className="w-8 h-8"
               style={{ filter: 'brightness(0) invert(1)' }}

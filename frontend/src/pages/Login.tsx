@@ -44,7 +44,7 @@ export default function Login() {
       <div className="relative w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-10">
-          <img src="/images/logo.svg" alt="NBLEsport" className="w-14 h-14 mx-auto mb-4" style={{ filter: 'brightness(0) invert(1)' }} />
+          <img src="/static/images/logo.svg" alt="NBLEsport" className="w-14 h-14 mx-auto mb-4" style={{ filter: 'brightness(0) invert(1)' }} />
           <h1 className="text-white font-black text-2xl uppercase tracking-widest" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
             NBL<span className="text-purple-400">ESPORT</span>
           </h1>
