@@ -11,6 +11,7 @@ commands = [
 [phases.build]
 commands = [
   "cd frontend && npm run build",
+  ". /opt/venv/bin/activate && python manage.py collectstatic --noinput"
 ]
 
 [start]
