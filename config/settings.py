@@ -15,7 +15,7 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'cloudinary_storage',          # ← must be before staticfiles
+    'cloudinary_storage',
     'django.contrib.staticfiles',
 
     # Local apps
@@ -59,7 +59,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# ── Database (Supabase PostgreSQL) ────────────────────────────────────────────
 DATABASES = {
     'default': dj_database_url.parse(
         config('DATABASE_URL'),
@@ -68,7 +67,6 @@ DATABASES = {
 }
 DATABASES['default']['OPTIONS'] = {'sslmode': 'require'}
 
-# ── Cloudinary ────────────────────────────────────────────────────────────────
 CLOUDINARY_STORAGE = {
     'CLOUD_NAME': config('CLOUDINARY_CLOUD_NAME'),
     'API_KEY':    config('CLOUDINARY_API_KEY'),
@@ -105,30 +103,30 @@ STATICFILES_DIRS = [
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-# ── Storage backends ──────────────────────────────────────────────────────────
-# Uses STORAGES dict (Django 4.2+) — replaces DEFAULT_FILE_STORAGE
-# and STATICFILES_STORAGE which no longer work reliably in Django 5.x
+# ── WhiteNoise SPA support ────────────────────────────────────────────────────
+WHITENOISE_ROOT = BASE_DIR / 'frontend' / 'dist'
+WHITENOISE_INDEX_FILE = True
+
 # ── Storage backends ──────────────────────────────────────────────────────────
 STORAGES = {
     "default": {
         "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
     },
     "staticfiles": {
-        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
 
-# Required by django-cloudinary-storage which reads this setting directly
-STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
-
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # ── Session ───────────────────────────────────────────────────────────────────
-SESSION_COOKIE_AGE = 86400 * 7  # 7 days
+SESSION_COOKIE_AGE = 86400 * 7
 SESSION_COOKIE_HTTPONLY = True
 
 # ── CSRF ──────────────────────────────────────────────────────────────────────
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
+    "https://nblesport.up.railway.app",
 ]
