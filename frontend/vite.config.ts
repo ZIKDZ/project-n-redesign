@@ -3,8 +3,8 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
-export default defineConfig(({ command }) => ({
-  base: command === 'build' ? '/static/' : '/',
+export default defineConfig({
+  base: '/static/',
 
   plugins: [
     tailwindcss(),
@@ -18,6 +18,7 @@ export default defineConfig(({ command }) => ({
 
   server: {
     port: 5173,
+    base: '/',  // override base back to / in dev so the proxy works normally
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
@@ -52,4 +53,4 @@ export default defineConfig(({ command }) => ({
       '@': path.resolve(__dirname, './src'),
     },
   },
-}))
+})
