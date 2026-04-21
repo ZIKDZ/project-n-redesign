@@ -4,6 +4,8 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
 export default defineConfig({
+  base: '/static/',
+
   plugins: [
     tailwindcss(),
     react(),
@@ -12,19 +14,17 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    // Do NOT use singlefile plugin anymore — Django serves assets separately
   },
 
   server: {
     port: 5173,
+    base: '/',  // override base back to / in dev so the proxy works normally
     proxy: {
-      // All API calls and auth forwarded to Django in development
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('error', (err, _req, res) => {
-            // Django not running — return a clean 503 instead of crashing the proxy
             console.warn('[vite proxy] Django backend offline:', err.message)
             if (!res.headersSent) {
               res.writeHead(503, { 'Content-Type': 'application/json' })
