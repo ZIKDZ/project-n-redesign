@@ -17,7 +17,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'cloudinary_storage',          # ← must be before staticfiles
     'django.contrib.staticfiles',
-    'cloudinary',
+
     # Local apps
     'apps.joins',
     'apps.matches',
@@ -108,6 +108,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # ── Storage backends ──────────────────────────────────────────────────────────
 # Uses STORAGES dict (Django 4.2+) — replaces DEFAULT_FILE_STORAGE
 # and STATICFILES_STORAGE which no longer work reliably in Django 5.x
+# ── Storage backends ──────────────────────────────────────────────────────────
 STORAGES = {
     "default": {
         "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
@@ -116,6 +117,8 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
