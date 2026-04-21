@@ -132,4 +132,5 @@ SESSION_COOKIE_HTTPONLY = True
 # ── CSRF ──────────────────────────────────────────────────────────────────────
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
+    "https://nblesport.up.railway.app",
 ]
