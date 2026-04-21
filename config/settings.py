@@ -121,6 +121,7 @@ STORAGES = {
 # Required by django-cloudinary-storage which reads this setting directly
 STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
 
+WHITENOISE_ROOT = BASE_DIR / 'frontend' / 'dist'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

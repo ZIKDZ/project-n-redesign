@@ -23,5 +23,5 @@ urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # Catch-all LAST and exclude media
 urlpatterns += [
-    re_path(r'^(?!media/).*$', TemplateView.as_view(template_name='index.html')),
+    re_path(r'^(?!media/|static/|api/).*$', TemplateView.as_view(template_name='index.html')),
 ]
