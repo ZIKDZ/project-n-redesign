@@ -480,7 +480,7 @@ export default function RosterPage() {
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-4">
           <button
             onClick={() => navigate("/")}
-            className="flex items-center gap-2 text-white/50 hover:text-white transition-colors text-sm font-bold tracking-wider uppercase group"
+            className="flex items-center gap-2 text-white/50 hover:text-white transition-colors text-sm font-bold tracking-wider uppercase group cursor-pointer"  // ← added cursor-pointer
           >
             <svg
               className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
@@ -631,7 +631,7 @@ export default function RosterPage() {
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           <button
             onClick={() => navigate("/")}
-            className="text-white/30 hover:text-white text-sm font-bold tracking-wider uppercase transition-colors flex items-center gap-2 group"
+            className="text-white/30 hover:text-white text-sm font-bold tracking-wider uppercase transition-colors flex items-center gap-2 group cursor-pointer"  // ← added cursor-pointer
           >
             <svg
               className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"

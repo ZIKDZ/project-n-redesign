@@ -98,7 +98,7 @@ function GameCard({ game, onRoster }: { game: GameData; onRoster: () => void }) 
           </span>
           <button
             onClick={onRoster}
-            className="inline-flex items-center gap-1.5 text-xs font-black px-4 py-2 rounded-xl uppercase tracking-widest transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg group/btn shrink-0"
+            className="inline-flex items-center gap-1.5 text-xs font-black px-4 py-2 rounded-xl uppercase tracking-widest transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg group/btn shrink-0 cursor-pointer"
             style={{
               background: overlayColor.replace(/[\d.]+\)$/, '0.3)'),
               color: "rgba(255,255,255,0.85)",
@@ -384,7 +384,7 @@ function NewsCard({
           {onReadMore && (
             <button
               onClick={onReadMore}
-              className="flex items-center gap-1.5 text-xs font-black tracking-widest uppercase px-4 py-2 rounded-xl transition-all duration-200 hover:-translate-y-0.5"
+              className="flex items-center gap-1.5 text-xs font-black tracking-widest uppercase px-4 py-2 rounded-xl transition-all duration-200 hover:-translate-y-0.5 cursor-pointer"
               style={{
                 background: hovered ? tc.bg : "rgba(255,255,255,0.05)",
                 color: hovered ? tc.text : "rgba(255,255,255,0.5)",
@@ -537,7 +537,7 @@ function JoinForm() {
           <h3 className="text-white text-2xl font-black uppercase mb-3" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>Application Sent!</h3>
           <p className="text-gray-400">We'll review your application and get back to you soon.</p>
           <button onClick={() => setStatus("idle")}
-            className="mt-8 text-purple-400 text-sm font-bold tracking-wider uppercase hover:text-purple-300 transition-colors">
+            className="mt-8 text-purple-400 text-sm font-bold tracking-wider uppercase hover:text-purple-300 transition-colors cursor-pointer">
             Submit Another →
           </button>
         </div>
@@ -595,7 +595,7 @@ function JoinForm() {
           )}
           <div className="mt-8">
             <button type="submit" disabled={status === "loading"}
-              className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-black py-4 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 hover:shadow-2xl hover:shadow-purple-500/40 hover:-translate-y-0.5"
+              className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer text-white font-black py-4 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 hover:shadow-2xl hover:shadow-purple-500/40 hover:-translate-y-0.5"
               style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: "1rem" }}>
               {status === "loading" ? "Submitting…" : "Apply Now"}
             </button>
@@ -703,7 +703,7 @@ function SpotlightHero() {
             <button
               key={i}
               onClick={e => { e.stopPropagation(); e.preventDefault(); setCurrent(i); }}
-              className={`rounded-full transition-all duration-300 ${
+              className={`rounded-full transition-all duration-300 cursor-pointer ${
                 i === current
                   ? "w-5 h-1.5 bg-purple-400"
                   : "w-1.5 h-1.5 bg-white/30 hover:bg-white/60"
