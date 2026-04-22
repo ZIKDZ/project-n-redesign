@@ -146,10 +146,13 @@ def update_player(request, pk):
             raw_team = data['team_id']
             player.team_id = int(raw_team) if raw_team and str(raw_team) not in ('null', 'None', '') else None
 
-        # Avatar upload
-        if avatar_file:
+        # Avatar upload / clear
+        clear_avatar = data.get('clear_avatar', '')
+        if clear_avatar and str(clear_avatar).lower() not in ('false', '0', ''):
+            player.avatar = None
+        elif avatar_file:
             player.avatar = avatar_file
-
+ 
         player.save()
         return JsonResponse(player.to_dict())
 
