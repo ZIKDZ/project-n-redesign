@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { players, games, teams } from '../../../../utils/api'
-import { Badge, SectionHeader, ActionButton, getCsrfToken } from '../DashboardShared'
+import { Badge, SectionHeader, ActionButton, FilterSelect, FilterOption, getCsrfToken } from '../DashboardShared'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const STATUS_COLORS: Record<string, 'green' | 'yellow' | 'gray'> = {
@@ -181,6 +181,8 @@ function PlayerModal({
 
   const inputClass =
     'bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500/60 w-full placeholder-white/20'
+  const selectClass =
+    'bg-[#1a0030] border border-white/10 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500/60 w-full cursor-pointer'
   const labelClass = 'block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1'
 
   return (
@@ -265,11 +267,11 @@ function PlayerModal({
                 <select
                   value={form.game}
                   onChange={e => handleGameChange(e.target.value)}
-                  className={inputClass + ' cursor-pointer'}
+                  className={selectClass}
                 >
-                  <option value="" className="bg-[#1a0030]">Select game</option>
+                  <option value="" className="bg-[#1a0030] text-white">Select game</option>
                   {gamesList.map(g => (
-                    <option key={g.slug} value={g.slug} className="bg-[#1a0030]">{g.title}</option>
+                    <option key={g.slug} value={g.slug} className="bg-[#1a0030] text-white">{g.title}</option>
                   ))}
                 </select>
               </div>
@@ -280,11 +282,11 @@ function PlayerModal({
                     value={form.rank}
                     onChange={e => setForm(p => ({ ...p, rank: e.target.value }))}
                     disabled={!form.game}
-                    className={inputClass + ' cursor-pointer disabled:opacity-40'}
+                    className={selectClass + ' disabled:opacity-40'}
                   >
-                    <option value="" className="bg-[#1a0030]">Select rank</option>
+                    <option value="" className="bg-[#1a0030] text-white">Select rank</option>
                     {ranks.map(r => (
-                      <option key={r} value={r} className="bg-[#1a0030]">{r}</option>
+                      <option key={r} value={r} className="bg-[#1a0030] text-white">{r}</option>
                     ))}
                   </select>
                 ) : (
@@ -301,7 +303,7 @@ function PlayerModal({
                 <select
                   value={form.role}
                   onChange={e => setForm(p => ({ ...p, role: e.target.value }))}
-                  className={inputClass + ' cursor-pointer'}
+                  className={selectClass}
                 >
                   {[
                     ['player', 'Player'],
@@ -310,7 +312,7 @@ function PlayerModal({
                     ['substitute', 'Substitute'],
                     ['content_creator', 'Content Creator'],
                   ].map(([v, l]) => (
-                    <option key={v} value={v} className="bg-[#1a0030]">{l}</option>
+                    <option key={v} value={v} className="bg-[#1a0030] text-white">{l}</option>
                   ))}
                 </select>
               </div>
@@ -319,11 +321,11 @@ function PlayerModal({
                 <select
                   value={form.status}
                   onChange={e => setForm(p => ({ ...p, status: e.target.value }))}
-                  className={inputClass + ' cursor-pointer'}
+                  className={selectClass}
                 >
-                  <option value="active" className="bg-[#1a0030]">Active</option>
-                  <option value="suspended" className="bg-[#1a0030]">Suspended</option>
-                  <option value="inactive" className="bg-[#1a0030]">Inactive</option>
+                  <option value="active" className="bg-[#1a0030] text-white">Active</option>
+                  <option value="suspended" className="bg-[#1a0030] text-white">Suspended</option>
+                  <option value="inactive" className="bg-[#1a0030] text-white">Inactive</option>
                 </select>
               </div>
               <div className="col-span-2">
@@ -331,11 +333,11 @@ function PlayerModal({
                 <select
                   value={form.team_id ?? ''}
                   onChange={e => setForm(p => ({ ...p, team_id: e.target.value ? Number(e.target.value) : null }))}
-                  className={inputClass + ' cursor-pointer'}
+                  className={selectClass}
                 >
-                  <option value="" className="bg-[#1a0030]">No team</option>
+                  <option value="" className="bg-[#1a0030] text-white">No team</option>
                   {teamsList.map((t: any) => (
-                    <option key={t.id} value={t.id} className="bg-[#1a0030]">{t.name}</option>
+                    <option key={t.id} value={t.id} className="bg-[#1a0030] text-white">{t.name}</option>
                   ))}
                 </select>
               </div>
@@ -369,61 +371,35 @@ function PlayerModal({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelClass}>First Name</label>
-                <input
-                  placeholder="e.g. Yacine"
-                  value={form.first_name}
-                  onChange={e => setForm(p => ({ ...p, first_name: e.target.value }))}
-                  className={inputClass}
-                />
+                <input placeholder="e.g. Yacine" value={form.first_name}
+                  onChange={e => setForm(p => ({ ...p, first_name: e.target.value }))} className={inputClass} />
               </div>
               <div>
                 <label className={labelClass}>Last Name</label>
-                <input
-                  placeholder="e.g. Benzema"
-                  value={form.last_name}
-                  onChange={e => setForm(p => ({ ...p, last_name: e.target.value }))}
-                  className={inputClass}
-                />
+                <input placeholder="e.g. Benzema" value={form.last_name}
+                  onChange={e => setForm(p => ({ ...p, last_name: e.target.value }))} className={inputClass} />
               </div>
               <div>
                 <label className={labelClass}>Age</label>
-                <input
-                  type="number"
-                  min="10"
-                  max="99"
-                  placeholder="e.g. 21"
+                <input type="number" min="10" max="99" placeholder="e.g. 21"
                   value={form.age ?? ''}
                   onChange={e => setForm(p => ({ ...p, age: e.target.value ? Number(e.target.value) : null }))}
-                  className={inputClass}
-                />
+                  className={inputClass} />
               </div>
               <div>
                 <label className={labelClass}>Email</label>
-                <input
-                  type="email"
-                  placeholder="e.g. player@email.com"
-                  value={form.email}
-                  onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-                  className={inputClass}
-                />
+                <input type="email" placeholder="e.g. player@email.com" value={form.email}
+                  onChange={e => setForm(p => ({ ...p, email: e.target.value }))} className={inputClass} />
               </div>
               <div>
                 <label className={labelClass}>Phone</label>
-                <input
-                  placeholder="e.g. +213 555 123456"
-                  value={form.phone}
-                  onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
-                  className={inputClass}
-                />
+                <input placeholder="e.g. +213 555 123456" value={form.phone}
+                  onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} className={inputClass} />
               </div>
               <div>
                 <label className={labelClass}>Address</label>
-                <input
-                  placeholder="e.g. Algiers, Algeria"
-                  value={form.address}
-                  onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
-                  className={inputClass}
-                />
+                <input placeholder="e.g. Algiers, Algeria" value={form.address}
+                  onChange={e => setForm(p => ({ ...p, address: e.target.value }))} className={inputClass} />
               </div>
               <div className="col-span-2 pt-2">
                 <p className="text-white/15 text-[10px] tracking-wide">
@@ -482,10 +458,8 @@ export default function PlayersSection() {
   const handleAdd = async (form: any, avatarFile: File | null) => {
     const fd = buildFormData(form, avatarFile)
     await fetch('/api/players/create/', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'X-CSRFToken': getCsrf() },
-      body: fd,
+      method: 'POST', credentials: 'include',
+      headers: { 'X-CSRFToken': getCsrf() }, body: fd,
     })
     load()
   }
@@ -494,10 +468,8 @@ export default function PlayersSection() {
     if (!editing) return
     const fd = buildFormData(form, avatarFile)
     await fetch(`/api/players/${editing.id}/`, {
-      method: 'PATCH',
-      credentials: 'include',
-      headers: { 'X-CSRFToken': getCsrf() },
-      body: fd,
+      method: 'PATCH', credentials: 'include',
+      headers: { 'X-CSRFToken': getCsrf() }, body: fd,
     })
     load()
   }
@@ -525,26 +497,18 @@ export default function PlayersSection() {
         title="Players"
         action={
           <div className="flex items-center gap-2">
-            <select
-              value={filterGame}
-              onChange={e => setFilterGame(e.target.value)}
-              className="bg-white/5 border border-white/10 text-white text-xs px-3 py-2 rounded-lg cursor-pointer"
-            >
-              <option value="">All Games</option>
+            <FilterSelect value={filterGame} onChange={setFilterGame}>
+              <FilterOption value="">All Games</FilterOption>
               {gamesList.map(g => (
-                <option key={g.slug} value={g.slug} className="bg-[#1a0030]">{g.title}</option>
+                <FilterOption key={g.slug} value={g.slug}>{g.title}</FilterOption>
               ))}
-            </select>
-            <select
-              value={filterStatus}
-              onChange={e => setFilterStatus(e.target.value)}
-              className="bg-white/5 border border-white/10 text-white text-xs px-3 py-2 rounded-lg cursor-pointer"
-            >
-              <option value="">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="suspended">Suspended</option>
-              <option value="inactive">Inactive</option>
-            </select>
+            </FilterSelect>
+            <FilterSelect value={filterStatus} onChange={setFilterStatus}>
+              <FilterOption value="">All Statuses</FilterOption>
+              <FilterOption value="active">Active</FilterOption>
+              <FilterOption value="suspended">Suspended</FilterOption>
+              <FilterOption value="inactive">Inactive</FilterOption>
+            </FilterSelect>
             <ActionButton onClick={() => setShowAdd(true)}>+ Add Player</ActionButton>
           </div>
         }

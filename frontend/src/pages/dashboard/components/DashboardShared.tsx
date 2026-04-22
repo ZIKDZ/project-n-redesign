@@ -103,3 +103,44 @@ export function ActionButton({
     </button>
   )
 }
+
+// ── FilterSelect ──────────────────────────────────────────────────────────────
+// Use this for all filter/status dropdowns in the dashboard toolbar.
+// Solid background ensures text is always visible regardless of OS/browser
+// dark-mode rendering of semi-transparent backgrounds.
+export function FilterSelect({
+  value,
+  onChange,
+  children,
+}: {
+  value: string
+  onChange: (value: string) => void
+  children: React.ReactNode
+}) {
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className="bg-[#1a0030] border border-white/10 text-white text-xs px-3 py-2 rounded-lg cursor-pointer focus:outline-none focus:border-purple-500/60 transition-colors duration-200"
+    >
+      {children}
+    </select>
+  )
+}
+
+// ── FilterOption ──────────────────────────────────────────────────────────────
+// Companion to FilterSelect — always renders with a solid background so the
+// dropdown list is readable in every browser / OS theme combination.
+export function FilterOption({
+  value,
+  children,
+}: {
+  value: string
+  children: React.ReactNode
+}) {
+  return (
+    <option value={value} className="bg-[#1a0030] text-white">
+      {children}
+    </option>
+  )
+}

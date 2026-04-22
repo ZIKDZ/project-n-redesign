@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { teams, players, games as gamesApi } from '../../../../utils/api'
-import { SectionHeader, ActionButton, getCsrfToken } from '../DashboardShared'
+import { SectionHeader, ActionButton, FilterSelect, FilterOption, getCsrfToken } from '../DashboardShared'
 
 // ── RosterCard ────────────────────────────────────────────────────────────────
 function RosterCard({
@@ -176,35 +176,22 @@ function RosterCard({
 
 // ── ImageUploadField ──────────────────────────────────────────────────────────
 function ImageUploadField({
-  label,
-  preview,
-  file,
-  inputRef,
-  accept,
-  onChange,
-  onRemove,
-  shape = 'banner',
+  label, preview, file, inputRef, accept, onChange, onRemove, shape = 'banner',
 }: {
-  label: string
-  preview: string
-  file: File | null
-  inputRef: React.RefObject<HTMLInputElement | null>
-  accept: string
+  label: string; preview: string; file: File | null
+  inputRef: React.RefObject<HTMLInputElement | null>; accept: string
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
-  onRemove: () => void
-  shape?: 'banner' | 'logo'
+  onRemove: () => void; shape?: 'banner' | 'logo'
 }) {
-  const labelClass = 'block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1'
   return (
     <div className="col-span-2">
-      <label className={labelClass}>{label}</label>
+      <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">{label}</label>
       <div className="flex items-start gap-4">
         <div
           className={`border-2 border-dashed border-white/10 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:border-purple-500/50 transition-colors ${
             shape === 'logo' ? 'w-14 h-14 rounded-xl' : 'w-36 h-20 rounded-xl'
           }`}
           onClick={() => inputRef.current?.click()}
-          title="Click to upload"
         >
           {preview ? (
             <img src={preview} className="w-full h-full object-cover" alt={label} />
@@ -221,11 +208,8 @@ function ImageUploadField({
         <div className="flex-1 space-y-1.5">
           <input ref={inputRef} type="file" accept={accept} onChange={onChange} className="hidden" />
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              className="bg-white/5 border border-white/10 hover:border-purple-500/40 text-white/60 hover:text-white text-[10px] font-bold px-3 py-1.5 rounded-lg tracking-wider uppercase transition-all duration-200"
-            >
+            <button type="button" onClick={() => inputRef.current?.click()}
+              className="bg-white/5 border border-white/10 hover:border-purple-500/40 text-white/60 hover:text-white text-[10px] font-bold px-3 py-1.5 rounded-lg tracking-wider uppercase transition-all duration-200">
               {file ? 'Change' : 'Choose File'}
             </button>
             {file && (
@@ -243,19 +227,10 @@ function ImageUploadField({
 
 // ── RosterModal ───────────────────────────────────────────────────────────────
 function RosterModal({
-  initial,
-  isEdit,
-  playersList,
-  gamesList,
-  onSave,
-  onClose,
+  initial, isEdit, playersList, gamesList, onSave, onClose,
 }: {
-  initial: any
-  isEdit: boolean
-  playersList: any[]
-  gamesList: any[]
-  onSave: (fd: FormData) => Promise<void>
-  onClose: () => void
+  initial: any; isEdit: boolean; playersList: any[]; gamesList: any[]
+  onSave: (fd: FormData) => Promise<void>; onClose: () => void
 }) {
   const [form, setForm] = useState({
     name:        initial.name        || '',
@@ -270,16 +245,15 @@ function RosterModal({
   const [bannerFile,    setBannerFile]    = useState<File | null>(null)
   const [bannerPreview, setBannerPreview] = useState<string>(initial.banner_url || '')
   const bannerRef = useRef<HTMLInputElement>(null)
-
   const [logoFile,    setLogoFile]    = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string>(initial.logo_url || '')
   const logoRef = useRef<HTMLInputElement>(null)
-
   const [saving, setSaving] = useState(false)
 
   const gamePlayers = playersList.filter(p => p.game === form.game && p.status === 'active')
-  const inputClass = 'bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500/60 w-full placeholder-white/20'
-  const labelClass = 'block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1'
+  const selectClass = 'bg-[#1a0030] border border-white/10 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500/60 w-full cursor-pointer'
+  const inputClass  = 'bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500/60 w-full placeholder-white/20'
+  const labelClass  = 'block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1'
 
   const handleSubmit = async () => {
     if (!form.name || !form.game) return
@@ -316,10 +290,7 @@ function RosterModal({
       >
         <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-white/8">
           <div>
-            <h3
-              className="text-white font-black text-base uppercase tracking-wide"
-              style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-            >
+            <h3 className="text-white font-black text-base uppercase tracking-wide" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
               {isEdit ? `Edit — ${initial.name}` : 'Create Roster'}
             </h3>
             <p className="text-white/25 text-[10px] tracking-widest">
@@ -333,56 +304,32 @@ function RosterModal({
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className={labelClass}>Roster Name *</label>
-              <input
-                placeholder="e.g. NBL Valorant Main"
-                value={form.name}
-                onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                className={inputClass}
-              />
+              <input placeholder="e.g. NBL Valorant Main" value={form.name}
+                onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className={inputClass} />
             </div>
             <div>
               <label className={labelClass}>Game *</label>
               {gamesList.length === 0 ? (
-                <div className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white/30 text-xs">
-                  Loading games…
-                </div>
+                <div className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white/30 text-xs">Loading games…</div>
               ) : (
-                <select
-                  value={form.game}
-                  onChange={e => setForm(p => ({ ...p, game: e.target.value, igl_id: '' }))}
-                  className={inputClass + ' cursor-pointer'}
-                >
+                <select value={form.game} onChange={e => setForm(p => ({ ...p, game: e.target.value, igl_id: '' }))} className={selectClass}>
                   {gamesList.map(g => (
-                    <option key={g.slug} value={g.slug} className="bg-[#1a0030]">
-                      {g.title}
-                    </option>
+                    <option key={g.slug} value={g.slug} className="bg-[#1a0030] text-white">{g.title}</option>
                   ))}
                 </select>
               )}
             </div>
             <div>
               <label className={labelClass}>Max Players</label>
-              <input
-                type="number"
-                min="1"
-                max="20"
-                value={form.max_players}
-                onChange={e => setForm(p => ({ ...p, max_players: Number(e.target.value) }))}
-                className={inputClass}
-              />
+              <input type="number" min="1" max="20" value={form.max_players}
+                onChange={e => setForm(p => ({ ...p, max_players: Number(e.target.value) }))} className={inputClass} />
             </div>
             <div className="col-span-2">
               <label className={labelClass}>In-Game Leader (IGL)</label>
-              <select
-                value={form.igl_id}
-                onChange={e => setForm(p => ({ ...p, igl_id: e.target.value }))}
-                className={inputClass + ' cursor-pointer'}
-              >
-                <option value="" className="bg-[#1a0030]">No IGL assigned</option>
+              <select value={form.igl_id} onChange={e => setForm(p => ({ ...p, igl_id: e.target.value }))} className={selectClass}>
+                <option value="" className="bg-[#1a0030] text-white">No IGL assigned</option>
                 {gamePlayers.map(p => (
-                  <option key={p.id} value={p.id} className="bg-[#1a0030]">
-                    {p.username} ({p.role})
-                  </option>
+                  <option key={p.id} value={p.id} className="bg-[#1a0030] text-white">{p.username} ({p.role})</option>
                 ))}
               </select>
               {gamePlayers.length === 0 && form.game && (
@@ -392,88 +339,45 @@ function RosterModal({
               )}
             </div>
 
-            <ImageUploadField
-              label="Banner Image"
-              preview={bannerPreview}
-              file={bannerFile}
-              inputRef={bannerRef}
-              accept="image/*"
-              onChange={e => {
-                const file = e.target.files?.[0] || null
-                setBannerFile(file)
-                setBannerPreview(file ? URL.createObjectURL(file) : (initial.banner_url || ''))
-              }}
-              onRemove={() => {
-                setBannerFile(null)
-                setBannerPreview(initial.banner_url || '')
-                if (bannerRef.current) bannerRef.current.value = ''
-              }}
-              shape="banner"
-            />
+            <ImageUploadField label="Banner Image" preview={bannerPreview} file={bannerFile} inputRef={bannerRef} accept="image/*"
+              onChange={e => { const f = e.target.files?.[0] || null; setBannerFile(f); setBannerPreview(f ? URL.createObjectURL(f) : (initial.banner_url || '')) }}
+              onRemove={() => { setBannerFile(null); setBannerPreview(initial.banner_url || ''); if (bannerRef.current) bannerRef.current.value = '' }}
+              shape="banner" />
 
-            <ImageUploadField
-              label="Logo / Icon"
-              preview={logoPreview}
-              file={logoFile}
-              inputRef={logoRef}
-              accept="image/*"
-              onChange={e => {
-                const file = e.target.files?.[0] || null
-                setLogoFile(file)
-                setLogoPreview(file ? URL.createObjectURL(file) : (initial.logo_url || ''))
-              }}
-              onRemove={() => {
-                setLogoFile(null)
-                setLogoPreview(initial.logo_url || '')
-                if (logoRef.current) logoRef.current.value = ''
-              }}
-              shape="logo"
-            />
+            <ImageUploadField label="Logo / Icon" preview={logoPreview} file={logoFile} inputRef={logoRef} accept="image/*"
+              onChange={e => { const f = e.target.files?.[0] || null; setLogoFile(f); setLogoPreview(f ? URL.createObjectURL(f) : (initial.logo_url || '')) }}
+              onRemove={() => { setLogoFile(null); setLogoPreview(initial.logo_url || ''); if (logoRef.current) logoRef.current.value = '' }}
+              shape="logo" />
 
             <div className="col-span-2">
               <label className={labelClass}>Description</label>
-              <textarea
-                placeholder="Short description about this roster…"
-                value={form.description}
+              <textarea placeholder="Short description about this roster…" value={form.description}
                 onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                className={inputClass + ' h-16 resize-none'}
-              />
+                className={inputClass + ' h-16 resize-none'} />
             </div>
 
             <div className="col-span-2 grid grid-cols-2 gap-3">
               <div className="flex items-center gap-3">
-                <button
-                  type="button"
+                <button type="button"
                   onClick={() => setForm(p => ({ ...p, visibility: p.visibility === 'public' ? 'hidden' : 'public' }))}
-                  className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${form.visibility === 'public' ? 'bg-green-600' : 'bg-white/10'}`}
-                >
-                  <span
-                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
-                    style={{ left: form.visibility === 'public' ? '16px' : '2px' }}
-                  />
+                  className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${form.visibility === 'public' ? 'bg-green-600' : 'bg-white/10'}`}>
+                  <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
+                    style={{ left: form.visibility === 'public' ? '16px' : '2px' }} />
                 </button>
                 <div>
-                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">
-                    {form.visibility === 'public' ? 'Public' : 'Hidden'}
-                  </p>
+                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">{form.visibility === 'public' ? 'Public' : 'Hidden'}</p>
                   <p className="text-white/20 text-[10px]">Visible on public site</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <button
-                  type="button"
+                <button type="button"
                   onClick={() => setForm(p => ({ ...p, is_active: !p.is_active }))}
-                  className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${form.is_active ? 'bg-purple-600' : 'bg-white/10'}`}
-                >
-                  <span
-                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
-                    style={{ left: form.is_active ? '16px' : '2px' }}
-                  />
+                  className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${form.is_active ? 'bg-purple-600' : 'bg-white/10'}`}>
+                  <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
+                    style={{ left: form.is_active ? '16px' : '2px' }} />
                 </button>
                 <div>
-                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">
-                    {form.is_active ? 'Active' : 'Inactive'}
-                  </p>
+                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">{form.is_active ? 'Active' : 'Inactive'}</p>
                   <p className="text-white/20 text-[10px]">Roster is competing</p>
                 </div>
               </div>
@@ -488,12 +392,9 @@ function RosterModal({
         </div>
 
         <div className="flex gap-3 px-6 py-4 border-t border-white/8">
-          <button
-            onClick={handleSubmit}
-            disabled={saving || !form.name || !form.game}
+          <button onClick={handleSubmit} disabled={saving || !form.name || !form.game}
             className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black px-6 py-2.5 rounded-xl text-xs tracking-widest uppercase transition-all duration-200"
-            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-          >
+            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
             {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Roster'}
           </button>
           <ActionButton variant="ghost" onClick={onClose}>Cancel</ActionButton>
@@ -524,19 +425,13 @@ export default function TeamsSection() {
   useEffect(() => { load() }, [])
 
   const handleAdd = async (fd: FormData) => {
-    await fetch('/api/teams/create/', {
-      method: 'POST', credentials: 'include',
-      headers: { 'X-CSRFToken': getCsrf() }, body: fd,
-    })
+    await fetch('/api/teams/create/', { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': getCsrf() }, body: fd })
     load()
   }
 
   const handleEdit = async (fd: FormData) => {
     if (!editing) return
-    await fetch(`/api/teams/${editing.id}/`, {
-      method: 'PATCH', credentials: 'include',
-      headers: { 'X-CSRFToken': getCsrf() }, body: fd,
-    })
+    await fetch(`/api/teams/${editing.id}/`, { method: 'PATCH', credentials: 'include', headers: { 'X-CSRFToken': getCsrf() }, body: fd })
     load()
   }
 
@@ -558,25 +453,17 @@ export default function TeamsSection() {
         title="Rosters"
         action={
           <div className="flex items-center gap-2">
-            <select
-              value={filterGame}
-              onChange={e => setFilterGame(e.target.value)}
-              className="bg-white/5 border border-white/10 text-white text-xs px-3 py-2 rounded-lg cursor-pointer"
-            >
-              <option value="">All Games</option>
+            <FilterSelect value={filterGame} onChange={setFilterGame}>
+              <FilterOption value="">All Games</FilterOption>
               {gamesList.map(g => (
-                <option key={g.slug} value={g.slug} className="bg-[#1a0030]">{g.title}</option>
+                <FilterOption key={g.slug} value={g.slug}>{g.title}</FilterOption>
               ))}
-            </select>
-            <select
-              value={filterVis}
-              onChange={e => setFilterVis(e.target.value)}
-              className="bg-white/5 border border-white/10 text-white text-xs px-3 py-2 rounded-lg cursor-pointer"
-            >
-              <option value="">All</option>
-              <option value="public">Public</option>
-              <option value="hidden">Hidden</option>
-            </select>
+            </FilterSelect>
+            <FilterSelect value={filterVis} onChange={setFilterVis}>
+              <FilterOption value="">All</FilterOption>
+              <FilterOption value="public">Public</FilterOption>
+              <FilterOption value="hidden">Hidden</FilterOption>
+            </FilterSelect>
             <ActionButton onClick={() => setShowAdd(true)}>+ New Roster</ActionButton>
           </div>
         }
@@ -585,23 +472,16 @@ export default function TeamsSection() {
       {displayed.length === 0 ? (
         <div className="text-center py-16 border border-white/5 rounded-2xl">
           <p className="text-white/20 text-sm tracking-wider">No rosters found.</p>
-          <button
-            onClick={() => setShowAdd(true)}
-            className="mt-4 text-purple-400 text-xs font-bold tracking-widest uppercase hover:text-purple-300 transition-colors"
-          >
+          <button onClick={() => setShowAdd(true)}
+            className="mt-4 text-purple-400 text-xs font-bold tracking-widest uppercase hover:text-purple-300 transition-colors">
             Create your first roster →
           </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {displayed.map(t => (
-            <RosterCard
-              key={t.id}
-              team={t}
-              gamesList={gamesList}
-              onManage={() => setEditing(t)}
-              onDelete={() => remove(t.id, t.name)}
-            />
+            <RosterCard key={t.id} team={t} gamesList={gamesList}
+              onManage={() => setEditing(t)} onDelete={() => remove(t.id, t.name)} />
           ))}
         </div>
       )}
