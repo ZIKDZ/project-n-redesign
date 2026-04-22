@@ -14,7 +14,7 @@ class SpotlightSlide(models.Model):
     Clicking the card on the landing page opens `href`.
     """
     title = models.CharField(max_length=150, blank=True, help_text='Internal label for staff reference')
-    media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES, default='video')
+    media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES, default='image')
 
     # Media — either an uploaded file or an external URL
     video_file = models.FileField(upload_to='spotlight/videos/', blank=True, null=True)
@@ -59,7 +59,11 @@ class SpotlightSlide(models.Model):
             'id': self.id,
             'title': self.title,
             'media_type': self.media_type,
+            # Resolved URL — used by the landing page player/img tag
             'media_url': self.get_media_url(),
+            # Raw stored fields — used by the dashboard edit form to pre-populate
+            'video_url': self.video_url or '',
+            'image_url': self.image_url or '',
             'href': self.href,
             'pill_label': self.pill_label,
             'duration': self.duration,
