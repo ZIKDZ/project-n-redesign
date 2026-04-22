@@ -17,6 +17,12 @@ const STATUS_LABELS: Record<string, string> = {
   inactive: 'Inactive',
 }
 
+const STATUS_ORDER: Record<string, number> = {
+  active: 0,
+  suspended: 1,
+  inactive: 2,
+}
+
 type PlayerData = {
   id: number
   username: string
@@ -932,20 +938,22 @@ export default function PlayersSection() {
     load()
   }
 
-  const filtered = data.filter(p => {
-    if (filterStatus && p.status !== filterStatus) return false
-    if (filterGame && p.game !== filterGame) return false
-    if (search) {
-      const q = search.toLowerCase()
-      return (
-        p.username.toLowerCase().includes(q) ||
-        p.ingame_username.toLowerCase().includes(q) ||
-        (p.first_name + ' ' + p.last_name).toLowerCase().includes(q) ||
-        p.discord_username.toLowerCase().includes(q)
-      )
-    }
-    return true
-  })
+  const filtered = data
+    .filter(p => {
+      if (filterStatus && p.status !== filterStatus) return false
+      if (filterGame && p.game !== filterGame) return false
+      if (search) {
+        const q = search.toLowerCase()
+        return (
+          p.username.toLowerCase().includes(q) ||
+          p.ingame_username.toLowerCase().includes(q) ||
+          (p.first_name + ' ' + p.last_name).toLowerCase().includes(q) ||
+          p.discord_username.toLowerCase().includes(q)
+        )
+      }
+      return true
+    })
+    .sort((a, b) => (STATUS_ORDER[a.status] ?? 3) - (STATUS_ORDER[b.status] ?? 3))
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const displayed = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -991,46 +999,51 @@ export default function PlayersSection() {
         {displayed.map((p: PlayerData) => (
           <div
             key={p.id}
-            className={`bg-white/5 border border-white/8 rounded-2xl px-5 py-4 flex items-center gap-4 transition-opacity ${
-              p.status === 'inactive' ? 'opacity-40' : p.status === 'suspended' ? 'opacity-70' : ''
-            }`}
+            className="bg-white/5 border border-white/8 rounded-2xl px-5 py-4 flex items-center gap-4"
           >
-            <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0 border border-white/10 bg-purple-900/30 flex items-center justify-center">
-              {p.avatar
-                ? (
-                  <img
-                    src={p.avatar}
-                    className="w-full h-full object-cover"
-                    alt={p.username}
-                    onError={e => {
-                      ;(e.currentTarget as HTMLImageElement).style.display = 'none'
-                      const parent = e.currentTarget.parentElement
-                      if (parent) {
-                        const span = document.createElement('span')
-                        span.className = 'text-purple-300 text-sm font-black'
-                        span.textContent = p.username[0]?.toUpperCase() ?? '?'
-                        parent.appendChild(span)
-                      }
-                    }}
-                  />
-                )
-                : <span className="text-purple-300 text-sm font-black">{p.username[0]?.toUpperCase() ?? '?'}</span>
-              }
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                <span className="text-white font-bold text-sm">{p.username}</span>
-                <Badge color={STATUS_COLORS[p.status] || 'gray'}>{STATUS_LABELS[p.status]}</Badge>
-                <Badge color="purple">{p.role}</Badge>
-                {p.game_title && <Badge color="gray">{p.game_title}</Badge>}
-                {p.team && <Badge color="yellow">{p.team}</Badge>}
+            {/* Avatar + info — these fade for suspended/inactive */}
+            <div className={`flex items-center gap-4 flex-1 min-w-0 transition-opacity ${
+              p.status === 'inactive' ? 'opacity-40' : p.status === 'suspended' ? 'opacity-70' : ''
+            }`}>
+              <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0 border border-white/10 bg-purple-900/30 flex items-center justify-center">
+                {p.avatar
+                  ? (
+                    <img
+                      src={p.avatar}
+                      className="w-full h-full object-cover"
+                      alt={p.username}
+                      onError={e => {
+                        ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+                        const parent = e.currentTarget.parentElement
+                        if (parent) {
+                          const span = document.createElement('span')
+                          span.className = 'text-purple-300 text-sm font-black'
+                          span.textContent = p.username[0]?.toUpperCase() ?? '?'
+                          parent.appendChild(span)
+                        }
+                      }}
+                    />
+                  )
+                  : <span className="text-purple-300 text-sm font-black">{p.username[0]?.toUpperCase() ?? '?'}</span>
+                }
               </div>
-              <p className="text-white/35 text-xs truncate">
-                {p.ingame_username}
-                {p.rank && ` · ${p.rank}`}
-                {p.discord_username && ` · ${p.discord_username}`}
-              </p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                  <span className="text-white font-bold text-sm">{p.username}</span>
+                  <Badge color={STATUS_COLORS[p.status] || 'gray'}>{STATUS_LABELS[p.status]}</Badge>
+                  <Badge color="purple">{p.role}</Badge>
+                  {p.game_title && <Badge color="gray">{p.game_title}</Badge>}
+                  {p.team && <Badge color="yellow">{p.team}</Badge>}
+                </div>
+                <p className="text-white/35 text-xs truncate">
+                  {p.ingame_username}
+                  {p.rank && ` · ${p.rank}`}
+                  {p.discord_username && ` · ${p.discord_username}`}
+                </p>
+              </div>
             </div>
+
+            {/* Actions — always full opacity */}
             <div className="flex items-center gap-2 shrink-0">
               <StatusDropdown currentStatus={p.status} onSelect={status => quickStatus(p.id, status)} />
               <ActionButton onClick={() => setEditing(p)}>Manage</ActionButton>
