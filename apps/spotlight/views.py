@@ -21,24 +21,33 @@ def list_slides_all(request):
 
 
 def _apply_slide_data(slide, data, files):
-    """Apply POST/PATCH data + uploaded files to a SpotlightSlide instance."""
+    """
+    Apply POST/PATCH data + uploaded files to a SpotlightSlide instance.
+    Returns a list of field names that were modified, for use with update_fields.
+    """
+    changed = []
+
     media_type = data.get('media_type', slide.media_type or 'image')
     slide.media_type = media_type
+    changed.append('media_type')
 
     for field in ['title', 'href', 'pill_label']:
         if field in data:
             setattr(slide, field, data[field])
+            changed.append(field)
 
     if 'duration' in data:
         slide.duration = int(data['duration'])
+        changed.append('duration')
+
     if 'is_active' in data:
         val = data['is_active']
-        if isinstance(val, str):
-            slide.is_active = val.lower() not in ('false', '0', '')
-        else:
-            slide.is_active = bool(val)
+        slide.is_active = val.lower() not in ('false', '0', '') if isinstance(val, str) else bool(val)
+        changed.append('is_active')
+
     if 'display_order' in data:
         slide.display_order = int(data['display_order'])
+        changed.append('display_order')
 
     if media_type == 'video':
         video_file = files.get('video_file') if files else None
@@ -47,10 +56,6 @@ def _apply_slide_data(slide, data, files):
             slide.video_url = ''
         elif 'video_url' in data:
             slide.video_url = data['video_url']
-            # False = "clear this field" for FileField/ImageField without triggering validation
-            slide.video_file = None
-
-        # Clear image fields safely
         slide.image_url = ''
         slide.image_file = None
 
@@ -61,13 +66,10 @@ def _apply_slide_data(slide, data, files):
             slide.image_url = ''
         elif 'image_url' in data:
             slide.image_url = data['image_url']
-            slide.image_file = None
-
-        # Clear video fields safely
         slide.video_url = ''
         slide.video_file = None
 
-    return slide
+    return slide, list(set(changed))
 
 
 @login_required
@@ -84,13 +86,14 @@ def create_slide(request):
             data = json.loads(request.body)
             files = {}
 
-        # Set defaults for new slides
+        # Defaults for new slides
         slide.pill_label = 'MATCH DAY · ROCKET LEAGUE'
         slide.duration = 8
         slide.is_active = True
         slide.display_order = 0
 
-        _apply_slide_data(slide, data, files)
+        slide, _ = _apply_slide_data(slide, data, files)
+        # For new objects, always do a full save (no update_fields)
         slide.save()
 
         return JsonResponse(slide.to_dict(), status=201)
@@ -107,15 +110,16 @@ def update_slide(request, pk):
         slide = SpotlightSlide.objects.get(pk=pk)
 
         if request.content_type and 'multipart' in request.content_type:
-            # Django already parses these for you — no manual MultiPartParser needed
             data = request.POST
             files = request.FILES
         else:
             data = json.loads(request.body)
             files = {}
 
-        _apply_slide_data(slide, data, files)
-        slide.save()
+        slide, changed_fields = _apply_slide_data(slide, data, files)
+        # Use update_fields so Django skips validation on untouched fields
+        # (critical: prevents Cloudinary ImageField from validating video bytes)
+        slide.save(update_fields=changed_fields)
         return JsonResponse(slide.to_dict())
 
     except SpotlightSlide.DoesNotExist:

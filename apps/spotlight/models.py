@@ -1,4 +1,5 @@
 from django.db import models
+from cloudinary_storage.storage import VideoMediaCloudinaryStorage
 
 
 MEDIA_TYPE_CHOICES = [
@@ -8,32 +9,24 @@ MEDIA_TYPE_CHOICES = [
 
 
 class SpotlightSlide(models.Model):
-    """
-    A single slide in the hero floating card carousel.
-    Can be a video (URL or uploaded file) or an image.
-    Clicking the card on the landing page opens `href`.
-    """
     title = models.CharField(max_length=150, blank=True, help_text='Internal label for staff reference')
     media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES, default='image')
 
-    # Media — either an uploaded file or an external URL
-    video_file = models.FileField(upload_to='spotlight/videos/', blank=True, null=True)
+    # video_file MUST use VideoMediaCloudinaryStorage — the default MediaCloudinaryStorage
+    # treats all uploads as images and throws "Invalid image file" for video content
+    video_file = models.FileField(
+        upload_to='spotlight/videos/',
+        blank=True,
+        null=True,
+        storage=VideoMediaCloudinaryStorage(),
+    )
     video_url = models.URLField(blank=True, help_text='External video URL (mp4, webm…)')
     image_file = models.ImageField(upload_to='spotlight/images/', blank=True, null=True)
     image_url = models.URLField(blank=True, help_text='External image URL fallback')
 
-    # Where clicking the card takes the visitor
     href = models.URLField(blank=True, help_text='Click-through URL (leave blank for no link)')
-
-    # Label shown on the floating card pill (e.g. "MATCH DAY · ROCKET LEAGUE")
     pill_label = models.CharField(max_length=100, blank=True, default='MATCH DAY · ROCKET LEAGUE')
-
-    # Duration override (seconds) — how long to show this slide before advancing
-    duration = models.PositiveSmallIntegerField(
-        default=8,
-        help_text='Seconds to display this slide in the carousel'
-    )
-
+    duration = models.PositiveSmallIntegerField(default=8)
     is_active = models.BooleanField(default=True)
     display_order = models.PositiveSmallIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -59,9 +52,7 @@ class SpotlightSlide(models.Model):
             'id': self.id,
             'title': self.title,
             'media_type': self.media_type,
-            # Resolved URL — used by the landing page player/img tag
             'media_url': self.get_media_url(),
-            # Raw stored fields — used by the dashboard edit form to pre-populate
             'video_url': self.video_url or '',
             'image_url': self.image_url or '',
             'href': self.href,
