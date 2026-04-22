@@ -14,8 +14,10 @@ def list_games(request):
 
 @require_http_methods(['GET'])
 def list_games_open(request):
-    """Public — games currently open for registration (join-form list)."""
-    qs = Game.objects.filter(is_active=True, registration_open=True)
+    """Public — games currently open for registration (join-form list).
+    Only registration_open is checked; is_active controls the showcase separately.
+    """
+    qs = Game.objects.filter(registration_open=True)
     return JsonResponse({'games': [g.to_dict() for g in qs]})
 
 
