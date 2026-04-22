@@ -97,7 +97,7 @@ export function ActionButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`text-xs font-bold px-4 py-2 rounded-lg tracking-wider uppercase transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed ${styles[variant]}`}
+      className={`text-xs font-bold px-4 py-2 rounded-lg tracking-wider uppercase transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer ${styles[variant]}`}
     >
       {children}
     </button>
@@ -105,9 +105,6 @@ export function ActionButton({
 }
 
 // ── FilterSelect ──────────────────────────────────────────────────────────────
-// Use this for all filter/status dropdowns in the dashboard toolbar.
-// Solid background ensures text is always visible regardless of OS/browser
-// dark-mode rendering of semi-transparent backgrounds.
 export function FilterSelect({
   value,
   onChange,
@@ -129,8 +126,6 @@ export function FilterSelect({
 }
 
 // ── FilterOption ──────────────────────────────────────────────────────────────
-// Companion to FilterSelect — always renders with a solid background so the
-// dropdown list is readable in every browser / OS theme combination.
 export function FilterOption({
   value,
   children,
@@ -142,5 +137,117 @@ export function FilterOption({
     <option value={value} className="bg-[#1a0030] text-white">
       {children}
     </option>
+  )
+}
+
+// ── SearchBar ─────────────────────────────────────────────────────────────────
+export function SearchBar({
+  value,
+  onChange,
+  placeholder = 'Search…',
+}: {
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+}) {
+  return (
+    <div className="relative">
+      <svg
+        className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30 pointer-events-none"
+        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round"
+          d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+      </svg>
+      <input
+        type="text"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="bg-white/5 border border-white/10 rounded-lg pl-8 pr-8 py-2 text-white text-xs placeholder-white/25 focus:outline-none focus:border-purple-500/60 transition-colors duration-200 w-44"
+      />
+      {value && (
+        <button
+          onClick={() => onChange('')}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white transition-colors cursor-pointer"
+        >
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ── Pagination ────────────────────────────────────────────────────────────────
+export function Pagination({
+  page,
+  totalPages,
+  onPage,
+}: {
+  page: number
+  totalPages: number
+  onPage: (page: number) => void
+}) {
+  // Always render the container so layout doesn't shift when < 2 pages
+  const pages: (number | '…')[] = []
+  if (totalPages > 1) {
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i)
+    } else {
+      pages.push(1)
+      if (page > 3) pages.push('…')
+      for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) pages.push(i)
+      if (page < totalPages - 2) pages.push('…')
+      pages.push(totalPages)
+    }
+  }
+
+  const btnBase =
+    'w-8 h-8 rounded-lg text-xs font-bold tracking-wider transition-all duration-150 flex items-center justify-center cursor-pointer'
+
+  return (
+    <div className="flex items-center justify-center gap-1.5 mt-6 h-10 select-none">
+      {totalPages > 1 && (
+        <>
+          <button
+            onClick={() => onPage(page - 1)}
+            disabled={page === 1}
+            className={`${btnBase} bg-white/5 border border-white/10 text-white/50 hover:text-white hover:border-purple-500/40 disabled:opacity-30 disabled:cursor-not-allowed`}
+          >
+            ‹
+          </button>
+
+          {pages.map((p, i) =>
+            p === '…' ? (
+              <span key={`ellipsis-${i}`} className="w-8 h-8 flex items-center justify-center text-white/20 text-xs">
+                …
+              </span>
+            ) : (
+              <button
+                key={p}
+                onClick={() => onPage(p as number)}
+                className={`${btnBase} ${
+                  p === page
+                    ? 'bg-purple-600/30 border border-purple-500/50 text-purple-300'
+                    : 'bg-white/5 border border-white/10 text-white/50 hover:text-white hover:border-purple-500/40'
+                }`}
+              >
+                {p}
+              </button>
+            )
+          )}
+
+          <button
+            onClick={() => onPage(page + 1)}
+            disabled={page === totalPages}
+            className={`${btnBase} bg-white/5 border border-white/10 text-white/50 hover:text-white hover:border-purple-500/40 disabled:opacity-30 disabled:cursor-not-allowed`}
+          >
+            ›
+          </button>
+        </>
+      )}
+    </div>
   )
 }

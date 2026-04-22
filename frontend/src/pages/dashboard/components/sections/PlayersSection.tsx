@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { players, games, teams } from '../../../../utils/api'
-import { Badge, SectionHeader, ActionButton, FilterSelect, FilterOption, getCsrfToken } from '../DashboardShared'
+import { Badge, SectionHeader, ActionButton, FilterSelect, FilterOption, getCsrfToken, SearchBar, Pagination } from '../DashboardShared'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
+const PAGE_SIZE = 10
+
 const STATUS_COLORS: Record<string, 'green' | 'yellow' | 'gray'> = {
   active: 'green',
   suspended: 'yellow',
@@ -91,7 +93,7 @@ function StatusDropdown({
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen(v => !v)}
-        className="bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white text-xs font-bold px-3 py-2 rounded-lg tracking-wider uppercase transition-all duration-200 flex items-center gap-1.5"
+        className="bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white text-xs font-bold px-3 py-2 rounded-lg tracking-wider uppercase transition-all duration-200 flex items-center gap-1.5 cursor-pointer"
       >
         <span
           className={`w-1.5 h-1.5 rounded-full shrink-0 ${
@@ -115,7 +117,7 @@ function StatusDropdown({
             <button
               key={val}
               onClick={() => { onSelect(val); setOpen(false) }}
-              className={`flex items-center gap-2.5 w-full text-left px-4 py-2.5 text-xs font-bold tracking-wider uppercase transition-colors hover:bg-purple-500/15 ${
+              className={`flex items-center gap-2.5 w-full text-left px-4 py-2.5 text-xs font-bold tracking-wider uppercase transition-colors hover:bg-purple-500/15 cursor-pointer ${
                 currentStatus === val ? 'text-purple-400 bg-purple-500/10' : 'text-white/55'
               }`}
             >
@@ -222,7 +224,7 @@ function PlayerModal({
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors text-xl">✕</button>
+          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors text-xl cursor-pointer">✕</button>
         </div>
 
         <div className="flex gap-1 px-6 pt-3 pb-1">
@@ -230,7 +232,7 @@ function PlayerModal({
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-4 py-1.5 rounded-lg text-[10px] font-black tracking-widest uppercase transition-all duration-150 ${
+              className={`px-4 py-1.5 rounded-lg text-[10px] font-black tracking-widest uppercase transition-all duration-150 cursor-pointer ${
                 tab === t
                   ? 'bg-purple-600/25 text-purple-300 border border-purple-500/30'
                   : 'text-white/30 hover:text-white/60'
@@ -414,7 +416,7 @@ function PlayerModal({
           <button
             onClick={handleSubmit}
             disabled={saving || !form.username}
-            className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black px-6 py-2.5 rounded-xl text-xs tracking-widest uppercase transition-all duration-200"
+            className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black px-6 py-2.5 rounded-xl text-xs tracking-widest uppercase transition-all duration-200 cursor-pointer"
             style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
           >
             {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Player'}
@@ -435,6 +437,8 @@ export default function PlayersSection() {
   const [editing, setEditing] = useState<PlayerData | null>(null)
   const [filterStatus, setFilterStatus] = useState('')
   const [filterGame, setFilterGame] = useState('')
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
 
   const getCsrf = getCsrfToken
 
@@ -445,6 +449,9 @@ export default function PlayersSection() {
   }
 
   useEffect(() => { load() }, [])
+
+  // Reset page when filters/search change
+  useEffect(() => { setPage(1) }, [filterStatus, filterGame, search])
 
   const buildFormData = (form: any, avatarFile: File | null) => {
     const fd = new FormData()
@@ -485,18 +492,36 @@ export default function PlayersSection() {
     load()
   }
 
-  const displayed = data.filter(p => {
+  // Filter + search
+  const filtered = data.filter(p => {
     if (filterStatus && p.status !== filterStatus) return false
     if (filterGame && p.game !== filterGame) return false
+    if (search) {
+      const q = search.toLowerCase()
+      return (
+        p.username.toLowerCase().includes(q) ||
+        p.ingame_username.toLowerCase().includes(q) ||
+        (p.first_name + ' ' + p.last_name).toLowerCase().includes(q) ||
+        p.discord_username.toLowerCase().includes(q)
+      )
+    }
     return true
   })
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const displayed = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   return (
     <div>
       <SectionHeader
         title="Players"
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <SearchBar
+              value={search}
+              onChange={setSearch}
+              placeholder="Search players…"
+            />
             <FilterSelect value={filterGame} onChange={setFilterGame}>
               <FilterOption value="">All Games</FilterOption>
               {gamesList.map(g => (
@@ -514,9 +539,20 @@ export default function PlayersSection() {
         }
       />
 
+      {/* Result count */}
+      <p className="text-white/25 text-xs mb-3 tracking-wide">
+        {filtered.length === 0
+          ? 'No players found'
+          : `Showing ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, filtered.length)} of ${filtered.length} player${filtered.length !== 1 ? 's' : ''}`}
+      </p>
+
       <div className="space-y-2">
         {displayed.length === 0 && (
-          <p className="text-white/30 text-sm py-4">No players found.</p>
+          <div className="bg-white/5 border border-white/8 rounded-2xl p-8 text-center">
+            <p className="text-white/30 text-sm">
+              {search ? `No players match "${search}"` : 'No players found.'}
+            </p>
+          </div>
         )}
         {displayed.map((p: PlayerData) => (
           <div
@@ -569,6 +605,8 @@ export default function PlayersSection() {
           </div>
         ))}
       </div>
+
+      <Pagination page={page} totalPages={totalPages} onPage={setPage} />
 
       {showAdd && (
         <PlayerModal
