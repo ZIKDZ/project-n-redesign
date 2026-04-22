@@ -1,31 +1,27 @@
 import { useState, useEffect, useRef } from 'react'
-import { teams, players } from '../../../../utils/api'
+import { teams, players, games as gamesApi } from '../../../../utils/api'
 import { SectionHeader, ActionButton, getCsrfToken } from '../DashboardShared'
-
-// ── Constants ─────────────────────────────────────────────────────────────────
-const GAME_COLORS: Record<string, { bg: string; accent: string }> = {
-  rocket_league: { bg: 'rgba(96,184,255,0.12)',  accent: '#60b8ff' },
-  valorant:      { bg: 'rgba(255,112,128,0.12)', accent: '#ff7080' },
-  fortnite:      { bg: 'rgba(255,215,0,0.12)',   accent: '#ffd700' },
-}
-
-const GAME_LABEL: Record<string, string> = {
-  rocket_league: 'Rocket League',
-  valorant:      'Valorant',
-  fortnite:      'Fortnite',
-}
 
 // ── RosterCard ────────────────────────────────────────────────────────────────
 function RosterCard({
   team,
+  gamesList,
   onManage,
   onDelete,
 }: {
   team: any
+  gamesList: any[]
   onManage: () => void
   onDelete: () => void
 }) {
-  const { bg, accent } = GAME_COLORS[team.game] || { bg: 'rgba(168,85,247,0.12)', accent: '#a855f7' }
+  const game = gamesList.find(g => g.slug === team.game)
+  const accentColor = (() => {
+    const oc = game?.overlay_color || ''
+    const m = oc.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
+    if (m) return `rgb(${m[1]},${m[2]},${m[3]})`
+    return '#a855f7'
+  })()
+  const bg = `${accentColor}1e`
 
   const initials = team.name
     .split(' ')
@@ -50,7 +46,7 @@ function RosterCard({
           <div className="w-full h-full flex items-center justify-center" style={{ background: bg }}>
             <span
               className="font-black text-5xl select-none"
-              style={{ color: accent, opacity: 0.25, fontFamily: "'Barlow Condensed', sans-serif" }}
+              style={{ color: accentColor, opacity: 0.25, fontFamily: "'Barlow Condensed', sans-serif" }}
             >
               {initials}
             </span>
@@ -71,7 +67,7 @@ function RosterCard({
           ) : (
             <span
               className="font-black text-xl select-none"
-              style={{ color: accent, fontFamily: "'Barlow Condensed', sans-serif" }}
+              style={{ color: accentColor, fontFamily: "'Barlow Condensed', sans-serif" }}
             >
               {initials}
             </span>
@@ -90,9 +86,9 @@ function RosterCard({
             </h3>
             <span
               className="text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded-full shrink-0 mt-0.5"
-              style={{ background: bg, color: accent, border: `1px solid ${accent}40` }}
+              style={{ background: bg, color: accentColor, border: `1px solid ${accentColor}40` }}
             >
-              {GAME_LABEL[team.game] ?? team.game}
+              {game?.title ?? team.game}
             </span>
           </div>
           {team.description && (
@@ -110,7 +106,7 @@ function RosterCard({
               <div
                 key={i}
                 className="h-1 flex-1 rounded-full"
-                style={{ background: i < filled ? accent : 'rgba(255,255,255,0.08)' }}
+                style={{ background: i < filled ? accentColor : 'rgba(255,255,255,0.08)' }}
               />
             ))}
           </div>
@@ -122,7 +118,7 @@ function RosterCard({
             <div className="flex items-center gap-1.5">
               <div
                 className="w-5 h-5 rounded-md overflow-hidden flex items-center justify-center text-[10px] font-black"
-                style={{ background: bg, color: accent }}
+                style={{ background: bg, color: accentColor }}
               >
                 {team.igl.avatar
                   ? <img src={team.igl.avatar} className="w-full h-full object-cover" alt="" />
@@ -140,7 +136,7 @@ function RosterCard({
               <div
                 key={p.id}
                 className="w-7 h-7 rounded-lg overflow-hidden flex items-center justify-center text-[10px] font-black border border-white/10"
-                style={{ background: bg, color: accent }}
+                style={{ background: bg, color: accentColor }}
                 title={p.username}
               >
                 {p.avatar
@@ -250,18 +246,20 @@ function RosterModal({
   initial,
   isEdit,
   playersList,
+  gamesList,
   onSave,
   onClose,
 }: {
   initial: any
   isEdit: boolean
   playersList: any[]
+  gamesList: any[]
   onSave: (fd: FormData) => Promise<void>
   onClose: () => void
 }) {
   const [form, setForm] = useState({
     name:        initial.name        || '',
-    game:        initial.game        || 'rocket_league',
+    game:        initial.game        || (gamesList[0]?.slug ?? ''),
     description: initial.description || '',
     max_players: initial.max_players ?? 5,
     igl_id:      initial.igl_id      ?? '',
@@ -344,15 +342,23 @@ function RosterModal({
             </div>
             <div>
               <label className={labelClass}>Game *</label>
-              <select
-                value={form.game}
-                onChange={e => setForm(p => ({ ...p, game: e.target.value, igl_id: '' }))}
-                className={inputClass + ' cursor-pointer'}
-              >
-                <option value="rocket_league" className="bg-[#1a0030]">Rocket League</option>
-                <option value="valorant"      className="bg-[#1a0030]">Valorant</option>
-                <option value="fortnite"      className="bg-[#1a0030]">Fortnite</option>
-              </select>
+              {gamesList.length === 0 ? (
+                <div className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white/30 text-xs">
+                  Loading games…
+                </div>
+              ) : (
+                <select
+                  value={form.game}
+                  onChange={e => setForm(p => ({ ...p, game: e.target.value, igl_id: '' }))}
+                  className={inputClass + ' cursor-pointer'}
+                >
+                  {gamesList.map(g => (
+                    <option key={g.slug} value={g.slug} className="bg-[#1a0030]">
+                      {g.title}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
             <div>
               <label className={labelClass}>Max Players</label>
@@ -379,9 +385,9 @@ function RosterModal({
                   </option>
                 ))}
               </select>
-              {gamePlayers.length === 0 && (
+              {gamePlayers.length === 0 && form.game && (
                 <p className="text-white/20 text-[10px] mt-1">
-                  No active {GAME_LABEL[form.game] ?? form.game} players found.
+                  No active {gamesList.find(g => g.slug === form.game)?.title ?? form.game} players found.
                 </p>
               )}
             </div>
@@ -484,7 +490,7 @@ function RosterModal({
         <div className="flex gap-3 px-6 py-4 border-t border-white/8">
           <button
             onClick={handleSubmit}
-            disabled={saving || !form.name}
+            disabled={saving || !form.name || !form.game}
             className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black px-6 py-2.5 rounded-xl text-xs tracking-widest uppercase transition-all duration-200"
             style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
           >
@@ -501,6 +507,7 @@ function RosterModal({
 export default function TeamsSection() {
   const [data,        setData]       = useState<any[]>([])
   const [playersList, setPlayersList] = useState<any[]>([])
+  const [gamesList,   setGamesList]  = useState<any[]>([])
   const [showAdd,     setShowAdd]    = useState(false)
   const [editing,     setEditing]    = useState<any | null>(null)
   const [filterGame,  setFilterGame] = useState('')
@@ -509,8 +516,9 @@ export default function TeamsSection() {
   const getCsrf = getCsrfToken
 
   const load = () => {
-    ;(teams.listAll()   as Promise<any>).then(r => setData(r.teams     || [])).catch(() => {})
-    ;(players.listAll() as Promise<any>).then(r => setPlayersList(r.players || [])).catch(() => {})
+    ;(teams.listAll()    as Promise<any>).then(r => setData(r.teams      || [])).catch(() => {})
+    ;(players.listAll()  as Promise<any>).then(r => setPlayersList(r.players || [])).catch(() => {})
+    ;(gamesApi.listAll() as Promise<any>).then(r => setGamesList(r.games  || [])).catch(() => {})
   }
 
   useEffect(() => { load() }, [])
@@ -556,9 +564,9 @@ export default function TeamsSection() {
               className="bg-white/5 border border-white/10 text-white text-xs px-3 py-2 rounded-lg cursor-pointer"
             >
               <option value="">All Games</option>
-              <option value="rocket_league">Rocket League</option>
-              <option value="valorant">Valorant</option>
-              <option value="fortnite">Fortnite</option>
+              {gamesList.map(g => (
+                <option key={g.slug} value={g.slug} className="bg-[#1a0030]">{g.title}</option>
+              ))}
             </select>
             <select
               value={filterVis}
@@ -590,6 +598,7 @@ export default function TeamsSection() {
             <RosterCard
               key={t.id}
               team={t}
+              gamesList={gamesList}
               onManage={() => setEditing(t)}
               onDelete={() => remove(t.id, t.name)}
             />
@@ -598,11 +607,11 @@ export default function TeamsSection() {
       )}
 
       {showAdd && (
-        <RosterModal initial={{}} isEdit={false} playersList={playersList}
+        <RosterModal initial={{}} isEdit={false} playersList={playersList} gamesList={gamesList}
           onSave={handleAdd} onClose={() => setShowAdd(false)} />
       )}
       {editing && (
-        <RosterModal initial={editing} isEdit={true} playersList={playersList}
+        <RosterModal initial={editing} isEdit={true} playersList={playersList} gamesList={gamesList}
           onSave={handleEdit} onClose={() => setEditing(null)} />
       )}
     </div>
