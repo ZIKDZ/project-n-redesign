@@ -5,6 +5,7 @@ import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Dashboard from './pages/dashboard/Dashboard'
 import RosterPage from './pages/RosterPage'
+import NewsArticlePage from './pages/NewsArticlePage'
 
 // ── Auth context ──────────────────────────────────────────────────────────────
 interface AuthUser {
@@ -64,6 +65,7 @@ export default function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/roster/:gameSlug" element={<RosterPage />} />
+        <Route path="/news/:id" element={<NewsArticlePage />} />
         <Route
           path="/dashboard/*"
           element={

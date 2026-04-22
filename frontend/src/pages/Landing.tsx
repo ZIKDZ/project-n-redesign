@@ -300,43 +300,126 @@ function MatchCard({ rival, rivalLogo, type, game, date, time, status, score, wi
   );
 }
 
-function NewsCard({ tag, title, description, date, thumbnail }: { tag: string; title: string; description: string; date: string; thumbnail: string }) {
+function NewsCard({
+  tag, title, description, date, thumbnail, onReadMore,
+}: {
+  tag: string; title: string; description: string;
+  date: string; thumbnail: string; onReadMore?: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+ 
+  const TAG_COLORS: Record<string, { text: string; bg: string; border: string }> = {
+    announcement: { text: "#a855f7", bg: "rgba(168,85,247,0.15)", border: "rgba(168,85,247,0.35)" },
+    award:        { text: "#ffd700", bg: "rgba(255,215,0,0.15)",  border: "rgba(255,215,0,0.35)"  },
+    community:    { text: "#34d399", bg: "rgba(52,211,153,0.15)", border: "rgba(52,211,153,0.35)" },
+    match:        { text: "#f87171", bg: "rgba(248,113,113,0.15)",border: "rgba(248,113,113,0.35)"},
+    roster:       { text: "#60a5fa", bg: "rgba(96,165,250,0.15)", border: "rgba(96,165,250,0.35)" },
+    update:       { text: "#fb923c", bg: "rgba(251,146,60,0.15)", border: "rgba(251,146,60,0.35)" },
+  };
+ 
+  const tc = TAG_COLORS[tag] || TAG_COLORS.announcement;
+ 
   const formattedDate = (() => {
     try { return new Date(date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) }
     catch { return date }
   })();
+ 
   return (
-    <div className="group border border-white/8 hover:border-purple-500/40 rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1" style={{ background: "rgba(255,255,255,0.04)" }}>
-      <div className="relative overflow-hidden h-48">
+    <div
+      className="group border border-white/8 rounded-2xl overflow-hidden transition-all duration-300 flex flex-col"
+      style={{
+        background: "rgba(255,255,255,0.04)",
+        borderColor: hovered ? tc.border : "rgba(255,255,255,0.08)",
+        transform: hovered ? "translateY(-4px)" : "translateY(0)",
+        boxShadow: hovered ? `0 16px 40px ${tc.bg}` : "none",
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Thumbnail */}
+      <div className="relative overflow-hidden h-48 shrink-0">
         {thumbnail
-          ? <img src={thumbnail} alt={tag} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" style={{ willChange: "transform", transform: "translateZ(0)" }} />
-          : <div className="w-full h-full bg-purple-950/40 flex items-center justify-center"><span className="text-purple-500/40 text-4xl font-black" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>NBL</span></div>
+          ? (
+            <img
+              src={thumbnail}
+              alt={tag}
+              className="w-full h-full object-cover transition-transform duration-500"
+              style={{ transform: hovered ? "scale(1.06)" : "scale(1)" }}
+            />
+          )
+          : (
+            <div
+              className="w-full h-full flex items-center justify-center text-5xl"
+              style={{ background: `${tc.bg}` }}
+            >
+              {tag === "award" ? "🏆" : tag === "match" ? "⚡" : tag === "roster" ? "👥" : tag === "community" ? "🤝" : tag === "update" ? "🔄" : "📣"}
+            </div>
+          )
         }
-        <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(13,0,20,0.9), transparent)" }} />
-        <span className="absolute top-3 left-3 text-xs font-bold tracking-widest uppercase px-3 py-1.5 rounded-full bg-purple-500/25 text-purple-300 border border-purple-500/40">{tag}</span>
+        <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(13,0,20,0.88), transparent 55%)" }} />
+        {/* Tag badge */}
+        <span
+          className="absolute top-3 left-3 text-xs font-black tracking-widest uppercase px-3 py-1.5 rounded-full"
+          style={{ background: tc.bg, color: tc.text, border: `1px solid ${tc.border}` }}
+        >
+          {tag}
+        </span>
       </div>
-      <div className="p-5">
-        {title && <h3 className="text-white font-bold text-sm mb-2 line-clamp-1">{title}</h3>}
-        <p className="text-white/55 text-sm leading-relaxed mb-4 line-clamp-3">{description}</p>
-        <span className="text-xs text-white/25 tracking-wider">{formattedDate}</span>
+ 
+      {/* Body */}
+      <div className="p-5 flex flex-col flex-1">
+        {title && (
+          <h3
+            className="text-white font-black text-base uppercase leading-tight mb-2 line-clamp-2"
+            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+          >
+            {title}
+          </h3>
+        )}
+        <p className="text-white/50 text-sm leading-relaxed mb-4 line-clamp-3 flex-1">{description}</p>
+ 
+        {/* Footer row */}
+        <div className="flex items-center justify-between mt-auto pt-3 border-t border-white/6">
+          <span className="text-xs text-white/25 tracking-wider">{formattedDate}</span>
+          {onReadMore && (
+            <button
+              onClick={onReadMore}
+              className="flex items-center gap-1.5 text-xs font-black tracking-widest uppercase px-4 py-2 rounded-xl transition-all duration-200 hover:-translate-y-0.5"
+              style={{
+                background: hovered ? tc.bg : "rgba(255,255,255,0.05)",
+                color: hovered ? tc.text : "rgba(255,255,255,0.5)",
+                border: `1px solid ${hovered ? tc.border : "rgba(255,255,255,0.1)"}`,
+              }}
+            >
+              Read More
+              <svg
+                className="w-3 h-3 transition-transform duration-200 group-hover:translate-x-0.5"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
 function LiveNewsSection() {
+  const navigate = useNavigate();
   const [newsList, setNewsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
+ 
   useEffect(() => {
     (newsApi.list() as Promise<any>)
       .then(r => setNewsList(r.news || []))
       .catch(() => setNewsList([]))
       .finally(() => setLoading(false));
   }, []);
-
+ 
   const displayed = newsList.slice(0, 3);
-
+ 
   return (
     <section id="news" className="py-24">
       <div className="max-w-7xl mx-auto px-6">
@@ -355,7 +438,15 @@ function LiveNewsSection() {
         ) : (
           <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
             {displayed.map((n: any) => (
-              <NewsCard key={n.id} tag={n.tag} title={n.title} description={n.description} date={n.published_at} thumbnail={n.thumbnail || ""} />
+              <NewsCard
+                key={n.id}
+                tag={n.tag}
+                title={n.title}
+                description={n.description}
+                date={n.published_at}
+                thumbnail={n.thumbnail || ""}
+                onReadMore={() => navigate(`/news/${n.id}`)}
+              />
             ))}
           </div>
         )}
