@@ -694,16 +694,31 @@ function PlayerModal({
                 </div>
                 <div className="col-span-2">
                   <label className={labelClass}>Team</label>
-                  <select
-                    value={form.team_id ?? ''}
-                    onChange={e => setForm(p => ({ ...p, team_id: e.target.value ? Number(e.target.value) : null }))}
-                    className={selectClass}
-                  >
-                    <option value="" className="bg-[#1a0030] text-white">No team</option>
-                    {teamsList.map((t: any) => (
-                      <option key={t.id} value={t.id} className="bg-[#1a0030] text-white">{t.name}</option>
-                    ))}
-                  </select>
+                  {(() => {
+                    const filteredTeams = form.game
+                      ? teamsList.filter((t: any) => t.game === form.game)
+                      : teamsList
+                    const currentTeamValid = filteredTeams.some((t: any) => t.id === form.team_id)
+                    return (
+                      <select
+                        value={currentTeamValid ? (form.team_id ?? '') : ''}
+                        onChange={e => setForm(p => ({ ...p, team_id: e.target.value ? Number(e.target.value) : null }))}
+                        className={selectClass + (!form.game ? ' opacity-50' : '')}
+                      >
+                        <option value="" className="bg-[#1a0030] text-white">
+                          {form.game ? 'No team' : 'Select a game first'}
+                        </option>
+                        {filteredTeams.map((t: any) => (
+                          <option key={t.id} value={t.id} className="bg-[#1a0030] text-white">{t.name}</option>
+                        ))}
+                      </select>
+                    )
+                  })()}
+                  {form.game && teamsList.filter((t: any) => t.game === form.game).length === 0 && (
+                    <p className="text-white/20 text-[10px] mt-1">
+                      No {gamesList.find(g => g.slug === form.game)?.title ?? form.game} rosters exist yet.
+                    </p>
+                  )}
                 </div>
                 <div className="col-span-2">
                   <label className={labelClass}>Discord Username</label>
@@ -761,7 +776,7 @@ function PlayerModal({
                       <p className="text-white/20 text-[10px] mt-0.5">
                         {clearAvatar
                           ? 'Save to apply'
-                          : 'Photo is cropped to a circle and shown on the roster page'}
+                          : 'Photo is cropped and shown on the roster page'}
                       </p>
                     </div>
 
