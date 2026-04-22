@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { joins } from '../../../../utils/api'
-import { Badge, SectionHeader, ActionButton } from '../DashboardShared'
+import { Badge, SectionHeader, ActionButton, FilterSelect, FilterOption } from '../DashboardShared'
 
 const GAME_LABELS: Record<string, string> = {
   rocket_league: 'Rocket League',
@@ -51,17 +51,13 @@ export default function JoinsSection() {
       <SectionHeader
         title="Join Requests"
         action={
-          <select
-            value={filter}
-            onChange={e => setFilter(e.target.value)}
-            className="bg-white/5 border border-white/10 text-white text-xs px-3 py-2 rounded-lg"
-          >
-            <option value="">All</option>
-            <option value="pending">Pending</option>
-            <option value="reviewing">Reviewing</option>
-            <option value="accepted">Accepted</option>
-            <option value="rejected">Rejected</option>
-          </select>
+          <FilterSelect value={filter} onChange={setFilter}>
+            <FilterOption value="">All</FilterOption>
+            <FilterOption value="pending">Pending</FilterOption>
+            <FilterOption value="reviewing">Reviewing</FilterOption>
+            <FilterOption value="accepted">Accepted</FilterOption>
+            <FilterOption value="rejected">Rejected</FilterOption>
+          </FilterSelect>
         }
       />
 
