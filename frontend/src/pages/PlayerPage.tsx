@@ -145,15 +145,22 @@ function ClipCard({ clip, accent, index }: { clip: Clip; accent: string; index: 
       onMouseLeave={() => setHovered(false)}
     >
       <div
-        className="rounded-2xl overflow-hidden border transition-all duration-300"
+        className="rounded-2xl overflow-hidden transition-all duration-300"
         style={{
-          borderColor: hovered ? `${accent}50` : "rgba(255,255,255,0.08)",
-          transform: hovered ? "translateY(-4px)" : "none",
-          boxShadow: hovered ? `0 20px 50px ${accent}18` : "none",
+          border: `1px solid ${hovered ? `${accent}40` : "rgba(255,255,255,0.07)"}`,
+          transform: hovered ? "translateY(-3px)" : "none",
+          boxShadow: hovered
+            ? `0 16px 48px rgba(0,0,0,0.6)`
+            : "0 4px 20px rgba(0,0,0,0.3)",
+          background: "#0a0015",
         }}
       >
         {/* Video frame */}
-        <div className="relative" style={{ paddingBottom: "56.25%", background: "#0a0015" }}>
+        <div
+          className="relative cursor-pointer"
+          style={{ paddingBottom: "56.25%" }}
+          onClick={() => !playing && setPlaying(true)}
+        >
           {playing ? (
             <iframe
               src={embedUrl}
@@ -165,12 +172,12 @@ function ClipCard({ clip, accent, index }: { clip: Clip; accent: string; index: 
           ) : (
             <>
               {/* Thumbnail */}
-              <div className="absolute inset-0">
+              <div className="absolute inset-0 overflow-hidden">
                 {thumbnail && !thumbError ? (
                   <img
                     src={thumbnail}
                     alt={clip.title}
-                    className="w-full h-full object-cover transition-transform duration-500"
+                    className="w-full h-full object-cover transition-transform duration-700 ease-out"
                     style={{ transform: hovered ? "scale(1.04)" : "scale(1)" }}
                     onError={() => setThumbError(true)}
                   />
@@ -179,70 +186,54 @@ function ClipCard({ clip, accent, index }: { clip: Clip; accent: string; index: 
                     className="w-full h-full flex items-center justify-center"
                     style={{ background: `${accent}10` }}
                   >
-                    <svg className="w-12 h-12" style={{ color: `${accent}60` }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                    <svg
+                      className="w-12 h-12"
+                      style={{ color: `${accent}40` }}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={1}
+                    >
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
                     </svg>
                   </div>
                 )}
               </div>
 
-              {/* Dark overlay */}
+              {/* Gradient — just enough to make the badge readable */}
               <div
-                className="absolute inset-0 transition-opacity duration-300"
+                className="absolute inset-0"
                 style={{
-                  background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 50%, transparent 100%)",
-                  opacity: hovered ? 1 : 0.6,
+                  background: "linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 50%)",
                 }}
               />
 
-              {/* YouTube play button — custom styled */}
-              <button
-                onClick={() => setPlaying(true)}
-                className="absolute inset-0 flex items-center justify-center group/btn cursor-pointer"
+              {/* YouTube badge — bottom left, always visible */}
+              <div
+                className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-md px-2 py-1"
+                style={{ background: "rgba(0,0,0,0.70)", backdropFilter: "blur(4px)" }}
               >
-                <div
-                  className="relative flex items-center justify-center w-16 h-16 rounded-2xl transition-all duration-300"
-                  style={{
-                    background: playing ? "transparent" : hovered ? accent : "rgba(255,255,255,0.15)",
-                    backdropFilter: "blur(8px)",
-                    border: `2px solid ${hovered ? accent : "rgba(255,255,255,0.3)"}`,
-                    transform: hovered ? "scale(1.1)" : "scale(1)",
-                    boxShadow: hovered ? `0 0 30px ${accent}60` : "none",
-                  }}
-                >
-                  {/* Play triangle */}
-                  <svg
-                    className="w-7 h-7 ml-1"
-                    style={{ color: hovered ? "#fff" : "rgba(255,255,255,0.9)" }}
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                </div>
-
-                {/* YouTube badge */}
-                <div className="absolute bottom-3 right-3 flex items-center gap-1.5 bg-black/70 backdrop-blur-sm rounded-lg px-2 py-1">
-                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-red-500">
-                    <path d="M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z" />
-                  </svg>
-                  <span className="text-white/70 text-[9px] font-bold tracking-wider uppercase">YouTube</span>
-                </div>
-              </button>
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3 text-red-500 shrink-0">
+                  <path d="M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z" />
+                </svg>
+                <span className="text-white/60 text-[9px] font-bold tracking-wider uppercase">YouTube</span>
+              </div>
             </>
           )}
         </div>
 
-        {/* Info */}
-        <div className="p-4" style={{ background: "rgba(10,0,20,0.85)" }}>
+        {/* Info bar */}
+        <div className="px-4 py-3" style={{ background: "rgba(10,0,20,0.95)" }}>
           <h4
-            className="text-white font-black text-sm uppercase leading-tight mb-1 line-clamp-1"
+            className="text-white font-black text-sm uppercase leading-tight line-clamp-1"
             style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
           >
             {clip.title}
           </h4>
           {clip.description && (
-            <p className="text-white/40 text-xs leading-relaxed line-clamp-2">{clip.description}</p>
+            <p className="text-white/35 text-xs mt-1 leading-relaxed line-clamp-2">
+              {clip.description}
+            </p>
           )}
         </div>
       </div>
@@ -305,7 +296,6 @@ export default function PlayerPage() {
   const [scrolled, setScrolled] = useState(false);
   const [avatarLoaded, setAvatarLoaded] = useState(false);
   const [revealed, setRevealed] = useState(false);
-  const [activeClip, setActiveClip] = useState<number | null>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 60);
@@ -374,6 +364,11 @@ export default function PlayerPage() {
           from { opacity: 0; transform: scale(0.92); }
           to { opacity: 1; transform: scale(1); }
         }
+        @keyframes pulseRing {
+          0% { box-shadow: 0 0 0 0 var(--ring-color); }
+          70% { box-shadow: 0 0 0 10px transparent; }
+          100% { box-shadow: 0 0 0 0 transparent; }
+        }
       `}</style>
 
       {/* ── Navbar ── */}
@@ -415,14 +410,13 @@ export default function PlayerPage() {
       </nav>
 
       {/* ── Hero Section ── */}
-      <div className="relative" style={{ minHeight: "520px" }}>
+      <div className="relative" style={{ minHeight: "560px" }}>
         {/* Background atmosphere */}
         <div className="absolute inset-0">
           <div
             className="absolute inset-0"
             style={{ background: "linear-gradient(135deg, rgba(13,0,20,1) 0%, rgba(20,0,40,1) 100%)" }}
           />
-          {/* Accent glow blob */}
           <div
             className="absolute"
             style={{
@@ -441,7 +435,6 @@ export default function PlayerPage() {
               opacity: 0.25,
             }}
           />
-          {/* Subtle grid */}
           <div
             className="absolute inset-0 opacity-[0.03]"
             style={{
@@ -460,57 +453,63 @@ export default function PlayerPage() {
           }}
         >
           <div className="flex flex-col md:flex-row items-start gap-10">
+
             {/* ── Avatar ── */}
             <div className="shrink-0">
-              <div
-                className="relative"
-                style={{ width: 200, height: 200 }}
-              >
-                {/* Glow ring */}
+              <div className="relative" style={{ width: 260, height: 260 }}>
+                {/* Outer glow ring */}
                 <div
-                  className="absolute inset-0 rounded-3xl"
+                  className="absolute rounded-3xl"
                   style={{
-                    background: `${accent}25`,
-                    border: `2px solid ${accent}40`,
-                    boxShadow: `0 0 60px ${glow}, inset 0 0 40px ${accent}10`,
+                    inset: "-3px",
+                    background: `linear-gradient(135deg, ${accent}60 0%, ${accent}10 50%, ${accent}40 100%)`,
+                    borderRadius: "26px",
                     animation: "scaleIn 0.6s ease-out both",
                     animationDelay: "0.1s",
                   }}
                 />
-                {/* Avatar image */}
-                {player.avatar ? (
-                  <img
-                    src={player.avatar}
-                    alt={player.username}
-                    className="absolute inset-0 w-full h-full object-cover rounded-3xl"
-                    style={{
-                      opacity: avatarLoaded ? 1 : 0,
-                      transition: "opacity 0.4s ease",
-                    }}
-                    onLoad={() => setAvatarLoaded(true)}
-                  />
-                ) : (
-                  <div
-                    className="absolute inset-0 rounded-3xl flex items-center justify-center"
-                    style={{ background: `${accent}15` }}
-                  >
-                    <span
-                      className="font-black text-7xl"
-                      style={{ color: accent, fontFamily: "'Barlow Condensed', sans-serif" }}
-                    >
-                      {player.username[0]?.toUpperCase()}
-                    </span>
-                  </div>
-                )}
-
-                {/* Role badge pinned to corner */}
+                {/* Inner container */}
                 <div
-                  className="absolute -bottom-3 -right-3 px-3 py-1.5 rounded-xl border text-xs font-black tracking-widest uppercase"
+                  className="absolute inset-0 rounded-3xl overflow-hidden"
+                  style={{
+                    boxShadow: `0 0 80px ${glow}, 0 0 30px ${glow}`,
+                  }}
+                >
+                  {player.avatar ? (
+                    <img
+                      src={player.avatar}
+                      alt={player.username}
+                      className="w-full h-full object-cover"
+                      style={{
+                        opacity: avatarLoaded ? 1 : 0,
+                        transition: "opacity 0.4s ease",
+                      }}
+                      onLoad={() => setAvatarLoaded(true)}
+                    />
+                  ) : (
+                    <div
+                      className="w-full h-full flex items-center justify-center"
+                      style={{ background: `${accent}15` }}
+                    >
+                      <span
+                        className="font-black text-8xl"
+                        style={{ color: accent, fontFamily: "'Barlow Condensed', sans-serif" }}
+                      >
+                        {player.username[0]?.toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Role badge */}
+                <div
+                  className="absolute -bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap px-4 py-1.5 rounded-xl border text-xs font-black tracking-widest uppercase"
                   style={{
                     background: "rgba(13,0,20,0.95)",
                     borderColor: `${accent}50`,
                     color: accent,
                     backdropFilter: "blur(8px)",
+                    boxShadow: `0 4px 20px rgba(0,0,0,0.5)`,
                   }}
                 >
                   {ROLE_ICONS[player.role] || "⚡"} {ROLE_LABELS[player.role] || player.role}
@@ -518,15 +517,15 @@ export default function PlayerPage() {
 
                 {/* Status dot */}
                 {player.status === "active" && (
-                  <div className="absolute -top-2 -right-2 flex items-center gap-1">
-                    <span className="w-3 h-3 rounded-full bg-green-400 border-2 border-[#0d0014] animate-pulse" />
+                  <div className="absolute -top-1.5 -right-1.5">
+                    <span className="block w-4 h-4 rounded-full bg-green-400 border-2 border-[#0d0014] animate-pulse" />
                   </div>
                 )}
               </div>
             </div>
 
             {/* ── Info ── */}
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 pt-2">
               {/* Username */}
               <div
                 className="mb-2"
@@ -628,7 +627,6 @@ export default function PlayerPage() {
       {player.clips.length > 0 && (
         <section className="py-16">
           <div className="max-w-6xl mx-auto px-6">
-            {/* Section header */}
             <div className="flex items-center gap-4 mb-10">
               <div className="h-px flex-1" style={{ background: `linear-gradient(to right, ${accent}50, transparent)` }} />
               <div className="flex items-center gap-3">
@@ -645,7 +643,6 @@ export default function PlayerPage() {
               <div className="h-px flex-1" style={{ background: `linear-gradient(to left, ${accent}50, transparent)` }} />
             </div>
 
-            {/* Clips grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {player.clips.map((clip, i) => (
                 <ClipCard key={i} clip={clip} accent={accent} index={i} />
@@ -653,13 +650,6 @@ export default function PlayerPage() {
             </div>
           </div>
         </section>
-      )}
-
-      {/* ── Divider if both sections exist ── */}
-      {player.clips.length > 0 && player.bio && (
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="h-px" style={{ background: `rgba(255,255,255,0.06)` }} />
-        </div>
       )}
 
       {/* ── Team section ── */}
