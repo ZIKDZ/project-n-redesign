@@ -79,6 +79,7 @@ function PlayerCard({
   accentColor: string;
   index: number;
 }) {
+  const navigate = useNavigate();
   const [hovered, setHovered] = useState(false);
   const [imgErr, setImgErr] = useState(false);
   const roleStyle = ROLE_COLORS[player.role] || ROLE_COLORS.player;
@@ -93,12 +94,13 @@ function PlayerCard({
 
   return (
     <div
-      className="relative group"
+      className="relative group cursor-pointer"
       style={{
         animation: `fadeSlideUp 0.5s ease-out forwards`,
         animationDelay: `${index * 60}ms`,
         opacity: 0,
       }}
+      onClick={() => navigate(`/player/${player.id}`)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -217,11 +219,6 @@ function PlayerCard({
             </div>
           )}
 
-          {player.bio && (
-            <p className="text-white/40 text-xs leading-relaxed line-clamp-2 mb-3">
-              {player.bio}
-            </p>
-          )}
 
           <div className="flex items-center justify-between pt-3 border-t border-white/5">
             {player.team && (

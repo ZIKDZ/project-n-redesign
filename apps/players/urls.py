@@ -7,4 +7,5 @@ urlpatterns = [
     path('create/', views.create_player, name='create-player'),         # POST — staff
     path('<int:pk>/', views.update_player, name='update-player'),       # PUT/PATCH — staff
     path('<int:pk>/delete/', views.delete_player, name='delete-player'),# DELETE — staff
+    path('<int:pk>/profile/', views.get_player, name='get-player'),     # GET — public
 ]

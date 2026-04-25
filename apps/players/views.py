@@ -31,6 +31,16 @@ def list_players(request):
     return JsonResponse({'players': [p.to_dict() for p in qs]})
 
 
+@require_http_methods(['GET'])
+def get_player(request, pk):
+    """Public — fetch a single player by id."""
+    try:
+        player = Player.objects.select_related('game', 'team').get(pk=pk)
+        return JsonResponse(player.to_dict())
+    except Player.DoesNotExist:
+        return JsonResponse({'error': 'Not found'}, status=404)
+
+
 @login_required
 @require_http_methods(['GET'])
 def list_players_all(request):
@@ -44,7 +54,6 @@ def list_players_all(request):
 def create_player(request):
     """Staff only — add a player. Always receives multipart/form-data from the dashboard."""
     try:
-        # Django parses multipart automatically for POST
         if request.content_type and 'multipart' in request.content_type:
             data = request.POST
             avatar_file = request.FILES.get('avatar')
@@ -58,9 +67,15 @@ def create_player(request):
         )
         game_slug = data.get('game', '')
 
-        # FormData sends everything as strings — coerce carefully
         raw_age = data.get('age', '')
         raw_team = data.get('team_id', '')
+
+        # Parse clips
+        clips_raw = data.get('clips', '[]')
+        try:
+            clips = json.loads(clips_raw) if isinstance(clips_raw, str) else clips_raw
+        except (json.JSONDecodeError, TypeError):
+            clips = []
 
         player = Player(
             username=data['username'],
@@ -72,7 +87,13 @@ def create_player(request):
             status=data.get('status', 'active'),
             team_id=int(raw_team) if raw_team and raw_team not in ('null', 'None', '') else None,
             bio=data.get('bio', ''),
+            clips=clips,
             discord_username=data.get('discord_username', ''),
+            twitter_url=data.get('twitter_url', ''),
+            instagram_url=data.get('instagram_url', ''),
+            twitch_url=data.get('twitch_url', ''),
+            kick_url=data.get('kick_url', ''),
+            tiktok_url=data.get('tiktok_url', ''),
             first_name=data.get('first_name', ''),
             last_name=data.get('last_name', ''),
             age=int(raw_age) if raw_age and raw_age not in ('null', 'None', '') else None,
@@ -97,16 +118,11 @@ def create_player(request):
 @login_required
 @require_http_methods(['PUT', 'PATCH'])
 def update_player(request, pk):
-    """Staff only — update player info. Supports multipart (avatar) or JSON.
-
-    Django does NOT auto-parse multipart bodies for PATCH/PUT — only for POST.
-    We use MultiPartParser explicitly when the content-type signals a file upload.
-    """
+    """Staff only — update player info. Supports multipart (avatar) or JSON."""
     try:
         player = Player.objects.select_related('game', 'team').get(pk=pk)
 
         if request.content_type and 'multipart' in request.content_type:
-            # Manually parse multipart for PATCH/PUT
             from django.http.multipartparser import MultiPartParser
             parser = MultiPartParser(request.META, request, request.upload_handlers)
             post_data, files = parser.parse()
@@ -121,12 +137,24 @@ def update_player(request, pk):
             if field in data:
                 setattr(player, field, data[field])
 
+        # Social links
+        for field in ['twitter_url', 'instagram_url', 'twitch_url', 'kick_url', 'tiktok_url']:
+            if field in data:
+                setattr(player, field, data[field])
+
+        # Clips — parse from JSON string (FormData) or direct list (JSON body)
+        if 'clips' in data:
+            clips_raw = data['clips']
+            try:
+                player.clips = json.loads(clips_raw) if isinstance(clips_raw, str) else clips_raw
+            except (json.JSONDecodeError, TypeError):
+                player.clips = []
+
         # Personal info
         for field in ['first_name', 'last_name', 'email', 'phone', 'address']:
             if field in data:
                 setattr(player, field, data[field])
 
-        # age — FormData sends strings, coerce safely
         if 'age' in data:
             raw_age = data['age']
             player.age = int(raw_age) if raw_age and str(raw_age) not in ('null', 'None', '') else None
@@ -141,7 +169,7 @@ def update_player(request, pk):
             if game_obj:
                 player.game_slug_fallback = game_obj.slug
 
-        # Team FK — FormData sends strings
+        # Team FK
         if 'team_id' in data:
             raw_team = data['team_id']
             player.team_id = int(raw_team) if raw_team and str(raw_team) not in ('null', 'None', '') else None
@@ -152,7 +180,7 @@ def update_player(request, pk):
             player.avatar = None
         elif avatar_file:
             player.avatar = avatar_file
- 
+
         player.save()
         return JsonResponse(player.to_dict())
 

@@ -44,24 +44,16 @@ export const auth = {
 
 // ── Games ─────────────────────────────────────────────────────────────────────
 export const games = {
-  /** Public — all active games (showcase / games section) */
   list: () =>
     request('/api/games/'),
-
-  /** Public — games currently open for registration (join form only) */
   listOpen: () =>
     request('/api/games/open/'),
-
-  /** Staff — every game regardless of status */
   listAll: () =>
     request('/api/games/all/'),
-
   create: (data: object) =>
     request('/api/games/create/', { method: 'POST', body: JSON.stringify(data) }),
-
   update: (id: number, data: object) =>
     request(`/api/games/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
-
   delete: (id: number) =>
     request(`/api/games/${id}/delete/`, { method: 'DELETE' }),
 }
@@ -114,6 +106,8 @@ export const players = {
   },
   listAll: () =>
     request('/api/players/all/'),
+  get: (id: number) =>
+    request(`/api/players/${id}/profile/`),
   create: (data: object) =>
     request('/api/players/create/', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: object) =>
@@ -138,20 +132,14 @@ export const teams = {
 
 // ── Spotlight slides ──────────────────────────────────────────────────────────
 export const spotlight = {
-  /** Public — active slides in display order */
   list: () =>
     request('/api/spotlight/'),
-
-  /** Staff — all slides including hidden */
   listAll: () =>
     request('/api/spotlight/all/'),
-
   create: (data: object) =>
     request('/api/spotlight/create/', { method: 'POST', body: JSON.stringify(data) }),
-
   update: (id: number, data: object) =>
     request(`/api/spotlight/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
-
   delete: (id: number) =>
     request(`/api/spotlight/${id}/delete/`, { method: 'DELETE' }),
 }

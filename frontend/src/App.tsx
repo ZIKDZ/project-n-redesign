@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/dashboard/Dashboard'
 import RosterPage from './pages/RosterPage'
 import NewsArticlePage from './pages/NewsArticlePage'
+import PlayerPage from './pages/PlayerPage'
 
 // ── Auth context ──────────────────────────────────────────────────────────────
 interface AuthUser {
@@ -46,16 +47,12 @@ export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Check session on mount — keeps dashboard accessible on refresh
-  // Silently handles the case where Django backend is not yet running
   useEffect(() => {
     auth.me()
       .then((data) => {
         if (data.authenticated && data.user) setUser(data.user)
       })
-      .catch(() => {
-        // Backend offline or network error — stay logged out silently
-      })
+      .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
 
@@ -65,6 +62,7 @@ export default function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/roster/:gameSlug" element={<RosterPage />} />
+        <Route path="/player/:id" element={<PlayerPage />} />
         <Route path="/news/:id" element={<NewsArticlePage />} />
         <Route
           path="/dashboard/*"
