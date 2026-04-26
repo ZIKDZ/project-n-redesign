@@ -23,31 +23,24 @@ def list_slides_all(request):
 def _apply_slide_data(slide, data, files):
     """
     Apply POST/PATCH data + uploaded files to a SpotlightSlide instance.
-    Returns a list of field names that were modified, for use with update_fields.
+    Mutates the slide in place. Always do a full save() after calling this.
     """
-    changed = []
-
     media_type = data.get('media_type', slide.media_type or 'image')
     slide.media_type = media_type
-    changed.append('media_type')
 
     for field in ['title', 'href', 'pill_label']:
         if field in data:
             setattr(slide, field, data[field])
-            changed.append(field)
 
     if 'duration' in data:
         slide.duration = int(data['duration'])
-        changed.append('duration')
 
     if 'is_active' in data:
         val = data['is_active']
         slide.is_active = val.lower() not in ('false', '0', '') if isinstance(val, str) else bool(val)
-        changed.append('is_active')
 
     if 'display_order' in data:
         slide.display_order = int(data['display_order'])
-        changed.append('display_order')
 
     if media_type == 'video':
         video_file = files.get('video_file') if files else None
@@ -56,9 +49,9 @@ def _apply_slide_data(slide, data, files):
             slide.video_url = ''
         elif 'video_url' in data:
             slide.video_url = data['video_url']
+        # Clear image fields when switching to video
         slide.image_url = ''
         slide.image_file = None
-
     else:
         image_file = files.get('image_file') if files else None
         if image_file:
@@ -66,10 +59,11 @@ def _apply_slide_data(slide, data, files):
             slide.image_url = ''
         elif 'image_url' in data:
             slide.image_url = data['image_url']
+        # Clear video fields when switching to image
         slide.video_url = ''
         slide.video_file = None
 
-    return slide, list(set(changed))
+    return slide
 
 
 @login_required
@@ -92,8 +86,7 @@ def create_slide(request):
         slide.is_active = True
         slide.display_order = 0
 
-        slide, _ = _apply_slide_data(slide, data, files)
-        # For new objects, always do a full save (no update_fields)
+        _apply_slide_data(slide, data, files)
         slide.save()
 
         return JsonResponse(slide.to_dict(), status=201)
@@ -110,23 +103,36 @@ def update_slide(request, pk):
         slide = SpotlightSlide.objects.get(pk=pk)
 
         if request.content_type and 'multipart' in request.content_type:
-            data = request.POST
-            files = request.FILES
+            # Django does NOT auto-parse multipart for PUT/PATCH — do it manually.
+            from django.http.multipartparser import MultiPartParser
+            parser = MultiPartParser(request.META, request, request.upload_handlers)
+            post_data, files = parser.parse()
+
+            data = post_data
+            # Get files from parsed multipart data
+            video_file = files.get('video_file')
+            image_file = files.get('image_file')
+            
+            # Create a files dict for _apply_slide_data
+            files_dict = {}
+            if video_file:
+                files_dict['video_file'] = video_file
+            if image_file:
+                files_dict['image_file'] = image_file
+
+            _apply_slide_data(slide, data, files_dict)
         else:
             data = json.loads(request.body)
-            files = {}
+            _apply_slide_data(slide, data, {})
 
-        slide, changed_fields = _apply_slide_data(slide, data, files)
-        # Use update_fields so Django skips validation on untouched fields
-        # (critical: prevents Cloudinary ImageField from validating video bytes)
-        slide.save(update_fields=changed_fields)
+        # Full save — avoids update_fields missing fields when media type changes
+        slide.save()
         return JsonResponse(slide.to_dict())
 
     except SpotlightSlide.DoesNotExist:
         return JsonResponse({'error': 'Not found'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
-
 
 @login_required
 @require_http_methods(['DELETE'])
