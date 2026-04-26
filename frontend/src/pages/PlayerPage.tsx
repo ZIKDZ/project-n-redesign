@@ -581,8 +581,13 @@ export default function PlayerPage() {
               {/* Bio */}
               {player.bio && (
                 <p
-                  className="text-white/60 text-base leading-relaxed max-w-2xl mb-6"
-                  style={{ animation: "slideUp 0.5s ease-out both", animationDelay: "0.2s" }}
+                  className="text-white font-bold text-lg leading-relaxed max-w-2xl mb-6"
+                  style={{ 
+                    animation: "slideUp 0.5s ease-out both", 
+                    animationDelay: "0.2s",
+                    textShadow: `0 0 20px ${glow}`,
+                    letterSpacing: "0.01em"
+                  }}
                 >
                   {player.bio}
                 </p>
