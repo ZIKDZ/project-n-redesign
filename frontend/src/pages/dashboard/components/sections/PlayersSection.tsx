@@ -593,8 +593,7 @@ function PlayerModal({
               <div className="space-y-3 py-1">
                 <p className="text-white/20 text-[10px] tracking-widest mb-3">Links shown publicly on the player's profile page.</p>
                 {[
-                  { field: 'discord_username', label: 'Discord Username', placeholder: 'e.g. username#0000 or user id' },
-                  { field: 'twitter_url', label: 'Twitter / X URL', placeholder: 'https://x.com/username' },
+                  { field: 'twitter_url', label: 'X URL', placeholder: 'https://x.com/username' },
                   { field: 'instagram_url', label: 'Instagram URL', placeholder: 'https://instagram.com/username' },
                   { field: 'twitch_url', label: 'Twitch URL', placeholder: 'https://twitch.tv/username' },
                   { field: 'kick_url', label: 'Kick URL', placeholder: 'https://kick.com/username' },
@@ -640,6 +639,10 @@ function PlayerModal({
                     onChange={e => setForm(p => ({ ...p, age: e.target.value ? Number(e.target.value) : null }))} className={inputClass} />
                 </div>
                 <div>
+                  <label className={labelClass}>Discord Username</label>
+                  <input placeholder="e.g. username#0000 or user id" value={form.discord_username} onChange={e => setForm(p => ({ ...p, discord_username: e.target.value }))} className={inputClass} />
+                </div>
+                <div>
                   <label className={labelClass}>Email</label>
                   <input type="email" placeholder="e.g. player@email.com" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} className={inputClass} />
                 </div>
@@ -647,7 +650,7 @@ function PlayerModal({
                   <label className={labelClass}>Phone</label>
                   <input placeholder="e.g. +213 555 123456" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} className={inputClass} />
                 </div>
-                <div>
+                <div className="col-span-2">
                   <label className={labelClass}>Address</label>
                   <input placeholder="e.g. Algiers, Algeria" value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} className={inputClass} />
                 </div>
