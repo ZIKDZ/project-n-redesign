@@ -22,11 +22,17 @@ function uploadWithProgress(
 
     xhr.addEventListener('load', () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        try { resolve(JSON.parse(xhr.responseText)) }
-        catch { resolve({}) }
+        try {
+          resolve(JSON.parse(xhr.responseText))
+        } catch {
+          resolve({})
+        }
       } else {
-        try { reject(new Error(JSON.parse(xhr.responseText).error || `HTTP ${xhr.status}`)) }
-        catch { reject(new Error(`HTTP ${xhr.status}`)) }
+        try {
+          reject(new Error(JSON.parse(xhr.responseText).error || `HTTP ${xhr.status}`))
+        } catch {
+          reject(new Error(`HTTP ${xhr.status}`))
+        }
       }
     })
 
@@ -54,6 +60,39 @@ function ProgressBar({ pct }: { pct: number }) {
   )
 }
 
+// ── VideoPreview ──────────────────────────────────────────────────────────────
+// Static video preview (shows first frame, no autoplay)
+function VideoPreview({
+  src,
+  className = '',
+}: {
+  src: string
+  className?: string
+}) {
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    setFailed(false)
+  }, [src])
+
+  if (failed) {
+    return (
+      <div className={`flex items-center justify-center bg-black/30 ${className}`}>
+        <span className="text-purple-400 text-xl">▶</span>
+      </div>
+    )
+  }
+
+  return (
+    <video
+      src={src}
+      className={className}
+      preload="metadata"
+      onError={() => setFailed(true)}
+    />
+  )
+}
+
 // ── SlideFormCard ─────────────────────────────────────────────────────────────
 function SlideFormCard({
   initial,
@@ -71,47 +110,65 @@ function SlideFormCard({
   const isEdit = !!initial?.id
 
   const initialMediaType: 'video' | 'image' = initial?.media_type || 'image'
-
   const initialVideoUrl = initialMediaType === 'video' ? (initial?.media_url || '') : ''
   const initialImageUrl = initialMediaType === 'image' ? (initial?.media_url || '') : ''
 
   const [mediaType, setMediaType] = useState<'video' | 'image'>(initialMediaType)
   const [form, setForm] = useState({
-    title:         initial?.title         || '',
-    video_url:     initialVideoUrl,
-    image_url:     initialImageUrl,
-    href:          initial?.href           || '',
-    pill_label:    initial?.pill_label     || 'MATCH DAY · ROCKET LEAGUE',
-    duration:      initial?.duration       || 8,
-    is_active:     initial?.is_active     !== false,
+    title: initial?.title || '',
+    video_url: initialVideoUrl,
+    image_url: initialImageUrl,
+    href: initial?.href || '',
+    pill_label: initial?.pill_label || 'MATCH DAY · ROCKET LEAGUE',
+    duration: initial?.duration || 8,
+    is_active: initial?.is_active !== false,
     display_order: initial?.display_order ?? nextOrder,
   })
+
   const [file, setFile] = useState<File | null>(null)
-  const [filePreview, setFilePreview] = useState<string>('')
+  const [previewSrc, setPreviewSrc] = useState<string>('')
   const [uploadPct, setUploadPct] = useState(0)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
   const fileRef = useRef<HTMLInputElement>(null)
+  const previewObjectUrlRef = useRef<string>('')
+
+  const clearPreviewObjectUrl = () => {
+    if (previewObjectUrlRef.current) {
+      URL.revokeObjectURL(previewObjectUrlRef.current)
+      previewObjectUrlRef.current = ''
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      clearPreviewObjectUrl()
+    }
+  }, [])
 
   const handleMediaTypeChange = (t: 'video' | 'image') => {
     setMediaType(t)
     setFile(null)
-    setFilePreview('')
+    setPreviewSrc('')
+    clearPreviewObjectUrl()
     if (fileRef.current) fileRef.current.value = ''
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] || null
     setFile(f)
-    if (f) {
-      if (f.type.startsWith('image/')) {
-        setFilePreview(URL.createObjectURL(f))
-      } else {
-        setFilePreview('')
-      }
-    } else {
-      setFilePreview('')
+
+    clearPreviewObjectUrl()
+
+    if (!f) {
+      setPreviewSrc('')
+      return
     }
+
+    const objectUrl = URL.createObjectURL(f)
+    previewObjectUrlRef.current = objectUrl
+    setPreviewSrc(objectUrl)
   }
 
   const inputClass =
@@ -122,27 +179,26 @@ function SlideFormCard({
     setError('')
     setSaving(true)
     setUploadPct(0)
+
     try {
       const fd = new FormData()
-      fd.append('media_type',    mediaType)
-      fd.append('title',         form.title)
-      fd.append('href',          form.href)
-      fd.append('pill_label',    form.pill_label)
-      fd.append('duration',      String(form.duration))
-      fd.append('is_active',     form.is_active ? 'true' : 'false')
+      fd.append('media_type', mediaType)
+      fd.append('title', form.title)
+      fd.append('href', form.href)
+      fd.append('pill_label', form.pill_label)
+      fd.append('duration', String(form.duration))
+      fd.append('is_active', form.is_active ? 'true' : 'false')
       fd.append('display_order', String(form.display_order))
 
       if (mediaType === 'video') {
         fd.append('video_url', form.video_url)
         if (file) fd.append('video_file', file)
-        // Do NOT append image fields — backend clears them safely
       } else {
         fd.append('image_url', form.image_url)
         if (file) fd.append('image_file', file)
-        // Do NOT append video fields — backend clears them safely
       }
 
-      const url    = isEdit ? `/api/spotlight/${initial.id}/` : '/api/spotlight/create/'
+      const url = isEdit ? `/api/spotlight/${initial.id}/` : '/api/spotlight/create/'
       const method = isEdit ? 'PATCH' : 'POST'
 
       await uploadWithProgress(url, method, fd, getCsrf(), pct => setUploadPct(pct))
@@ -156,8 +212,9 @@ function SlideFormCard({
     }
   }
 
-  const currentImagePreview = filePreview || (mediaType === 'image' ? form.image_url : '')
-  const currentUrlField     = mediaType === 'video' ? form.video_url : form.image_url
+  const currentImageSrc = previewSrc || form.image_url
+  const currentVideoSrc = previewSrc || form.video_url
+  const currentUrlField = mediaType === 'video' ? form.video_url : form.image_url
 
   return (
     <div className="bg-white/5 border border-purple-500/20 rounded-2xl p-6 mb-4">
@@ -169,7 +226,6 @@ function SlideFormCard({
       </h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
         {/* Internal title */}
         <div className="md:col-span-2">
           <label className={labelClass}>Internal Title (staff only)</label>
@@ -226,28 +282,30 @@ function SlideFormCard({
           />
         </div>
 
-        {/* File upload */}
+        {/* File upload / Preview */}
         <div>
           <label className={labelClass}>Upload File</label>
           <div className="space-y-2">
-
             {/* Image preview box */}
             {mediaType === 'image' && (
               <div
                 className="w-full h-24 rounded-xl border-2 border-dashed border-white/10 flex items-center justify-center overflow-hidden cursor-pointer hover:border-purple-500/50 transition-colors bg-white/5"
                 onClick={() => fileRef.current?.click()}
               >
-                {currentImagePreview ? (
+                {currentImageSrc ? (
                   <img
-                    src={currentImagePreview}
+                    src={currentImageSrc}
                     alt="preview"
                     className="w-full h-full object-cover"
                   />
                 ) : (
                   <div className="flex flex-col items-center gap-1 text-white/20">
                     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round"
-                        d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M13.5 12h.008v.008H13.5V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M13.5 12h.008v.008H13.5V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
+                      />
                     </svg>
                     <span className="text-[10px]">Click to upload image</span>
                   </div>
@@ -258,16 +316,21 @@ function SlideFormCard({
             {/* Video preview box */}
             {mediaType === 'video' && (
               <div
-                className="w-full h-24 rounded-xl border-2 border-dashed border-white/10 flex items-center justify-center overflow-hidden cursor-pointer hover:border-purple-500/50 transition-colors bg-white/5"
+                className="w-full h-24 rounded-xl border-2 border-dashed border-white/10 overflow-hidden cursor-pointer hover:border-purple-500/50 transition-colors bg-white/5 relative"
                 onClick={() => fileRef.current?.click()}
               >
-                {file ? (
-                  <div className="flex flex-col items-center gap-1">
-                    <span className="text-purple-400 text-2xl">▶</span>
-                    <span className="text-white/40 text-[10px] truncate max-w-[180px] px-2">{file.name}</span>
-                  </div>
+                {currentVideoSrc ? (
+                  <>
+                    <VideoPreview
+                      src={currentVideoSrc}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/30 pointer-events-none flex items-center justify-center">
+                      <span className="text-white text-2xl drop-shadow">▶</span>
+                    </div>
+                  </>
                 ) : (
-                  <div className="flex flex-col items-center gap-1 text-white/20">
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-white/20">
                     <span className="text-2xl">▶</span>
                     <span className="text-[10px]">Click to upload video</span>
                   </div>
@@ -283,12 +346,14 @@ function SlideFormCard({
               >
                 {file ? 'Change File' : `Choose ${mediaType === 'video' ? 'Video' : 'Image'}`}
               </button>
+
               {file && (
                 <button
                   type="button"
                   onClick={() => {
                     setFile(null)
-                    setFilePreview('')
+                    setPreviewSrc('')
+                    clearPreviewObjectUrl()
                     if (fileRef.current) fileRef.current.value = ''
                   }}
                   className="text-red-400/60 hover:text-red-400 text-[10px] transition-colors"
@@ -300,7 +365,8 @@ function SlideFormCard({
 
             {file && (
               <p className="text-white/40 text-[10px] truncate max-w-[200px]">
-                {mediaType === 'video' ? '▶ ' : '🖼 '}{file.name}
+                {mediaType === 'video' ? '▶ ' : '🖼 '}
+                {file.name}
               </p>
             )}
 
@@ -366,7 +432,9 @@ function SlideFormCard({
           <button
             type="button"
             onClick={() => setForm(p => ({ ...p, is_active: !p.is_active }))}
-            className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${form.is_active ? 'bg-purple-600' : 'bg-white/10'}`}
+            className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${
+              form.is_active ? 'bg-purple-600' : 'bg-white/10'
+            }`}
           >
             <span
               className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
@@ -404,7 +472,9 @@ function SlideFormCard({
         >
           {saving ? `Uploading… ${uploadPct > 0 ? uploadPct + '%' : ''}` : isEdit ? 'Save Changes' : 'Add Slide'}
         </button>
-        <ActionButton variant="ghost" onClick={onCancel}>Cancel</ActionButton>
+        <ActionButton variant="ghost" onClick={onCancel}>
+          Cancel
+        </ActionButton>
       </div>
     </div>
   )
@@ -417,10 +487,14 @@ export default function SpotlightSection() {
   const [editingSlide, setEditingSlide] = useState<any | null>(null)
 
   const load = () => {
-    ;(spotlight.listAll() as Promise<any>).then(r => setData(r.slides || [])).catch(() => {})
+    ;(spotlight.listAll() as Promise<any>)
+      .then(r => setData(r.slides || []))
+      .catch(() => {})
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+  }, [])
 
   const remove = async (id: number, name: string) => {
     if (!confirm(`Delete "${name || 'this slide'}"?`)) return
@@ -438,7 +512,12 @@ export default function SpotlightSection() {
       <SectionHeader
         title="Spotlight"
         action={
-          <ActionButton onClick={() => { setEditingSlide(null); setShowForm(v => !v) }}>
+          <ActionButton
+            onClick={() => {
+              setEditingSlide(null)
+              setShowForm(v => !v)
+            }}
+          >
             {showForm ? 'Cancel' : '+ Add Slide'}
           </ActionButton>
         }
@@ -453,8 +532,15 @@ export default function SpotlightSection() {
         <SlideFormCard
           initial={editingSlide}
           getCsrf={getCsrfToken}
-          onSaved={() => { setShowForm(false); setEditingSlide(null); load() }}
-          onCancel={() => { setShowForm(false); setEditingSlide(null) }}
+          onSaved={() => {
+            setShowForm(false)
+            setEditingSlide(null)
+            load()
+          }}
+          onCancel={() => {
+            setShowForm(false)
+            setEditingSlide(null)
+          }}
           nextOrder={data.length}
         />
       )}
@@ -468,26 +554,34 @@ export default function SpotlightSection() {
             </p>
           </div>
         )}
+
         {data.map((s: any) => (
           <div
             key={s.id}
-            className={`bg-white/5 border border-white/8 rounded-2xl p-5 flex items-center gap-4 transition-opacity ${!s.is_active ? 'opacity-40' : ''}`}
+            className={`bg-white/5 border border-white/8 rounded-2xl p-5 flex items-center gap-4 transition-opacity ${
+              !s.is_active ? 'opacity-40' : ''
+            }`}
           >
             {/* Thumbnail preview */}
-            <div className="w-24 h-16 rounded-xl overflow-hidden shrink-0 border border-white/10 bg-black/30 flex items-center justify-center">
+            <div className="w-24 h-16 rounded-xl overflow-hidden shrink-0 border border-white/10 bg-black/30 flex items-center justify-center relative">
               {s.media_url ? (
                 s.media_type === 'video' ? (
-                  <div className="flex flex-col items-center gap-1">
-                    <span className="text-purple-400 text-xl">▶</span>
-                    <span className="text-white/30 text-[9px] tracking-widest uppercase">Video</span>
-                  </div>
+                  <>
+                    <VideoPreview
+                      src={s.media_url}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center pointer-events-none">
+                      <span className="text-white text-lg drop-shadow">▶</span>
+                    </div>
+                  </>
                 ) : (
                   <img
                     src={s.media_url}
                     alt=""
                     className="w-full h-full object-cover"
                     onError={e => {
-                      (e.currentTarget as HTMLImageElement).style.display = 'none'
+                      ;(e.currentTarget as HTMLImageElement).style.display = 'none'
                     }}
                   />
                 )
@@ -505,11 +599,14 @@ export default function SpotlightSection() {
               <p className="text-white/35 text-xs truncate">
                 {s.pill_label}
                 {s.href && <span className="ml-2 text-purple-400/60">→ {s.href.slice(0, 40)}</span>}
-                <span className="ml-2 text-white/20">{s.duration}s · order {s.display_order}</span>
+                <span className="ml-2 text-white/20">
+                  {s.duration}s · order {s.display_order}
+                </span>
               </p>
               {s.media_url && (
                 <p className="text-white/20 text-[10px] mt-0.5 truncate max-w-xs">
-                  {s.media_url.slice(0, 60)}{s.media_url.length > 60 ? '…' : ''}
+                  {s.media_url.slice(0, 60)}
+                  {s.media_url.length > 60 ? '…' : ''}
                 </p>
               )}
             </div>
@@ -518,8 +615,17 @@ export default function SpotlightSection() {
               <ActionButton variant="ghost" onClick={() => toggleActive(s.id, s.is_active)}>
                 {s.is_active ? 'Hide' : 'Show'}
               </ActionButton>
-              <ActionButton onClick={() => { setShowForm(false); setEditingSlide(s) }}>Edit</ActionButton>
-              <ActionButton variant="danger" onClick={() => remove(s.id, s.title)}>Delete</ActionButton>
+              <ActionButton
+                onClick={() => {
+                  setShowForm(false)
+                  setEditingSlide(s)
+                }}
+              >
+                Edit
+              </ActionButton>
+              <ActionButton variant="danger" onClick={() => remove(s.id, s.title)}>
+                Delete
+              </ActionButton>
             </div>
           </div>
         ))}
