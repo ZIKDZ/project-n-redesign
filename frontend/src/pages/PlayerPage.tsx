@@ -80,7 +80,9 @@ function getYouTubeThumbnail(url: string): string {
 
 function getYouTubeEmbedUrl(url: string): string {
   const id = getYouTubeId(url);
-  return id ? `https://www.youtube.com/embed/${id}?autoplay=1&rel=0` : url;
+  if (!id) return url;
+  const origin = encodeURIComponent(window.location.origin);
+  return `https://www.youtube.com/embed/${id}?autoplay=1&rel=0&origin=${origin}`;
 }
 
 // ── Social Icons ──────────────────────────────────────────────────────────────
