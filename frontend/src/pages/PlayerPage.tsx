@@ -133,6 +133,7 @@ function ClipCard({ clip, accent, index }: { clip: Clip; accent: string; index: 
   const [playing, setPlaying] = useState(false);
   const [thumbError, setThumbError] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const [iframeError, setIframeError] = useState(false);
   const thumbnail = getYouTubeThumbnail(clip.youtube_url);
   const embedUrl = getYouTubeEmbedUrl(clip.youtube_url);
 
@@ -161,15 +162,21 @@ function ClipCard({ clip, accent, index }: { clip: Clip; accent: string; index: 
         <div
           className="relative cursor-pointer"
           style={{ paddingBottom: "56.25%" }}
-          onClick={() => !playing && setPlaying(true)}
+          onClick={() => !playing && !iframeError && setPlaying(true)}
         >
-          {playing ? (
+          {playing && !iframeError ? (
             <iframe
               src={embedUrl}
               className="absolute inset-0 w-full h-full"
-              allow="autoplay; encrypted-media"
+              allow="autoplay; encrypted-media; fullscreen"
               allowFullScreen
+              sandbox="allow-same-origin allow-scripts allow-popups allow-presentation allow-forms"
+              referrerPolicy="no-referrer"
               title={clip.title}
+              onError={() => {
+                console.error("YouTube iframe error for:", clip.youtube_url);
+                setIframeError(true);
+              }}
             />
           ) : (
             <>
@@ -202,7 +209,7 @@ function ClipCard({ clip, accent, index }: { clip: Clip; accent: string; index: 
                 )}
               </div>
 
-              {/* Gradient — just enough to make the badge readable */}
+              {/* Gradient */}
               <div
                 className="absolute inset-0"
                 style={{
@@ -210,7 +217,7 @@ function ClipCard({ clip, accent, index }: { clip: Clip; accent: string; index: 
                 }}
               />
 
-              {/* YouTube badge — bottom left, always visible */}
+              {/* YouTube badge */}
               <div
                 className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-md px-2 py-1"
                 style={{ background: "rgba(0,0,0,0.70)", backdropFilter: "blur(4px)" }}
@@ -220,6 +227,23 @@ function ClipCard({ clip, accent, index }: { clip: Clip; accent: string; index: 
                 </svg>
                 <span className="text-white/60 text-[9px] font-bold tracking-wider uppercase">YouTube</span>
               </div>
+
+              {/* Error message if iframe failed */}
+              {iframeError && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+                  <div className="text-center">
+                    <p className="text-white/60 text-sm mb-2">Video unavailable</p>
+                    <a
+                      href={clip.youtube_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs px-3 py-1.5 rounded bg-red-600 text-white hover:bg-red-700"
+                    >
+                      Watch on YouTube
+                    </a>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
