@@ -447,7 +447,14 @@ function PlayerModal({
     try {
       await onSave({ ...form, clips }, avatarFile, clearAvatar)
       onClose()
-    } catch (e) { console.error(e) } finally { setSaving(false) }
+    } catch (e) {
+      // Show the actual error so you can debug
+      console.error('Save failed:', e)
+      alert(`Failed to save player: ${(e as Error).message}`)
+      // Modal stays open — user can fix the issue
+    } finally {
+      setSaving(false)
+    }
   }
 
   const inputClass = 'bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500/60 w-full placeholder-white/20'
@@ -705,25 +712,56 @@ export default function PlayersSection() {
     Object.entries(form).forEach(([k, v]) => {
       if (k === 'clips') {
         fd.append('clips', JSON.stringify(v))
-      } else if (v !== null && v !== undefined) {
+      } else if (k === 'game_id') {
+        // Skip game_id entirely — backend resolves game via slug
+        // (avoids sending "null" as a string)
+        return
+      } else if (v !== null && v !== undefined && v !== '') {
         fd.append(k, String(v))
+      } else if (v === '') {
+        // Still send empty strings so backend can clear fields on update
+        fd.append(k, '')
       }
     })
     if (clearAvatar) fd.append('clear_avatar', 'true')
     else if (avatarFile) fd.append('avatar', avatarFile)
     return fd
   }
-
+  
   const handleAdd = async (form: any, avatarFile: File | null, clearAvatar: boolean) => {
     const fd = buildFormData(form, avatarFile, clearAvatar)
-    await fetch('/api/players/create/', { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': getCsrf() }, body: fd })
+    const res = await fetch('/api/players/create/', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'X-CSRFToken': getCsrf() },
+      body: fd,
+    })
+  
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Unknown error' }))
+      throw new Error(err.error || `HTTP ${res.status}`)
+      // ↑ This causes handleSubmit's catch block to fire,
+      //   keeping the modal open and logging the real error
+    }
+  
     load()
   }
-
+  
   const handleEdit = async (form: any, avatarFile: File | null, clearAvatar: boolean) => {
     if (!editing) return
     const fd = buildFormData(form, avatarFile, clearAvatar)
-    await fetch(`/api/players/${editing.id}/`, { method: 'PATCH', credentials: 'include', headers: { 'X-CSRFToken': getCsrf() }, body: fd })
+    const res = await fetch(`/api/players/${editing.id}/`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'X-CSRFToken': getCsrf() },
+      body: fd,
+    })
+  
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Unknown error' }))
+      throw new Error(err.error || `HTTP ${res.status}`)
+    }
+  
     load()
   }
 
