@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Player
+from .models import Player, PlayerClip
 
 
 @admin.register(Player)
@@ -18,10 +18,6 @@ class PlayerAdmin(admin.ModelAdmin):
         ('Game / Role', {
             'fields': ('game', 'game_slug_fallback', 'role', 'rank', 'status', 'team'),
         }),
-        ('Highlights', {
-            'fields': ('clips',),
-            'description': 'JSON list of {title, youtube_url, description} objects.',
-        }),
         ('Social Links', {
             'fields': ('discord_username', 'twitter_url', 'instagram_url', 'twitch_url', 'kick_url', 'tiktok_url'),
         }),
@@ -33,3 +29,13 @@ class PlayerAdmin(admin.ModelAdmin):
             'fields': ('joined_at',),
         }),
     )
+
+
+@admin.register(PlayerClip)
+class PlayerClipAdmin(admin.ModelAdmin):
+    list_display = ('player', 'title', 'display_order', 'created_at')
+    list_filter = ('player__game',)
+    search_fields = ('title', 'player__username')
+    list_editable = ('display_order',)
+    ordering = ('player', 'display_order')
+    raw_id_fields = ('player',)

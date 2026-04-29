@@ -24,7 +24,13 @@ const STATUS_ORDER: Record<string, number> = {
   inactive: 2,
 }
 
-type Clip = { title: string; youtube_url: string; description?: string }
+type Clip = {
+  id: number
+  title: string
+  description: string
+  video_url: string
+  display_order: number
+}
 
 type PlayerData = {
   id: number
@@ -84,158 +90,268 @@ const EMPTY_PLAYER: Omit<PlayerData, 'id' | 'joined_at'> = {
   address: '',
 }
 
-// ── YouTube helpers ───────────────────────────────────────────────────────────
-function getYouTubeId(url: string): string | null {
-  const patterns = [
-    /youtu\.be\/([a-zA-Z0-9_-]{11})/,
-    /youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
-    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
-    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
-  ]
-  for (const p of patterns) {
-    const m = url.match(p)
-    if (m) return m[1]
-  }
-  return null
+// ── Upload helper with progress (mirrors SpotlightSection) ────────────────────
+function uploadWithProgress(
+  url: string,
+  method: string,
+  fd: FormData,
+  csrfToken: string,
+  onProgress: (pct: number) => void
+): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open(method, url)
+    xhr.withCredentials = true
+    xhr.setRequestHeader('X-CSRFToken', csrfToken)
+
+    xhr.upload.addEventListener('progress', e => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))
+    })
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText)) } catch { resolve({}) }
+      } else {
+        try { reject(new Error(JSON.parse(xhr.responseText).error || `HTTP ${xhr.status}`)) }
+        catch { reject(new Error(`HTTP ${xhr.status}`)) }
+      }
+    })
+
+    xhr.addEventListener('error', () => reject(new Error('Network error')))
+    xhr.send(fd)
+  })
 }
 
-function getYouTubeThumbnail(url: string): string {
-  const id = getYouTubeId(url)
-  return id ? `https://img.youtube.com/vi/${id}/mqdefault.jpg` : ''
+// ── ProgressBar ───────────────────────────────────────────────────────────────
+function ProgressBar({ pct }: { pct: number }) {
+  if (pct === 0 || pct === 100) return null
+  return (
+    <div className="mt-3">
+      <div className="flex justify-between items-center mb-1">
+        <span className="text-white/40 text-[10px] font-bold tracking-widest uppercase">Uploading…</span>
+        <span className="text-purple-300 text-[10px] font-bold">{pct}%</span>
+      </div>
+      <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-gradient-to-r from-purple-600 to-violet-400 rounded-full transition-all duration-150"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  )
 }
 
-// ── ClipsEditor ───────────────────────────────────────────────────────────────
-function ClipsEditor({ clips, onChange }: { clips: Clip[]; onChange: (clips: Clip[]) => void }) {
-  const [newClip, setNewClip] = useState<Clip>({ title: '', youtube_url: '', description: '' })
+// ── ClipManager ───────────────────────────────────────────────────────────────
+// Manages Cloudinary video clips for an existing player.
+// For new (unsaved) players, playerId is undefined → shows a placeholder.
+function ClipManager({
+  playerId,
+  initialClips,
+  onClipsChange,
+}: {
+  playerId: number | undefined
+  initialClips: Clip[]
+  onClipsChange: (clips: Clip[]) => void
+}) {
+  const [clips, setClips] = useState<Clip[]>(initialClips)
   const [adding, setAdding] = useState(false)
-
-  const addClip = () => {
-    if (!newClip.title || !newClip.youtube_url) return
-    onChange([...clips, { ...newClip }])
-    setNewClip({ title: '', youtube_url: '', description: '' })
-    setAdding(false)
-  }
-
-  const removeClip = (i: number) => onChange(clips.filter((_, idx) => idx !== i))
-
-  const moveUp = (i: number) => {
-    if (i === 0) return
-    const next = [...clips]
-    ;[next[i - 1], next[i]] = [next[i], next[i - 1]]
-    onChange(next)
-  }
-
-  const moveDown = (i: number) => {
-    if (i === clips.length - 1) return
-    const next = [...clips]
-    ;[next[i], next[i + 1]] = [next[i + 1], next[i]]
-    onChange(next)
-  }
+  const [form, setForm] = useState({ title: '', description: '' })
+  const [file, setFile] = useState<File | null>(null)
+  const [previewSrc, setPreviewSrc] = useState<string>('')
+  const [uploading, setUploading] = useState(false)
+  const [uploadPct, setUploadPct] = useState(0)
+  const [error, setError] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const inputClass = 'bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500/60 w-full placeholder-white/20'
   const labelClass = 'block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1'
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] || null
+    setFile(f)
+    setPreviewSrc(f ? URL.createObjectURL(f) : '')
+  }
+
+  const cancelAdd = () => {
+    setAdding(false)
+    setFile(null)
+    setPreviewSrc('')
+    setForm({ title: '', description: '' })
+    setError('')
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  const handleUpload = async () => {
+    if (!file || !form.title.trim() || !playerId) return
+    setUploading(true)
+    setError('')
+    setUploadPct(0)
+    try {
+      const fd = new FormData()
+      fd.append('video_file', file)
+      fd.append('title', form.title.trim())
+      fd.append('description', form.description.trim())
+      fd.append('display_order', String(clips.length))
+
+      const result: Clip = await uploadWithProgress(
+        `/api/players/${playerId}/clips/create/`,
+        'POST', fd, getCsrfToken(),
+        pct => setUploadPct(pct)
+      )
+      const next = [...clips, result]
+      setClips(next)
+      onClipsChange(next)
+      cancelAdd()
+    } catch (e: any) {
+      setError(e.message || 'Upload failed')
+    } finally {
+      setUploading(false)
+      setUploadPct(0)
+    }
+  }
+
+  const handleDelete = async (clipId: number) => {
+    if (!playerId) return
+    if (!confirm('Delete this clip permanently?')) return
+    try {
+      await fetch(`/api/players/${playerId}/clips/${clipId}/delete/`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { 'X-CSRFToken': getCsrfToken() },
+      })
+      const next = clips.filter(c => c.id !== clipId)
+      setClips(next)
+      onClipsChange(next)
+    } catch {
+      // ignore
+    }
+  }
+
+  // ── No player yet ──
+  if (!playerId) {
+    return (
+      <div className="border border-dashed border-white/10 rounded-xl p-8 text-center">
+        <div className="flex flex-col items-center gap-3">
+          <span className="text-white/20 text-3xl">🎬</span>
+          <p className="text-white/30 text-xs font-bold tracking-widest uppercase">Clips unavailable</p>
+          <p className="text-white/15 text-[10px] leading-relaxed max-w-xs">
+            Save the player profile first, then reopen their manage panel to upload highlight videos.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-3">
+      {/* Existing clips */}
       {clips.length === 0 && !adding && (
         <div className="border border-dashed border-white/10 rounded-xl p-6 text-center">
-          <p className="text-white/20 text-xs tracking-widest uppercase mb-3">No clips added yet</p>
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="text-purple-400/60 hover:text-purple-400 text-xs font-bold tracking-widest uppercase transition-colors cursor-pointer"
-          >
-            + Add First Clip
+          <p className="text-white/20 text-xs tracking-widest uppercase mb-3">No clips yet</p>
+          <button type="button" onClick={() => setAdding(true)}
+            className="text-purple-400/60 hover:text-purple-400 text-xs font-bold tracking-widest uppercase transition-colors cursor-pointer">
+            + Upload First Clip
           </button>
         </div>
       )}
 
-      {/* Existing clips */}
-      {clips.map((clip, i) => {
-        const thumb = getYouTubeThumbnail(clip.youtube_url)
-        return (
-          <div key={i} className="flex items-center gap-3 bg-white/5 border border-white/8 rounded-xl p-3">
-            {/* Thumbnail */}
-            <div className="w-16 h-10 rounded-lg overflow-hidden shrink-0 bg-white/5 border border-white/10 flex items-center justify-center">
-              {thumb
-                ? <img src={thumb} alt="" className="w-full h-full object-cover" />
-                : <svg className="w-4 h-4 text-red-500/50" viewBox="0 0 24 24" fill="currentColor"><path d="M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z" /></svg>
-              }
-            </div>
-
+      {clips.map((clip, i) => (
+        <div key={clip.id} className="bg-white/5 border border-white/8 rounded-xl overflow-hidden">
+          <div className="relative" style={{ paddingBottom: '42%' }}>
+            <video
+              src={clip.video_url}
+              className="absolute inset-0 w-full h-full object-cover bg-black"
+              controls
+              preload="metadata"
+            />
+          </div>
+          <div className="flex items-center gap-3 px-4 py-3">
             <div className="flex-1 min-w-0">
               <p className="text-white text-xs font-bold truncate">{clip.title}</p>
-              <p className="text-white/30 text-[10px] truncate">{clip.youtube_url}</p>
+              {clip.description && <p className="text-white/35 text-[10px] truncate">{clip.description}</p>}
             </div>
-
-            {/* Order controls */}
-            <div className="flex flex-col gap-0.5 shrink-0">
-              <button type="button" onClick={() => moveUp(i)} disabled={i === 0}
-                className="text-white/30 hover:text-white disabled:opacity-20 text-[10px] cursor-pointer">▲</button>
-              <button type="button" onClick={() => moveDown(i)} disabled={i === clips.length - 1}
-                className="text-white/30 hover:text-white disabled:opacity-20 text-[10px] cursor-pointer">▼</button>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => removeClip(i)}
-              className="text-red-400/50 hover:text-red-400 transition-colors cursor-pointer shrink-0"
-            >
+            <span className="text-white/20 text-[10px] shrink-0">#{i + 1}</span>
+            <button type="button" onClick={() => handleDelete(clip.id)}
+              className="text-red-400/50 hover:text-red-400 transition-colors cursor-pointer shrink-0">
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
-        )
-      })}
+        </div>
+      ))}
 
-      {/* Add clip form */}
+      {/* Upload form */}
       {adding ? (
         <div className="bg-white/5 border border-purple-500/20 rounded-xl p-4 space-y-3">
           <div>
             <label className={labelClass}>Clip Title *</label>
-            <input placeholder="e.g. Clutch 1v5 — Valorant" value={newClip.title}
-              onChange={e => setNewClip(p => ({ ...p, title: e.target.value }))} className={inputClass} />
-          </div>
-          <div>
-            <label className={labelClass}>YouTube URL *</label>
-            <input placeholder="https://youtube.com/watch?v=…" value={newClip.youtube_url}
-              onChange={e => setNewClip(p => ({ ...p, youtube_url: e.target.value }))} className={inputClass} />
-            {newClip.youtube_url && getYouTubeId(newClip.youtube_url) && (
-              <div className="mt-2 flex items-center gap-2">
-                <img src={getYouTubeThumbnail(newClip.youtube_url)} alt="" className="w-16 h-10 rounded-lg object-cover border border-white/10" />
-                <span className="text-green-400 text-[10px] font-bold tracking-widest uppercase">✓ Valid YouTube URL</span>
-              </div>
-            )}
-            {newClip.youtube_url && !getYouTubeId(newClip.youtube_url) && (
-              <p className="text-red-400/60 text-[10px] mt-1">⚠ Could not detect YouTube video ID</p>
-            )}
+            <input placeholder="e.g. Clutch 1v5 — Valorant" value={form.title}
+              onChange={e => setForm(p => ({ ...p, title: e.target.value }))} className={inputClass} />
           </div>
           <div>
             <label className={labelClass}>Description (optional)</label>
-            <input placeholder="Short description of the clip…" value={newClip.description || ''}
-              onChange={e => setNewClip(p => ({ ...p, description: e.target.value }))} className={inputClass} />
+            <input placeholder="Short description of the clip…" value={form.description}
+              onChange={e => setForm(p => ({ ...p, description: e.target.value }))} className={inputClass} />
           </div>
+          <div>
+            <label className={labelClass}>Video File * (mp4, webm)</label>
+            {/* Video preview */}
+            <div
+              className="w-full h-28 rounded-xl border-2 border-dashed border-white/10 flex items-center justify-center overflow-hidden cursor-pointer hover:border-purple-500/50 transition-colors bg-black/20 mb-2 relative"
+              onClick={() => fileRef.current?.click()}
+            >
+              {previewSrc ? (
+                <video src={previewSrc} className="w-full h-full object-cover" preload="metadata" />
+              ) : (
+                <div className="flex flex-col items-center gap-1 text-white/20">
+                  <span className="text-2xl">▶</span>
+                  <span className="text-[10px]">Click to choose video</span>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => fileRef.current?.click()}
+                className="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-500/40 text-white/50 hover:text-white text-[10px] font-bold px-3 py-2 rounded-lg tracking-wider uppercase transition-all duration-200 cursor-pointer">
+                {file ? 'Change File' : 'Choose File'}
+              </button>
+              {file && (
+                <>
+                  <span className="text-white/30 text-[10px] truncate max-w-[180px]">{file.name}</span>
+                  <button type="button"
+                    onClick={() => { setFile(null); setPreviewSrc(''); if (fileRef.current) fileRef.current.value = '' }}
+                    className="text-red-400/60 hover:text-red-400 text-[10px] transition-colors cursor-pointer">Remove</button>
+                </>
+              )}
+              <input ref={fileRef} type="file" accept="video/mp4,video/webm,video/*" onChange={handleFileChange} className="hidden" />
+            </div>
+          </div>
+
+          {uploading && <ProgressBar pct={uploadPct} />}
+          {error && (
+            <p className="text-red-400 text-[10px] bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+              ⚠ {error}
+            </p>
+          )}
+
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={addClip} disabled={!newClip.title || !newClip.youtube_url}
-              className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white font-black px-4 py-2 rounded-lg text-xs tracking-widest uppercase transition-all cursor-pointer">
-              Add Clip
+            <button type="button" onClick={handleUpload}
+              disabled={uploading || !file || !form.title.trim()}
+              className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black px-4 py-2 rounded-lg text-xs tracking-widest uppercase transition-all cursor-pointer">
+              {uploading ? `Uploading… ${uploadPct > 0 ? uploadPct + '%' : ''}` : 'Upload Clip'}
             </button>
-            <button type="button" onClick={() => { setAdding(false); setNewClip({ title: '', youtube_url: '', description: '' }) }}
+            <button type="button" onClick={cancelAdd}
               className="bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white font-bold px-4 py-2 rounded-lg text-xs tracking-widest uppercase transition-all cursor-pointer">
               Cancel
             </button>
           </div>
         </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="flex items-center gap-2 text-purple-400/60 hover:text-purple-400 text-xs font-bold tracking-widest uppercase transition-colors cursor-pointer"
-        >
-          <span className="text-lg leading-none">+</span> Add Clip
+      ) : clips.length > 0 ? (
+        <button type="button" onClick={() => setAdding(true)}
+          className="flex items-center gap-2 text-purple-400/60 hover:text-purple-400 text-xs font-bold tracking-widest uppercase transition-colors cursor-pointer">
+          <span className="text-lg leading-none">+</span> Add Another Clip
         </button>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -445,7 +561,9 @@ function PlayerModal({
     if (!form.username) return
     setSaving(true)
     try {
-      await onSave({ ...form, clips }, avatarFile, clearAvatar)
+      // clips are managed separately via ClipManager — don't include in form
+      const { clips: _clips, ...formWithoutClips } = form as any
+      await onSave(formWithoutClips, avatarFile, clearAvatar)
       onClose()
     } catch (e) { console.error(e) } finally { setSaving(false) }
   }
@@ -524,6 +642,7 @@ function PlayerModal({
 
           {/* Body */}
           <div className="overflow-y-auto flex-1 px-6 py-3" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+
             {/* ── Profile tab ── */}
             {tab === 'profile' && (
               <div className="grid grid-cols-2 gap-3">
@@ -600,7 +719,7 @@ function PlayerModal({
                   { field: 'tiktok_url', label: 'TikTok URL', placeholder: 'https://tiktok.com/@username' },
                 ].map(({ field, label, placeholder }) => (
                   <div key={field}>
-                    <label className={labelClass}>{label}</label>
+                    <label className='block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1'>{label}</label>
                     <input
                       placeholder={placeholder}
                       value={(form as any)[field] || ''}
@@ -616,9 +735,13 @@ function PlayerModal({
             {tab === 'clips' && (
               <div className="py-1">
                 <p className="text-white/20 text-[10px] tracking-widest mb-4">
-                  Add YouTube highlight clips shown on the player's public profile. Use any YouTube URL format.
+                  Upload highlight videos directly to Cloudinary. Videos appear on the player's public profile page.
                 </p>
-                <ClipsEditor clips={clips} onChange={setClips} />
+                <ClipManager
+                  playerId={(initial as any).id}
+                  initialClips={clips}
+                  onClipsChange={setClips}
+                />
               </div>
             )}
 
@@ -640,7 +763,7 @@ function PlayerModal({
                 </div>
                 <div>
                   <label className={labelClass}>Discord Username</label>
-                  <input placeholder="e.g. username#0000 or user id" value={form.discord_username} onChange={e => setForm(p => ({ ...p, discord_username: e.target.value }))} className={inputClass} />
+                  <input placeholder="e.g. username#0000" value={form.discord_username} onChange={e => setForm(p => ({ ...p, discord_username: e.target.value }))} className={inputClass} />
                 </div>
                 <div>
                   <label className={labelClass}>Email</label>
@@ -703,9 +826,9 @@ export default function PlayersSection() {
   const buildFormData = (form: any, avatarFile: File | null, clearAvatar: boolean) => {
     const fd = new FormData()
     Object.entries(form).forEach(([k, v]) => {
-      if (k === 'clips') {
-        fd.append('clips', JSON.stringify(v))
-      } else if (v !== null && v !== undefined) {
+      // clips are managed separately via ClipManager — never include in player form
+      if (k === 'clips') return
+      if (v !== null && v !== undefined) {
         fd.append(k, String(v))
       }
     })
@@ -804,17 +927,14 @@ export default function PlayersSection() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-0.5">
                   <button
-                    onClick={() => {
-                      // Open in a new tab since we're inside the dashboard (which has a scale transform)
-                      window.open(`/player/${p.id}`, '_blank')
-                    }}
+                    onClick={() => window.open(`/player/${p.id}`, '_blank')}
                     className="text-white font-bold text-sm hover:text-purple-300 transition-colors cursor-pointer"
                     title="View public profile"
                   >
                     {p.username}
                   </button>
                   {p.clips.length > 0 && (
-                    <span className="text-[9px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/20">
+                    <span className="text-[9px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400 border border-purple-500/20">
                       🎬 {p.clips.length}
                     </span>
                   )}
@@ -859,7 +979,7 @@ export default function PlayersSection() {
           gamesList={gamesList}
           teamsList={teamsList}
           onSave={handleEdit}
-          onClose={() => setEditing(null)}
+          onClose={() => { setEditing(null); load() }}
         />
       )}
     </div>

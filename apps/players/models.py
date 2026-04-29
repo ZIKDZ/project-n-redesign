@@ -1,3 +1,4 @@
+from cloudinary_storage.storage import VideoMediaCloudinaryStorage
 from django.db import models
 
 
@@ -49,11 +50,11 @@ class Player(models.Model):
     avatar = models.ImageField(upload_to='players/', blank=True, null=True)
     bio = models.TextField(blank=True)
 
-    # ── Clips / Highlights ────────────────────────────────────────────────────
+    # ── Legacy clips field (kept to avoid data-loss; superseded by PlayerClip) ─
     clips = models.JSONField(
         default=list,
         blank=True,
-        help_text='List of highlight clips: [{"title": "...", "youtube_url": "...", "description": "..."}]',
+        help_text='[Deprecated] Old YouTube clip links. Use PlayerClip model instead.',
     )
 
     # ── Socials ───────────────────────────────────────────────────────────────
@@ -93,6 +94,12 @@ class Player(models.Model):
         return self.game.title if self.game else self.game_slug_fallback
 
     def to_dict(self):
+        # clip_set is prefetched by views that need it
+        try:
+            clips = [c.to_dict() for c in self.clip_set.all()]
+        except Exception:
+            clips = []
+
         return {
             'id': self.id,
             # Profile
@@ -112,8 +119,8 @@ class Player(models.Model):
             # Team
             'team': self.team.name if self.team else None,
             'team_id': self.team_id,
-            # Clips
-            'clips': self.clips or [],
+            # Clips (from PlayerClip model)
+            'clips': clips,
             # Socials
             'discord_username': self.discord_username,
             'twitter_url': self.twitter_url,
@@ -130,4 +137,38 @@ class Player(models.Model):
             'address': self.address,
             # Meta
             'joined_at': self.joined_at.isoformat(),
+        }
+
+
+class PlayerClip(models.Model):
+    """A single highlight video uploaded to Cloudinary, linked to a player."""
+
+    player = models.ForeignKey(
+        Player,
+        on_delete=models.CASCADE,
+        related_name='clip_set',
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    video_file = models.FileField(
+        upload_to='players/clips/',
+        storage=VideoMediaCloudinaryStorage(),
+        help_text='Uploaded highlight video (mp4, webm…)',
+    )
+    display_order = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['display_order', 'created_at']
+
+    def __str__(self):
+        return f"{self.player.username} — {self.title}"
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'video_url': self.video_file.url if self.video_file else '',
+            'display_order': self.display_order,
         }
