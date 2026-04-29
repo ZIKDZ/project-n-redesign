@@ -29,6 +29,12 @@ function NBLLogoFull({ size = 48, className = "", color = "white" }: { size?: nu
   );
 }
 
+// ── Shared wordmark style — single source of truth ────────────────────────────
+const WORDMARK_STYLE: React.CSSProperties = {
+  fontFamily: "'Zuume', 'Barlow Condensed', sans-serif",
+  fontWeight: 600,
+};
+
 function Counter({ end, duration = 2000, suffix = "" }: { end: number; duration?: number; suffix?: string }) {
   const [count, setCount] = useState(0);
   const ref = useRef<HTMLSpanElement>(null);
@@ -357,7 +363,6 @@ function NewsCard({
           )
         }
         <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(13,0,20,0.88), transparent 55%)" }} />
-        {/* Tag badge */}
         <span
           className="absolute top-3 left-3 text-xs font-black tracking-widest uppercase px-3 py-1.5 rounded-full"
           style={{ background: tc.bg, color: tc.text, border: `1px solid ${tc.border}` }}
@@ -377,8 +382,6 @@ function NewsCard({
           </h3>
         )}
         <p className="text-white/50 text-sm leading-relaxed mb-4 line-clamp-3 flex-1">{description}</p>
- 
-        {/* Footer row */}
         <div className="flex items-center justify-between mt-auto pt-3 border-t border-white/6">
           <span className="text-xs text-white/25 tracking-wider">{formattedDate}</span>
           {onReadMore && (
@@ -657,7 +660,7 @@ function MatchSchedule() {
   );
 }
 
-// ── Spotlight Hero — full card replacing the rocket car ───────────────────────
+// ── Spotlight Hero ────────────────────────────────────────────────────────────
 function SpotlightHero() {
   const [slides, setSlides] = useState<any[]>([]);
   const [current, setCurrent] = useState(0);
@@ -671,7 +674,6 @@ function SpotlightHero() {
       .catch(() => setLoaded(true));
   }, []);
 
-  // Auto-advance for images
   useEffect(() => {
     if (!slides.length) return;
     const slide = slides[current];
@@ -683,7 +685,6 @@ function SpotlightHero() {
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [current, slides]);
 
-  // Restart video on slide change
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.load();
@@ -694,7 +695,6 @@ function SpotlightHero() {
   const advance = () => setCurrent(prev => (prev + 1) % slides.length);
   const slide = slides[current];
 
-  // ── Dot navigation ────────────────────────────────────────────────────────
   const Dots = () => (
     <>
       {slides.length > 1 && (
@@ -715,43 +715,31 @@ function SpotlightHero() {
     </>
   );
 
-  // ── Fallback: static branded card (shown while loading or no slides) ──────
   if (!loaded || !slides.length) {
     return (
       <div
         className="animate-float w-full max-w-lg rounded-3xl overflow-hidden border border-white/20 shadow-2xl shadow-purple-900/40"
-        style={{
-          background: "rgba(10,0,20,0.65)",
-          backdropFilter: "blur(16px)",
-        }}
+        style={{ background: "rgba(10,0,20,0.65)", backdropFilter: "blur(16px)" }}
       >
-        {/* Decorative top bar */}
         <div className="h-1.5 w-full bg-gradient-to-r from-purple-600 via-violet-500 to-purple-400" />
-
         <div className="p-8 flex flex-col items-center gap-6">
-          {/* Logo glow */}
           <div className="relative">
             <div className="absolute inset-0 rounded-full bg-purple-500/30 blur-2xl scale-150" />
             <div className="relative w-24 h-24 rounded-2xl bg-gradient-to-br from-violet-600 to-purple-500 flex items-center justify-center border border-purple-400/30 shadow-lg shadow-purple-500/40">
               <NBLLogoFull size={56} />
             </div>
           </div>
-
           <div className="text-center">
             <div className="flex items-center justify-center gap-2 mb-3">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
               <span className="text-purple-300/80 text-xs font-bold tracking-widest uppercase">Season Active</span>
             </div>
-            <h3
-              className="text-white font-black text-3xl uppercase mb-1"
-              style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-            >
+            {/* ── Spotlight fallback wordmark ── */}
+            <h3 className="font-black uppercase mb-1" style={{ ...WORDMARK_STYLE, fontSize: "1.875rem" }}>
               NBL<span className="text-purple-400">ESPORT</span>
             </h3>
             <p className="text-white/40 text-sm tracking-wider">Compete · Build · Dominate</p>
           </div>
-
-          {/* Game pills */}
           <div className="flex items-center gap-2 flex-wrap justify-center">
             {[
               { label: "Rocket League", color: "#60b8ff" },
@@ -761,11 +749,7 @@ function SpotlightHero() {
               <span
                 key={g.label}
                 className="text-[11px] font-bold tracking-widest uppercase px-3 py-1 rounded-full"
-                style={{
-                  background: `${g.color}18`,
-                  color: g.color,
-                  border: `1px solid ${g.color}40`,
-                }}
+                style={{ background: `${g.color}18`, color: g.color, border: `1px solid ${g.color}40` }}
               >
                 {g.label}
               </span>
@@ -776,82 +760,38 @@ function SpotlightHero() {
     );
   }
 
-  // ── Media content ─────────────────────────────────────────────────────────
   const MediaContent = (
     <div
       className="animate-float w-full max-w-lg rounded-3xl overflow-hidden border border-white/20 shadow-2xl shadow-purple-900/50"
-      style={{
-        background: "rgba(10,0,20,0.55)",
-        backdropFilter: "blur(12px)",
-      }}
+      style={{ background: "rgba(10,0,20,0.55)", backdropFilter: "blur(12px)" }}
     >
-      {/* Coloured top accent */}
       <div className="h-1 w-full bg-gradient-to-r from-purple-600 via-violet-500 to-purple-400" />
-
       <div className="relative" style={{ height: "300px" }}>
         {slide.media_type === "video" ? (
-          <video
-            ref={videoRef}
-            className="w-full h-full object-cover"
-            autoPlay
-            muted
-            playsInline
-            onEnded={advance}
-            style={{ display: "block" }}
-          >
+          <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline onEnded={advance} style={{ display: "block" }}>
             <source src={slide.media_url} />
           </video>
         ) : (
-          <img
-            src={slide.media_url}
-            alt={slide.title || "Spotlight"}
-            className="w-full h-full object-cover"
-          />
+          <img src={slide.media_url} alt={slide.title || "Spotlight"} className="w-full h-full object-cover" />
         )}
-
-        {/* Bottom fade */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background: "linear-gradient(to top, rgba(10,0,20,0.90) 0%, rgba(10,0,20,0.15) 55%, transparent 100%)",
-          }}
-        />
-
-        {/* Pill label */}
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(to top, rgba(10,0,20,0.90) 0%, rgba(10,0,20,0.15) 55%, transparent 100%)" }} />
         <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm border border-white/15 rounded-full px-3 py-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-white/80 text-[10px] font-bold tracking-widest uppercase">
-            {slide.pill_label}
-          </span>
+          <span className="text-white/80 text-[10px] font-bold tracking-widest uppercase">{slide.pill_label}</span>
         </div>
-
-        {/* Slide counter / dots */}
         <Dots />
-
-        {/* Title overlay at bottom */}
         {slide.title && (
           <div className="absolute bottom-3 left-4 right-8">
-            <p
-              className="text-white font-black text-lg leading-tight uppercase truncate"
-              style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-            >
-              {slide.title}
-            </p>
+            <p className="text-white font-black text-lg leading-tight uppercase truncate" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>{slide.title}</p>
           </div>
         )}
       </div>
     </div>
   );
 
-  // Wrap in <a> if slide has a click-through href
   if (slide.href) {
-    return (
-      <a href={slide.href} target="_blank" rel="noreferrer" className="block w-full max-w-lg">
-        {MediaContent}
-      </a>
-    );
+    return <a href={slide.href} target="_blank" rel="noreferrer" className="block w-full max-w-lg">{MediaContent}</a>;
   }
-
   return <div className="w-full max-w-lg">{MediaContent}</div>;
 }
 
@@ -874,7 +814,10 @@ export default function Landing() {
           <a href="#" className="flex items-center gap-3 group">
             <NBLLogoFull size={40} className="group-hover:scale-110 transition-transform duration-200" />
             <div>
-              <span className="block text-white font-black text-xl tracking-wider" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>NBL<span className="text-purple-400">ESPORT</span></span>
+              {/* ── Nav wordmark ── */}
+              <span className="block font-black tracking-wider" style={{ ...WORDMARK_STYLE, fontSize: "1.5rem" }}>
+                NBL<span className="text-purple-400">ESPORT</span>
+              </span>
               <span className="block text-purple-400/60 text-xs tracking-widest uppercase">Nebula Esport</span>
             </div>
           </a>
@@ -907,23 +850,16 @@ export default function Landing() {
 
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
       <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-        {/* Background */}
         <div className="absolute inset-0">
           <img src="/static/images/hero-bg.jpg" alt="" className="w-full h-full object-cover opacity-40" />
           <div className="absolute inset-0 bg-gradient-to-b from-[#0d0014]/60 via-[#0d0014]/20 to-[#0d0014]" />
           <div className="absolute inset-0 bg-gradient-to-r from-[#0d0014]/80 via-transparent to-[#0d0014]/80" />
         </div>
-
-        {/* Ambient glows */}
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl animate-pulse" />
         <div className="absolute bottom-1/3 right-1/4 w-64 h-64 bg-violet-500/15 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1s" }} />
-
-        {/* Grid overlay */}
         <div className="absolute inset-0 opacity-5" style={{ backgroundImage: "linear-gradient(rgba(168,85,247,1) 1px, transparent 1px), linear-gradient(90deg, rgba(168,85,247,1) 1px, transparent 1px)", backgroundSize: "60px 60px" }} />
 
         <div className="relative z-10 max-w-7xl mx-auto px-6 pt-24 pb-12 grid md:grid-cols-2 gap-12 items-center">
-
-          {/* LEFT — copy */}
           <div>
             <div className="inline-flex items-center gap-2 bg-purple-500/20 border border-purple-500/40 rounded-full px-4 py-2 mb-8">
               <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
@@ -949,14 +885,11 @@ export default function Landing() {
               </a>
             </div>
           </div>
-
-          {/* RIGHT — Spotlight card (replaces rocket car) */}
           <div className="flex justify-center items-center">
             <SpotlightHero />
           </div>
         </div>
 
-        {/* Scroll indicator */}
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-bounce">
           <span className="text-gray-500 text-xs tracking-widest uppercase">Scroll</span>
           <svg className="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1024,7 +957,13 @@ export default function Landing() {
             <NBLLogoFull size={48} color="white" />
             <div>
               <div className="text-purple-300 text-xs font-bold tracking-widest uppercase mb-1">Season 2026</div>
-              <h3 className="text-white text-2xl font-black uppercase" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>We're Recruiting · Open Tryouts Now</h3>
+              {/* ── Banner wordmark ── */}
+              <h3 className="font-black uppercase" style={{ ...WORDMARK_STYLE, fontSize: "1.5rem" }}>
+                NBL<span className="text-purple-300">ESPORT</span>
+                <span className="text-white/70 font-normal text-sm ml-2" style={{ fontFamily: "'Barlow', sans-serif" }}>
+                  · We're Recruiting · Open Tryouts Now
+                </span>
+              </h3>
               <p className="text-purple-200/60 text-sm mt-1">Rocket League · Valorant · Fortnite — all divisions open</p>
             </div>
           </div>
@@ -1058,7 +997,10 @@ export default function Landing() {
             <div className="flex items-center gap-3">
               <NBLLogoFull size={36} />
               <div>
-                <span className="block text-white font-black tracking-wider text-lg" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>NBL<span className="text-purple-400">ESPORT</span></span>
+                {/* ── Footer wordmark ── */}
+                <span className="block font-black tracking-wider" style={{ ...WORDMARK_STYLE, fontSize: "1.25rem" }}>
+                  NBL<span className="text-purple-400">ESPORT</span>
+                </span>
                 <span className="block text-gray-500 text-xs tracking-widest">© 2026 NBLEsport. All rights reserved.</span>
               </div>
             </div>
@@ -1081,8 +1023,6 @@ export default function Landing() {
                   <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.78a4.85 4.85 0 0 1-1.01-.09z" />
                 </svg>
               </a>
-                  
-              {/* Kick */}
               <a href="https://kick.com/nblesports" target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center hover:border-purple-500/50 hover:bg-purple-500/10 transition-all duration-200">
                 <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M2 2h4v7l5-7h5l-6 8 6 8h-5l-5-7v7H2V2z" />
