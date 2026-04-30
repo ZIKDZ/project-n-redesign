@@ -1,19 +1,38 @@
+// ProductPage.tsx - Updated for dynamic variants
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { asset } from "../utils/asset";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface Variant {
-  size: string;
-  color: string;
+interface VariantAttribute {
+  name: string;
+  type: 'select' | 'text';
+  values: string[];
+}
+
+interface VariantCombination {
+  id: string;
+  values: Record<string, string>;
   stock: number;
+  sku?: string;
+}
+
+interface VariantConfig {
+  attributes: VariantAttribute[];
+  variants: VariantCombination[];
 }
 
 interface GalleryImage {
   id: number;
   url: string;
   display_order: number;
+}
+
+interface CustomField {
+  label: string;
+  placeholder: string;
+  required: boolean;
 }
 
 interface Product {
@@ -23,10 +42,11 @@ interface Product {
   price: string;
   category: string;
   banner: string;
-  variants: Variant[];
+  variant_config: VariantConfig;
   images: GalleryImage[];
-  track_stock: boolean;        // ← new
-  total_stock: number | null;  // null when track_stock=false
+  custom_fields: CustomField[];
+  track_stock: boolean;
+  total_stock: number | null;
   is_active: boolean;
   is_featured: boolean;
 }
@@ -55,10 +75,14 @@ const WILAYA_CHOICES: [string, string][] = [
 function OrderForm({
   product,
   selectedVariant,
+  customValues,
+  onCustomValuesChange,
   onSuccess,
 }: {
   product: Product;
-  selectedVariant: Variant | null;
+  selectedVariant: VariantCombination | null;
+  customValues: Record<string, string>;
+  onCustomValuesChange: (values: Record<string, string>) => void;
   onSuccess: () => void;
 }) {
   const [form, setForm] = useState({
@@ -69,40 +93,44 @@ function OrderForm({
     address: "",
     quantity: 1,
   });
-  const [status,   setStatus]   = useState<"idle" | "loading" | "success" | "error">("idle");
+
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
   const inputClass =
     "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm " +
     "placeholder-white/25 focus:outline-none focus:border-purple-500/60 transition-all duration-200";
 
-  // Upper bound for quantity:
-  // - track_stock ON  → cap at variant stock (or 99 if no variant selected)
-  // - track_stock OFF → effectively unlimited (999)
   const maxQty = product.track_stock
     ? selectedVariant?.stock ?? 99
     : 999;
 
+  const customFieldsValid = (product.custom_fields || []).every(
+    f => !f.required || (customValues[f.label] || "").trim() !== ""
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.full_name || !form.email || !form.phone) return;
+    if (!customFieldsValid) return;
+
     setStatus("loading");
     setErrorMsg("");
     try {
       const res = await fetch("/api/shop/order/", {
-        method:  "POST",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          product_id:    product.id,
-          product_name:  product.name,
-          variant_size:  selectedVariant?.size  || "",
-          variant_color: selectedVariant?.color || "",
-          quantity:      form.quantity,
-          full_name:     form.full_name,
-          email:         form.email,
-          phone:         form.phone,
-          wilaya:        form.wilaya,
-          address:       form.address,
+          product_id: product.id,
+          product_name: product.name,
+          variant_values: selectedVariant?.values || {},
+          quantity: form.quantity,
+          custom_field_values: customValues,
+          full_name: form.full_name,
+          email: form.email,
+          phone: form.phone,
+          wilaya: form.wilaya,
+          address: form.address,
         }),
       });
       if (!res.ok) {
@@ -117,7 +145,6 @@ function OrderForm({
     }
   };
 
-  // ── Success state ──────────────────────────────────────────────────────────
   if (status === "success") {
     return (
       <div className="text-center py-10">
@@ -141,7 +168,6 @@ function OrderForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* ── Customer fields ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-2">
@@ -152,7 +178,7 @@ function OrderForm({
             required
             placeholder="Your full name"
             value={form.full_name}
-            onChange={(e) => setForm((p) => ({ ...p, full_name: e.target.value }))}
+            onChange={e => setForm(p => ({ ...p, full_name: e.target.value }))}
             className={inputClass}
           />
         </div>
@@ -165,7 +191,7 @@ function OrderForm({
             required
             placeholder="your@email.com"
             value={form.email}
-            onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+            onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
             className={inputClass}
           />
         </div>
@@ -178,7 +204,7 @@ function OrderForm({
             required
             placeholder="+213 5XX XXX XXX"
             value={form.phone}
-            onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+            onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
             className={inputClass}
           />
         </div>
@@ -188,7 +214,7 @@ function OrderForm({
           </label>
           <select
             value={form.wilaya}
-            onChange={(e) => setForm((p) => ({ ...p, wilaya: e.target.value }))}
+            onChange={e => setForm(p => ({ ...p, wilaya: e.target.value }))}
             className={inputClass + " cursor-pointer"}
             style={{ background: "rgba(26,0,48,0.8)" }}
           >
@@ -202,7 +228,6 @@ function OrderForm({
         </div>
       </div>
 
-      {/* ── Address ── */}
       <div>
         <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-2">
           Delivery Address
@@ -210,12 +235,11 @@ function OrderForm({
         <textarea
           placeholder="Street address, apartment, city…"
           value={form.address}
-          onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
+          onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
           className={inputClass + " resize-none h-20"}
         />
       </div>
 
-      {/* ── Quantity ── */}
       <div>
         <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-2">
           Quantity
@@ -223,7 +247,7 @@ function OrderForm({
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => setForm((p) => ({ ...p, quantity: Math.max(1, p.quantity - 1) }))}
+            onClick={() => setForm(p => ({ ...p, quantity: Math.max(1, p.quantity - 1) }))}
             className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white
                        hover:bg-purple-500/15 hover:border-purple-500/40 transition-all
                        text-lg font-bold cursor-pointer"
@@ -239,10 +263,7 @@ function OrderForm({
           <button
             type="button"
             onClick={() =>
-              setForm((p) => ({
-                ...p,
-                quantity: p.quantity < maxQty ? p.quantity + 1 : p.quantity,
-              }))
+              setForm(p => ({ ...p, quantity: p.quantity < maxQty ? p.quantity + 1 : p.quantity }))
             }
             className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white
                        hover:bg-purple-500/15 hover:border-purple-500/40 transition-all
@@ -250,7 +271,6 @@ function OrderForm({
           >
             +
           </button>
-          {/* Stock hint — only shown when tracking is on and a variant is selected */}
           {product.track_stock && selectedVariant && (
             <span className="text-white/30 text-xs ml-2">
               {selectedVariant.stock} in stock
@@ -259,7 +279,6 @@ function OrderForm({
         </div>
       </div>
 
-      {/* ── Total ── */}
       <div className="flex items-center justify-between py-3 border-t border-white/8">
         <span className="text-white/50 text-sm font-bold tracking-widest uppercase">Total</span>
         <span
@@ -270,17 +289,15 @@ function OrderForm({
         </span>
       </div>
 
-      {/* ── Error ── */}
       {errorMsg && (
         <p className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
           ⚠ {errorMsg}
         </p>
       )}
 
-      {/* ── Submit ── */}
       <button
         type="submit"
-        disabled={status === "loading"}
+        disabled={status === "loading" || !customFieldsValid}
         className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50
                    disabled:cursor-not-allowed text-white font-black py-4 rounded-xl
                    text-sm tracking-widest uppercase transition-all duration-200
@@ -296,48 +313,112 @@ function OrderForm({
   );
 }
 
+// ── Personalisation Section ────────────────────────────────────────────────────
+
+function PersonalisationSection({
+  product,
+  customValues,
+  onCustomValuesChange,
+}: {
+  product: Product;
+  customValues: Record<string, string>;
+  onCustomValuesChange: (values: Record<string, string>) => void;
+}) {
+  const inputClass =
+    "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm " +
+    "placeholder-white/25 focus:outline-none focus:border-purple-500/60 transition-all duration-200";
+
+  if (!product.custom_fields || product.custom_fields.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-3 mb-8">
+      <div className="flex items-center gap-2">
+        <span className="text-purple-400/70 text-sm">✏</span>
+        <span className="text-white/50 text-[10px] font-bold tracking-widest uppercase">
+          Personalisation
+        </span>
+      </div>
+
+      <div
+        className="rounded-2xl border border-purple-500/20 p-4 space-y-3"
+        style={{ background: "rgba(168,85,247,0.05)" }}
+      >
+        {product.custom_fields.map(field => (
+          <div key={field.label}>
+            <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-2">
+              {field.label}
+              {field.required && (
+                <span className="text-purple-400 ml-1">*</span>
+              )}
+            </label>
+            <input
+              type="text"
+              required={field.required}
+              placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}…`}
+              value={customValues[field.label] || ""}
+              onChange={e =>
+                onCustomValuesChange({
+                  ...customValues,
+                  [field.label]: e.target.value,
+                })
+              }
+              className={inputClass}
+              style={{ textTransform: "uppercase" }}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Product Page ─────────────────────────────────────────────────────────
 
 export default function ProductPage() {
-  const { id }     = useParams<{ id: string }>();
-  const navigate   = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
 
-  const [product,       setProduct]       = useState<Product | null>(null);
-  const [loading,       setLoading]       = useState(true);
-  const [scrolled,      setScrolled]      = useState(false);
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [scrolled, setScrolled] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string>("");
-  const [selectedSize,  setSelectedSize]  = useState("");
-  const [selectedColor, setSelectedColor] = useState("");
-  const [orderSuccess,  setOrderSuccess]  = useState(false);
-  const [revealed,      setRevealed]      = useState(false);
+  const [selectedVariant, setSelectedVariant] = useState<Record<string, string>>({});
+  const [orderSuccess, setOrderSuccess] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+  const [customValues, setCustomValues] = useState<Record<string, string>>({});
 
-  // ── Scroll listener ────────────────────────────────────────────────────────
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 60);
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // ── Fetch product ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!id) return;
     setLoading(true);
     fetch(`/api/shop/${id}/`)
-      .then((r) => {
+      .then(r => {
         if (!r.ok) throw new Error("Not found");
         return r.json();
       })
       .then((data: Product) => {
         setProduct(data);
-        // Default selected image: banner first, then first gallery image
         setSelectedImage(data.banner || data.images?.[0]?.url || "");
+        setCustomValues(
+          Object.fromEntries((data.custom_fields || []).map(f => [f.label, ""]))
+        );
+        // Initialize selected variant with empty values
+        setSelectedVariant(
+          Object.fromEntries((data.variant_config?.attributes || []).map(a => [a.name, ""]))
+        );
         setTimeout(() => setRevealed(true), 80);
       })
       .catch(() => navigate("/shop", { replace: true }))
       .finally(() => setLoading(false));
   }, [id]);
 
-  // ── Loading screen ─────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0d0014] flex items-center justify-center">
@@ -354,42 +435,21 @@ export default function ProductPage() {
 
   if (!product) return null;
 
-  // ── Derived state ──────────────────────────────────────────────────────────
-
-  // All images to show in the thumbnail strip (banner first, then gallery)
   const allImages = [
     ...(product.banner ? [{ id: -1, url: product.banner, display_order: -1 }] : []),
     ...(product.images || []),
   ];
 
-  // Unique sizes across all variants
-  const sizes = [...new Set(product.variants.map((v) => v.size))].filter(Boolean);
+  // Find matching variant combination
+  const matchingVariant = product.variant_config?.variants.find(v =>
+    Object.entries(selectedVariant).every(([key, val]) => v.values[key] === val)
+  ) || null;
 
-  // Colors available for the currently-selected size (or all colors if no size chosen)
-  const colorsForSize = selectedSize
-    ? [...new Set(
-        product.variants
-          .filter((v) => v.size === selectedSize)
-          .map((v) => v.color)
-      )].filter(Boolean)
-    : [...new Set(product.variants.map((v) => v.color))].filter(Boolean);
-
-  // The variant that matches current size + color selections
-  const selectedVariant =
-    product.variants.find(
-      (v) =>
-        (!selectedSize  || v.size  === selectedSize) &&
-        (!selectedColor || v.color === selectedColor)
-    ) || null;
-
-  // In-stock logic — respects track_stock flag
   const inStock = !product.track_stock
-    ? true  // tracking off → always in stock
-    : selectedVariant
-    ? selectedVariant.stock > 0
+    ? true
+    : matchingVariant
+    ? matchingVariant.stock > 0
     : (product.total_stock ?? 0) > 0;
-
-  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div
@@ -397,17 +457,17 @@ export default function ProductPage() {
       style={{ fontFamily: "'Barlow', sans-serif" }}
     >
       <style>{`
-        @keyframes fadeIn  { from { opacity: 0; }                        to { opacity: 1; } }
+        @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
 
-      {/* ── Navbar ── */}
+      {/* Navbar */}
       <nav
         className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
         style={{
-          background:     scrolled ? "rgba(13,0,20,0.95)" : "transparent",
-          backdropFilter: scrolled ? "blur(14px)"          : "none",
-          boxShadow:      scrolled ? "0 1px 0 rgba(255,255,255,0.06)" : "none",
+          background: scrolled ? "rgba(13,0,20,0.95)" : "transparent",
+          backdropFilter: scrolled ? "blur(14px)" : "none",
+          boxShadow: scrolled ? "0 1px 0 rgba(255,255,255,0.06)" : "none",
         }}
       >
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-4">
@@ -440,21 +500,18 @@ export default function ProductPage() {
         </div>
       </nav>
 
-      {/* ── Main content ── */}
+      {/* Main content */}
       <div
         className="max-w-7xl mx-auto px-6 pt-28 pb-24"
         style={{
-          opacity:    revealed ? 1 : 0,
-          transform:  revealed ? "none" : "translateY(20px)",
+          opacity: revealed ? 1 : 0,
+          transform: revealed ? "none" : "translateY(20px)",
           transition: "opacity 0.7s ease-out, transform 0.7s ease-out",
         }}
       >
         <div className="grid lg:grid-cols-2 gap-12 items-start">
-
-          {/* ══ Left column: image gallery ═══════════════════════════════════ */}
+          {/* Left: image gallery */}
           <div className="space-y-4">
-
-            {/* Main image */}
             <div
               className="relative rounded-3xl overflow-hidden border border-white/10"
               style={{ aspectRatio: "4/3", background: "rgba(168,85,247,0.06)" }}
@@ -473,49 +530,37 @@ export default function ProductPage() {
                 </div>
               )}
 
-              {/* Featured badge */}
               {product.is_featured && (
                 <div className="absolute top-4 left-4">
-                  <span
-                    className="inline-flex items-center gap-1 text-[10px] font-black tracking-widest
-                               uppercase px-3 py-1.5 rounded-full bg-yellow-500/20 text-yellow-400
-                               border border-yellow-500/35"
-                  >
+                  <span className="inline-flex items-center gap-1 text-[10px] font-black tracking-widest
+                                   uppercase px-3 py-1.5 rounded-full bg-yellow-500/20 text-yellow-400
+                                   border border-yellow-500/35">
                     ⭐ Featured
                   </span>
                 </div>
               )}
 
-              {/* Out-of-stock overlay badge on main image */}
               {!inStock && (
                 <div className="absolute top-4 right-4">
-                  <span
-                    className="inline-flex items-center gap-1 text-[10px] font-black tracking-widest
-                               uppercase px-3 py-1.5 rounded-full bg-red-500/25 text-red-300
-                               border border-red-500/40 backdrop-blur-sm"
-                  >
+                  <span className="inline-flex items-center gap-1 text-[10px] font-black tracking-widest
+                                   uppercase px-3 py-1.5 rounded-full bg-red-500/25 text-red-300
+                                   border border-red-500/40 backdrop-blur-sm">
                     Out of Stock
                   </span>
                 </div>
               )}
             </div>
 
-            {/* Thumbnail strip */}
             {allImages.length > 1 && (
               <div className="flex gap-3 flex-wrap">
-                {allImages.map((img) => (
+                {allImages.map(img => (
                   <button
                     key={img.id}
                     onClick={() => setSelectedImage(img.url)}
-                    className="w-20 h-20 rounded-xl overflow-hidden border-2 transition-all
-                               duration-200 cursor-pointer shrink-0"
+                    className="w-20 h-20 rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer shrink-0"
                     style={{
-                      borderColor: selectedImage === img.url
-                        ? "rgba(168,85,247,0.8)"
-                        : "rgba(255,255,255,0.1)",
-                      boxShadow: selectedImage === img.url
-                        ? "0 0 12px rgba(168,85,247,0.4)"
-                        : "none",
+                      borderColor: selectedImage === img.url ? "rgba(168,85,247,0.8)" : "rgba(255,255,255,0.1)",
+                      boxShadow: selectedImage === img.url ? "0 0 12px rgba(168,85,247,0.4)" : "none",
                     }}
                   >
                     <img src={img.url} alt="" className="w-full h-full object-cover" />
@@ -525,39 +570,36 @@ export default function ProductPage() {
             )}
           </div>
 
-          {/* ══ Right column: product info + order form ═══════════════════════ */}
+          {/* Right: product info + order form */}
           <div className="lg:sticky lg:top-28">
-
-            {/* Category + stock badge row */}
+            {/* Category + stock badges */}
             <div className="flex items-center gap-3 mb-4 flex-wrap">
               <span
                 className="text-[10px] font-black tracking-widest uppercase px-3 py-1.5 rounded-full"
-                style={{
-                  background: "rgba(168,85,247,0.2)",
-                  color:      "#c084fc",
-                  border:     "1px solid rgba(168,85,247,0.4)",
-                }}
+                style={{ background: "rgba(168,85,247,0.2)", color: "#c084fc", border: "1px solid rgba(168,85,247,0.4)" }}
               >
                 {product.category}
               </span>
 
-              {/* Out of stock pill (only when tracking is on) */}
               {product.track_stock && !inStock && (
-                <span
-                  className="text-[10px] font-black tracking-widest uppercase px-3 py-1.5
-                             rounded-full bg-red-500/15 text-red-400 border border-red-500/25"
-                >
+                <span className="text-[10px] font-black tracking-widest uppercase px-3 py-1.5
+                                 rounded-full bg-red-500/15 text-red-400 border border-red-500/25">
                   Out of Stock
                 </span>
               )}
 
-              {/* "Always available" hint when tracking is off */}
               {!product.track_stock && (
-                <span
-                  className="text-[10px] font-black tracking-widest uppercase px-3 py-1.5
-                             rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/25"
-                >
+                <span className="text-[10px] font-black tracking-widest uppercase px-3 py-1.5
+                                 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/25">
                   ∞ Always Available
+                </span>
+              )}
+
+              {(product.custom_fields || []).length > 0 && (
+                <span className="text-[10px] font-black tracking-widest uppercase px-3 py-1.5
+                                 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25
+                                 flex items-center gap-1">
+                  ✏ Personalised
                 </span>
               )}
             </div>
@@ -587,129 +629,87 @@ export default function ProductPage() {
               </p>
             )}
 
-            {/* ── Size selector ── */}
-            {sizes.length > 0 && (
-              <div className="mb-5">
-                <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-3">
-                  Size
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {sizes.map((s) => {
-                    const stockForSize = product.variants
-                      .filter((v) => v.size === s)
-                      .reduce((sum, v) => sum + v.stock, 0);
-                    const active  = selectedSize === s;
-                    // Disable only when tracking is on AND no stock
-                    const noStock = product.track_stock && stockForSize === 0;
+            {/* Variant Attributes */}
+            {(product.variant_config?.attributes || []).length > 0 && (
+              <div className="space-y-5 mb-8">
+                {product.variant_config.attributes.map(attr => (
+                  <div key={attr.name}>
+                    <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-3">
+                      {attr.name}
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {attr.values.map(value => {
+                        const variantWithValue = product.variant_config.variants.find(v =>
+                          v.values[attr.name] === value &&
+                          Object.entries(selectedVariant).every(([k, v]) =>
+                            k === attr.name || v === "" || v === product.variant_config.variants.find(var_ =>
+                              var_.values[k] === v && var_.values[attr.name] === value
+                            )?.values[k]
+                          )
+                        );
+                        const active = selectedVariant[attr.name] === value;
+                        const noStock = product.track_stock && (!variantWithValue || variantWithValue.stock === 0);
 
-                    return (
-                      <button
-                        key={s}
-                        onClick={() => {
-                          setSelectedSize(active ? "" : s);
-                          setSelectedColor("");
-                        }}
-                        disabled={noStock}
-                        className="px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider
-                                   transition-all duration-200 cursor-pointer
-                                   disabled:opacity-30 disabled:cursor-not-allowed"
-                        style={{
-                          background: active
-                            ? "rgba(168,85,247,0.35)"
-                            : "rgba(255,255,255,0.06)",
-                          color: active ? "#c084fc" : "rgba(255,255,255,0.6)",
-                          border: active
-                            ? "1px solid rgba(168,85,247,0.6)"
-                            : "1px solid rgba(255,255,255,0.1)",
-                        }}
-                      >
-                        {s}
-                      </button>
-                    );
-                  })}
-                </div>
+                        return (
+                          <button
+                            key={value}
+                            onClick={() =>
+                              setSelectedVariant(prev => ({
+                                ...prev,
+                                [attr.name]: active ? "" : value,
+                              }))
+                            }
+                            disabled={noStock}
+                            className="px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider
+                                       transition-all duration-200 cursor-pointer
+                                       disabled:opacity-30 disabled:cursor-not-allowed"
+                            style={{
+                              background: active ? "rgba(168,85,247,0.35)" : "rgba(255,255,255,0.06)",
+                              color: active ? "#c084fc" : "rgba(255,255,255,0.6)",
+                              border: active ? "1px solid rgba(168,85,247,0.6)" : "1px solid rgba(255,255,255,0.1)",
+                            }}
+                          >
+                            {value}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
-            {/* ── Color selector ── */}
-            {colorsForSize.length > 0 && (
-              <div className="mb-8">
-                <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-3">
-                  Color
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {colorsForSize.map((c) => {
-                    const v = product.variants.find(
-                      (v) =>
-                        (!selectedSize || v.size === selectedSize) && v.color === c
-                    );
-                    const active  = selectedColor === c;
-                    // Disable only when tracking is on AND no stock
-                    const noStock = product.track_stock && (!v || v.stock === 0);
-
-                    return (
-                      <button
-                        key={c}
-                        onClick={() => setSelectedColor(active ? "" : c)}
-                        disabled={noStock}
-                        className="px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider
-                                   transition-all duration-200 cursor-pointer
-                                   disabled:opacity-30 disabled:cursor-not-allowed capitalize"
-                        style={{
-                          background: active
-                            ? "rgba(168,85,247,0.35)"
-                            : "rgba(255,255,255,0.06)",
-                          color: active ? "#c084fc" : "rgba(255,255,255,0.6)",
-                          border: active
-                            ? "1px solid rgba(168,85,247,0.6)"
-                            : "1px solid rgba(255,255,255,0.1)",
-                        }}
-                      >
-                        {c}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* ── Stock indicator pill ── (only when tracking on + variant chosen) */}
-            {product.track_stock && selectedVariant && (
+            {/* Stock indicator */}
+            {product.track_stock && matchingVariant && (
               <div
                 className="flex items-center gap-2 mb-6 px-4 py-2.5 rounded-xl border"
                 style={{
-                  background: selectedVariant.stock > 5
-                    ? "rgba(52,211,153,0.1)"
-                    : selectedVariant.stock > 0
-                    ? "rgba(251,191,36,0.1)"
-                    : "rgba(248,113,113,0.1)",
-                  borderColor: selectedVariant.stock > 5
-                    ? "rgba(52,211,153,0.25)"
-                    : selectedVariant.stock > 0
-                    ? "rgba(251,191,36,0.25)"
-                    : "rgba(248,113,113,0.25)",
-                  color: selectedVariant.stock > 5
-                    ? "#34d399"
-                    : selectedVariant.stock > 0
-                    ? "#fbbf24"
-                    : "#f87171",
+                  background:
+                    matchingVariant.stock > 5 ? "rgba(52,211,153,0.1)" : matchingVariant.stock > 0 ? "rgba(251,191,36,0.1)" : "rgba(248,113,113,0.1)",
+                  borderColor:
+                    matchingVariant.stock > 5 ? "rgba(52,211,153,0.25)" : matchingVariant.stock > 0 ? "rgba(251,191,36,0.25)" : "rgba(248,113,113,0.25)",
+                  color: matchingVariant.stock > 5 ? "#34d399" : matchingVariant.stock > 0 ? "#fbbf24" : "#f87171",
                 }}
               >
-                <span
-                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                  style={{ background: "currentColor" }}
-                />
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "currentColor" }} />
                 <span className="text-xs font-bold tracking-wider">
-                  {selectedVariant.stock > 5
-                    ? `${selectedVariant.stock} in stock`
-                    : selectedVariant.stock > 0
-                    ? `Only ${selectedVariant.stock} left!`
+                  {matchingVariant.stock > 5
+                    ? `${matchingVariant.stock} in stock`
+                    : matchingVariant.stock > 0
+                    ? `Only ${matchingVariant.stock} left!`
                     : "Out of stock"}
                 </span>
               </div>
             )}
 
-            {/* ── Order form card ── */}
+            {/* Personalisation section */}
+            <PersonalisationSection
+              product={product}
+              customValues={customValues}
+              onCustomValuesChange={setCustomValues}
+            />
+
+            {/* Order form card */}
             <div
               className="rounded-3xl border border-white/10 p-6"
               style={{ background: "rgba(255,255,255,0.03)" }}
@@ -722,7 +722,9 @@ export default function ProductPage() {
               </h3>
               <OrderForm
                 product={product}
-                selectedVariant={selectedVariant}
+                selectedVariant={matchingVariant}
+                customValues={customValues}
+                onCustomValuesChange={setCustomValues}
                 onSuccess={() => setOrderSuccess(true)}
               />
             </div>
@@ -730,7 +732,7 @@ export default function ProductPage() {
         </div>
       </div>
 
-      {/* ── Footer ── */}
+      {/* Footer */}
       <div className="border-t border-white/8 py-8">
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           <button

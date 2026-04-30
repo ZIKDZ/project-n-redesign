@@ -1,6 +1,5 @@
-# models.py
-
 from django.db import models
+from django.contrib.postgres.fields import ArrayField  # or use JSONField for flexibility
 
 CATEGORY_CHOICES = [
     ('jersey',    'Jersey'),
@@ -47,20 +46,42 @@ class Product(models.Model):
     banner        = models.ImageField(upload_to='shop/banners/', blank=True, null=True)
     banner_url    = models.URLField(blank=True, help_text='External URL fallback')
 
-    # Variants: [{"size": "M", "color": "black", "stock": 10}, ...]
-    variants      = models.JSONField(
-        default=list, blank=True,
-        help_text='List of size/color/stock variants'
+    # Variant system (NEW — dynamic attributes):
+    # {
+    #   "attributes": [
+    #     {"name": "Size", "type": "select", "values": ["XS", "S", "M", "L", "XL"]},
+    #     {"name": "Color", "type": "select", "values": ["Black", "White", "Red"]}
+    #   ],
+    #   "variants": [
+    #     {
+    #       "id": "var_1",
+    #       "values": {"Size": "M", "Color": "Black"},
+    #       "stock": 10,
+    #       "sku": "NBL-JERSEY-M-BLK"
+    #     },
+    #     ...
+    #   ]
+    # }
+    variant_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Dynamic variant attributes and combinations'
     )
 
-    # ── NEW: stock tracking toggle ──────────────────────────────────────────
+    # Custom fields: [{"label": "Back Name", "placeholder": "e.g. SMITH", "required": true}, ...]
+    custom_fields = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='Extra text inputs shown to the customer at order time'
+    )
+
     track_stock   = models.BooleanField(
         default=True,
-        help_text='When disabled, stock numbers are ignored and the product is always shown as available'
+        help_text='When disabled, stock numbers are ignored'
     )
 
     is_active     = models.BooleanField(default=True)
-    is_featured   = models.BooleanField(default=False, help_text='Show in hero/featured spot')
+    is_featured   = models.BooleanField(default=False)
     display_order = models.PositiveSmallIntegerField(default=0)
     created_at    = models.DateTimeField(auto_now_add=True)
     updated_at    = models.DateTimeField(auto_now=True)
@@ -76,26 +97,35 @@ class Product(models.Model):
             return self.banner.url
         return self.banner_url or ''
 
+    def get_attributes(self):
+        """Return list of variant attributes."""
+        return self.variant_config.get('attributes', [])
+
+    def get_variants(self):
+        """Return list of variant combinations."""
+        return self.variant_config.get('variants', [])
+
     def total_stock(self):
-        # If stock tracking is off, return None to signal "unlimited"
+        """Sum of all variant stocks."""
         if not self.track_stock:
             return None
-        return sum(v.get('stock', 0) for v in (self.variants or []))
+        return sum(v.get('stock', 0) for v in self.get_variants())
 
     def to_dict(self):
         return {
-            'id':            self.id,
-            'name':          self.name,
-            'description':   self.description,
-            'price':         str(self.price),
-            'category':      self.category,
-            'banner':        self.get_banner(),
-            'variants':      self.variants or [],
-            'track_stock':   self.track_stock,           # ← NEW
-            'total_stock':   self.total_stock(),          # None when tracking off
-            'is_active':     self.is_active,
-            'is_featured':   self.is_featured,
-            'display_order': self.display_order,
+            'id':              self.id,
+            'name':            self.name,
+            'description':     self.description,
+            'price':           str(self.price),
+            'category':        self.category,
+            'banner':          self.get_banner(),
+            'variant_config':  self.variant_config or {},
+            'custom_fields':   self.custom_fields or [],
+            'track_stock':     self.track_stock,
+            'total_stock':     self.total_stock(),
+            'is_active':       self.is_active,
+            'is_featured':     self.is_featured,
+            'display_order':   self.display_order,
         }
 
 
@@ -128,25 +158,31 @@ class Order(models.Model):
         Product, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='orders'
     )
-    product_name  = models.CharField(max_length=200, blank=True,
-                                     help_text='Snapshot in case product is deleted')
+    product_name  = models.CharField(max_length=200, blank=True)
 
-    variant_size  = models.CharField(max_length=50, blank=True)
-    variant_color = models.CharField(max_length=50, blank=True)
-    quantity      = models.PositiveSmallIntegerField(default=1)
+    # Variant selection: {"Size": "M", "Color": "Black"}
+    variant_values = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Selected variant attribute values'
+    )
+    quantity       = models.PositiveSmallIntegerField(default=1)
 
-    full_name     = models.CharField(max_length=150)
-    email         = models.EmailField()
-    phone         = models.CharField(max_length=30)
-    wilaya        = models.CharField(max_length=3, choices=WILAYA_CHOICES, blank=True)
-    address       = models.TextField(blank=True)
+    # Custom field answers: {"Back Name": "SMITH"}
+    custom_field_values = models.JSONField(default=dict, blank=True)
 
-    status        = models.CharField(
+    full_name      = models.CharField(max_length=150)
+    email          = models.EmailField()
+    phone          = models.CharField(max_length=30)
+    wilaya         = models.CharField(max_length=3, choices=WILAYA_CHOICES, blank=True)
+    address        = models.TextField(blank=True)
+
+    status         = models.CharField(
         max_length=20, choices=ORDER_STATUS_CHOICES, default='pending'
     )
-    notes         = models.TextField(blank=True, help_text='Staff notes')
-    submitted_at  = models.DateTimeField(auto_now_add=True)
-    updated_at    = models.DateTimeField(auto_now=True)
+    notes          = models.TextField(blank=True)
+    submitted_at   = models.DateTimeField(auto_now_add=True)
+    updated_at     = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-submitted_at']
@@ -156,21 +192,24 @@ class Order(models.Model):
 
     def to_dict(self):
         wilaya_label = dict(WILAYA_CHOICES).get(self.wilaya, self.wilaya)
+        # Format variant values as readable string
+        variant_str = ' / '.join(self.variant_values.values()) if self.variant_values else ''
         return {
-            'id':             self.id,
-            'product_id':     self.product_id,
-            'product_name':   self.product.name if self.product else self.product_name,
-            'product_banner': self.product.get_banner() if self.product else '',
-            'variant_size':   self.variant_size,
-            'variant_color':  self.variant_color,
-            'quantity':       self.quantity,
-            'full_name':      self.full_name,
-            'email':          self.email,
-            'phone':          self.phone,
-            'wilaya':         self.wilaya,
-            'wilaya_label':   wilaya_label,
-            'address':        self.address,
-            'status':         self.status,
-            'notes':          self.notes,
-            'submitted_at':   self.submitted_at.isoformat(),
+            'id':                  self.id,
+            'product_id':          self.product_id,
+            'product_name':        self.product.name if self.product else self.product_name,
+            'product_banner':      self.product.get_banner() if self.product else '',
+            'variant_values':      self.variant_values or {},
+            'variant_display':     variant_str,  # Human-readable
+            'quantity':            self.quantity,
+            'custom_field_values': self.custom_field_values or {},
+            'full_name':           self.full_name,
+            'email':               self.email,
+            'phone':               self.phone,
+            'wilaya':              self.wilaya,
+            'wilaya_label':        wilaya_label,
+            'address':             self.address,
+            'status':              self.status,
+            'notes':               self.notes,
+            'submitted_at':        self.submitted_at.isoformat(),
         }

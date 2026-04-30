@@ -7,9 +7,33 @@ import {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Variant = { size: string; color: string; stock: number }
+type VariantAttribute = {
+  name: string
+  type: 'select' | 'text'
+  values: string[]
+}
+
+type VariantCombination = {
+  id: string
+  values: Record<string, string>
+  stock: number
+  sku?: string
+}
+
+type VariantConfig = {
+  attributes: VariantAttribute[]
+  variants: VariantCombination[]
+}
+
+type CustomField = {
+  label: string
+  placeholder: string
+  required: boolean
+}
 
 type GalleryImage = { id: number; url: string; display_order: number }
+
+type StagedImage = { file: File; previewUrl: string; key: string }
 
 type Product = {
   id: number
@@ -18,7 +42,8 @@ type Product = {
   price: string
   category: string
   banner: string
-  variants: Variant[]
+  variant_config: VariantConfig
+  custom_fields: CustomField[]
   images: GalleryImage[]
   track_stock: boolean
   total_stock: number | null
@@ -32,9 +57,10 @@ type Order = {
   product_id: number | null
   product_name: string
   product_banner: string
-  variant_size: string
-  variant_color: string
+  variant_values: Record<string, string>
+  variant_display: string
   quantity: number
+  custom_field_values: Record<string, string>
   full_name: string
   email: string
   phone: string
@@ -49,82 +75,324 @@ type Order = {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const CATEGORY_LABELS: Record<string, string> = {
-  jersey: 'Jersey', hoodie: 'Hoodie', cap: 'Cap', accessory: 'Accessory', other: 'Other',
+  jersey: 'Jersey',
+  hoodie: 'Hoodie',
+  cap: 'Cap',
+  accessory: 'Accessory',
+  other: 'Other',
 }
 
-const ORDER_STATUS_COLORS: Record<string, 'gray' | 'yellow' | 'purple' | 'green' | 'red'> = {
-  pending: 'yellow', confirmed: 'purple', shipped: 'purple', delivered: 'green', cancelled: 'red',
-}
-
-const getCsrf  = getCsrfToken
+const getCsrf = getCsrfToken
 const PAGE_SIZE = 8
 
-// ── VariantEditor ─────────────────────────────────────────────────────────────
+// ── Shared input styles ───────────────────────────────────────────────────────
 
-function VariantEditor({
-  variants,
+const inputCls =
+  'bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-xs ' +
+  'focus:outline-none focus:border-purple-500/60 w-full placeholder-white/20'
+
+const selectCls =
+  'bg-[#1a0030] border border-white/10 rounded-lg px-3 py-2 text-white text-xs ' +
+  'focus:outline-none focus:border-purple-500/60 w-full cursor-pointer'
+
+const labelCls = 'block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1'
+
+// ── VariantBuilder Component ─────────────────────────────────────────────────
+
+function VariantBuilder({
+  config,
   onChange,
   trackStock,
 }: {
-  variants: Variant[]
-  onChange: (v: Variant[]) => void
+  config: VariantConfig
+  onChange: (cfg: VariantConfig) => void
   trackStock: boolean
 }) {
-  const add    = () => onChange([...variants, { size: '', color: '', stock: 0 }])
-  const remove = (i: number) => onChange(variants.filter((_, idx) => idx !== i))
-  const update = (i: number, field: keyof Variant, value: string | number) =>
-    onChange(variants.map((v, idx) => (idx === i ? { ...v, [field]: value } : v)))
+  const [attrName, setAttrName] = useState('')
+  const [attrValues, setAttrValues] = useState('')
 
-  const inputClass =
-    'bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs ' +
-    'focus:outline-none focus:border-purple-500/60 w-full placeholder-white/20'
+  const addAttribute = () => {
+    if (!attrName.trim() || !attrValues.trim()) return
+
+    const newAttr: VariantAttribute = {
+      name: attrName,
+      type: 'select',
+      values: attrValues.split(',').map(v => v.trim()).filter(Boolean),
+    }
+
+    onChange({
+      ...config,
+      attributes: [...config.attributes, newAttr],
+      variants: [],
+    })
+
+    setAttrName('')
+    setAttrValues('')
+  }
+
+  const removeAttribute = (idx: number) => {
+    onChange({
+      ...config,
+      attributes: config.attributes.filter((_, i) => i !== idx),
+      variants: [],
+    })
+  }
+
+  const generateVariants = () => {
+    if (config.attributes.length === 0) return
+
+    const combinations: VariantCombination[] = []
+
+    const generate = (attrIdx: number, currentValues: Record<string, string> = {}) => {
+      if (attrIdx === config.attributes.length) {
+        combinations.push({
+          id: `var_${combinations.length}`,
+          values: { ...currentValues },
+          stock: 0,
+        })
+        return
+      }
+
+      const attr = config.attributes[attrIdx]
+      for (const value of attr.values) {
+        generate(attrIdx + 1, { ...currentValues, [attr.name]: value })
+      }
+    }
+
+    generate(0)
+    onChange({ ...config, variants: combinations })
+  }
+
+  const updateVariant = (varIdx: number, field: keyof VariantCombination, value: any) => {
+    const updated = [...config.variants]
+    updated[varIdx] = { ...updated[varIdx], [field]: value }
+    onChange({ ...config, variants: updated })
+  }
+
+  const removeVariant = (varIdx: number) => {
+    onChange({ ...config, variants: config.variants.filter((_, i) => i !== varIdx) })
+  }
 
   return (
-    <div className="space-y-2">
-      {/* Column headers */}
-      <div className={`grid gap-2 mb-1 ${trackStock ? 'grid-cols-[1fr_1fr_80px_28px]' : 'grid-cols-[1fr_1fr_28px]'}`}>
-        {['Size', 'Color', ...(trackStock ? ['Stock'] : []), ''].map(h => (
-          <span key={h} className="text-white/25 text-[9px] font-bold tracking-widest uppercase px-1">{h}</span>
-        ))}
+    <div className="space-y-5">
+      {/* Attribute Manager */}
+      <div className="border border-white/10 rounded-xl p-4 space-y-3">
+        <p className="text-white/30 text-xs tracking-widest uppercase">Add Variant Attributes</p>
+
+        <div>
+          <label className={labelCls}>Attribute Name</label>
+          <input
+            placeholder="e.g. Size"
+            value={attrName}
+            onChange={e => setAttrName(e.target.value)}
+            className={inputCls}
+          />
+        </div>
+
+        <div>
+          <label className={labelCls}>Values (comma-separated)</label>
+          <input
+            placeholder="e.g. XS, S, M, L, XL"
+            value={attrValues}
+            onChange={e => setAttrValues(e.target.value)}
+            className={inputCls}
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={addAttribute}
+          className="text-purple-400/60 hover:text-purple-400 text-xs font-bold tracking-widest uppercase flex items-center gap-1.5 cursor-pointer transition-colors"
+        >
+          <span className="text-base leading-none">+</span> Add Attribute
+        </button>
       </div>
 
-      {variants.map((v, i) => (
-        <div
-          key={i}
-          className={`grid gap-2 items-center ${trackStock ? 'grid-cols-[1fr_1fr_80px_28px]' : 'grid-cols-[1fr_1fr_28px]'}`}
+      {/* Attributes list */}
+      {config.attributes.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-white/30 text-xs tracking-widest uppercase">Attributes ({config.attributes.length})</p>
+          {config.attributes.map((attr, i) => (
+            <div
+              key={i}
+              className="bg-white/3 border border-white/8 rounded-lg p-3 flex items-center justify-between"
+            >
+              <div>
+                <p className="text-white font-bold text-sm">{attr.name}</p>
+                <p className="text-white/40 text-xs">{attr.values.join(', ')}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeAttribute(i)}
+                className="w-7 h-7 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20
+                           text-red-400/70 hover:text-red-400 flex items-center justify-center
+                           transition-all cursor-pointer"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Generate variants button */}
+      {config.attributes.length > 0 && (
+        <button
+          type="button"
+          onClick={generateVariants}
+          className="w-full bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30
+                     text-purple-300 font-bold px-4 py-3 rounded-lg text-xs tracking-widest uppercase
+                     transition-all cursor-pointer"
         >
-          <input
-            placeholder="Size (e.g. M)"
-            value={v.size}
-            onChange={e => update(i, 'size', e.target.value)}
-            className={inputClass}
-          />
-          <input
-            placeholder="Color (e.g. black)"
-            value={v.color}
-            onChange={e => update(i, 'color', e.target.value)}
-            className={inputClass}
-          />
-          {trackStock && (
-            <input
-              type="number"
-              min="0"
-              placeholder="Stock"
-              value={v.stock}
-              onChange={e => update(i, 'stock', parseInt(e.target.value) || 0)}
-              className={inputClass}
-            />
-          )}
-          <button
-            type="button"
-            onClick={() => remove(i)}
-            className="w-7 h-7 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20
-                       text-red-400/70 hover:text-red-400 flex items-center justify-center transition-all cursor-pointer"
-          >
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          Generate {Math.pow(config.attributes.reduce((p, a) => p * a.values.length, 1), 1)} Combinations
+        </button>
+      )}
+
+      {/* Variants list */}
+      {config.variants.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-white/30 text-xs tracking-widest uppercase">
+              Variants ({config.variants.length})
+            </p>
+            <button
+              type="button"
+              onClick={() => onChange({ ...config, variants: [] })}
+              className="text-red-400 hover:text-red-300 text-xs font-bold cursor-pointer"
+            >
+              Clear All
+            </button>
+          </div>
+
+          <div className="max-h-96 overflow-y-auto space-y-2">
+            {config.variants.map((variant, idx) => (
+              <div key={variant.id} className="bg-white/3 border border-white/8 rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-white/60 text-xs font-bold">
+                    {Object.entries(variant.values)
+                      .map(([k, v]) => `${k}: ${v}`)
+                      .join(' · ')}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => removeVariant(idx)}
+                    className="w-6 h-6 rounded bg-red-500/10 hover:bg-red-500/20 border border-red-500/20
+                               text-red-400/70 hover:text-red-400 flex items-center justify-center
+                               transition-all cursor-pointer text-xs"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className={`grid gap-2 ${trackStock ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                  <div>
+                    <label className={labelCls}>SKU (Optional)</label>
+                    <input
+                      placeholder="e.g. NBL-JERSEY-M-BLK"
+                      value={variant.sku || ''}
+                      onChange={e => updateVariant(idx, 'sku', e.target.value)}
+                      className={inputCls}
+                    />
+                  </div>
+                  {trackStock && (
+                    <div>
+                      <label className={labelCls}>Stock</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={variant.stock}
+                        onChange={e => updateVariant(idx, 'stock', parseInt(e.target.value) || 0)}
+                        className={inputCls}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── CustomFieldEditor ─────────────────────────────────────────────────────────
+
+function CustomFieldEditor({
+  fields,
+  onChange,
+}: {
+  fields: CustomField[]
+  onChange: (f: CustomField[]) => void
+}) {
+  const add = () => onChange([...fields, { label: '', placeholder: '', required: false }])
+  const remove = (i: number) => onChange(fields.filter((_, idx) => idx !== i))
+  const update = <K extends keyof CustomField>(i: number, key: K, val: CustomField[K]) =>
+    onChange(fields.map((f, idx) => (idx === i ? { ...f, [key]: val } : f)))
+
+  return (
+    <div className="space-y-3">
+      <p className="text-white/25 text-[10px] tracking-widest">
+        These fields appear as text inputs on the product page when a customer places an order.
+        Use them for things like jersey back names, numbers, or personalisation details.
+      </p>
+
+      {fields.map((f, i) => (
+        <div key={i} className="bg-white/3 border border-white/8 rounded-xl p-3 space-y-2">
+          <div className="grid grid-cols-[1fr_1fr_28px] gap-2 items-start">
+            <div>
+              <label className={labelCls}>Field Label</label>
+              <input
+                placeholder="e.g. Back Name"
+                value={f.label}
+                onChange={e => update(i, 'label', e.target.value)}
+                className={inputCls}
+              />
+            </div>
+
+            <div>
+              <label className={labelCls}>Placeholder</label>
+              <input
+                placeholder="e.g. SMITH"
+                value={f.placeholder}
+                onChange={e => update(i, 'placeholder', e.target.value)}
+                className={inputCls}
+              />
+            </div>
+
+            <div className="pt-5">
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                className="w-7 h-7 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20
+                           text-red-400/70 hover:text-red-400 flex items-center justify-center
+                           transition-all cursor-pointer"
+              >
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => update(i, 'required', !f.required)}
+              className={`w-8 h-4 rounded-full transition-colors duration-200 relative shrink-0
+                          ${f.required ? 'bg-purple-600' : 'bg-white/10'}`}
+            >
+              <span
+                className="absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all duration-200"
+                style={{ left: f.required ? '13px' : '2px' }}
+              />
+            </button>
+            <span className="text-white/35 text-[10px] font-bold tracking-widest uppercase">
+              {f.required ? 'Required' : 'Optional'}
+            </span>
+          </div>
         </div>
       ))}
 
@@ -132,17 +400,15 @@ function VariantEditor({
         type="button"
         onClick={add}
         className="flex items-center gap-1.5 text-purple-400/60 hover:text-purple-400
-                   text-[10px] font-bold tracking-widest uppercase transition-colors cursor-pointer mt-1"
+                   text-[10px] font-bold tracking-widest uppercase transition-colors cursor-pointer"
       >
-        <span className="text-base leading-none">+</span> Add Variant
+        <span className="text-base leading-none">+</span> Add Custom Field
       </button>
     </div>
   )
 }
 
 // ── GalleryEditor ─────────────────────────────────────────────────────────────
-
-type StagedImage = { file: File; previewUrl: string; key: string }
 
 function GalleryEditor({
   existing,
@@ -241,7 +507,6 @@ function GalleryEditor({
 
 // ── ProductModal ──────────────────────────────────────────────────────────────
 
-// ProductModal
 function ProductModal({
   initial,
   isEdit,
@@ -253,38 +518,33 @@ function ProductModal({
   onSave: (fd: FormData, deletedImageIds: number[]) => Promise<void>
   onClose: () => void
 }) {
-  const [tab, setTab] = useState<'general' | 'variants' | 'settings'>('general')
+  const [tab, setTab] = useState<'general' | 'variants' | 'custom' | 'settings'>('general')
   const backdropRef = useRef<HTMLDivElement>(null)
-  const modalRef = useRef<HTMLDivElement>(null)
-  
+
   const [form, setForm] = useState({
-    name:          initial.name          || '',
-    description:   initial.description   || '',
-    price:         initial.price         || '',
-    category:      initial.category      || 'jersey',
-    is_active:     initial.is_active     !== false,
-    is_featured:   initial.is_featured   || false,
-    track_stock:   initial.track_stock   !== false,
+    name: initial.name || '',
+    description: initial.description || '',
+    price: initial.price || '',
+    category: initial.category || 'jersey',
+    is_active: initial.is_active !== false,
+    is_featured: initial.is_featured || false,
+    track_stock: initial.track_stock !== false,
     display_order: initial.display_order ?? 0,
   })
-  const [variants,      setVariants]      = useState<Variant[]>(initial.variants || [])
-  const [bannerFile,    setBannerFile]    = useState<File | null>(null)
+
+  const [variantConfig, setVariantConfig] = useState<VariantConfig>(
+    initial.variant_config || { attributes: [], variants: [] }
+  )
+  const [customFields, setCustomFields] = useState<CustomField[]>(initial.custom_fields || [])
+  const [bannerFile, setBannerFile] = useState<File | null>(null)
   const [bannerPreview, setBannerPreview] = useState(initial.banner || '')
   const bannerRef = useRef<HTMLInputElement>(null)
 
-  const [existingImages,  setExistingImages]  = useState<GalleryImage[]>(initial.images || [])
-  const [stagedImages,    setStagedImages]    = useState<StagedImage[]>([])
+  const [existingImages, setExistingImages] = useState<GalleryImage[]>(initial.images || [])
+  const [stagedImages, setStagedImages] = useState<StagedImage[]>([])
   const [deletedImageIds, setDeletedImageIds] = useState<number[]>([])
 
   const [saving, setSaving] = useState(false)
-
-  const inputClass =
-    'bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-xs ' +
-    'focus:outline-none focus:border-purple-500/60 w-full placeholder-white/20'
-  const selectClass =
-    'bg-[#1a0030] border border-white/10 rounded-lg px-3 py-2 text-white text-xs ' +
-    'focus:outline-none focus:border-purple-500/60 w-full cursor-pointer'
-  const labelClass = 'block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1'
 
   const handleBannerFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] || null
@@ -299,9 +559,9 @@ function ProductModal({
 
   const handleAddStaged = (files: File[]) => {
     const next: StagedImage[] = files.map(f => ({
-      file:       f,
+      file: f,
       previewUrl: URL.createObjectURL(f),
-      key:        `${f.name}-${Date.now()}-${Math.random()}`,
+      key: `${f.name}-${Date.now()}-${Math.random()}`,
     }))
     setStagedImages(prev => [...prev, ...next])
   }
@@ -320,7 +580,8 @@ function ProductModal({
     try {
       const fd = new FormData()
       Object.entries(form).forEach(([k, v]) => fd.append(k, String(v)))
-      fd.append('variants', JSON.stringify(variants))
+      fd.append('variant_config', JSON.stringify(variantConfig))
+      fd.append('custom_fields', JSON.stringify(customFields))
       if (bannerFile) fd.append('banner', bannerFile)
       stagedImages.forEach((s, i) => fd.append(`gallery_${i}`, s.file))
 
@@ -337,21 +598,26 @@ function ProductModal({
     setForm(p => ({ ...p, [key]: !(p as any)[key] }))
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // Only close if backdrop was clicked AND there's no text selection
     if (e.target === backdropRef.current && window.getSelection()?.toString() === '') {
       onClose()
     }
   }
 
   const TOGGLES = [
-    { key: 'is_active',   on: 'Active',    off: 'Inactive',     sub: 'Visible in shop' },
-    { key: 'is_featured', on: 'Featured',  off: 'Not Featured', sub: 'Shown in hero' },
-    { key: 'track_stock', on: 'Tracking Stock', off: 'Stock Tracking Off', sub: form.track_stock ? 'Stock counts enforced' : 'Always shown as available' },
+    { key: 'is_active', on: 'Active', off: 'Inactive', sub: 'Visible in shop' },
+    { key: 'is_featured', on: 'Featured', off: 'Not Featured', sub: 'Shown in hero' },
+    {
+      key: 'track_stock',
+      on: 'Tracking Stock',
+      off: 'Stock Tracking Off',
+      sub: form.track_stock ? 'Stock counts enforced' : 'Always shown as available',
+    },
   ] as const
 
   const TABS = [
     { id: 'general', label: '🎨 General' },
     { id: 'variants', label: '📦 Variants' },
+    { id: 'custom', label: `✏️ Custom Fields${customFields.length ? ` (${customFields.length})` : ''}` },
     { id: 'settings', label: '⚙ Settings' },
   ] as const
 
@@ -363,8 +629,8 @@ function ProductModal({
       onClick={handleBackdropClick}
     >
       <div
-        ref={modalRef}
-        className="bg-[#13001f] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl shadow-purple-900/30 flex flex-col my-auto"
+        className="bg-[#13001f] border border-white/10 rounded-3xl w-full max-w-2xl shadow-2xl
+                   shadow-purple-900/30 flex flex-col my-auto"
         style={{ maxHeight: '90vh' }}
       >
         {/* Header */}
@@ -380,7 +646,12 @@ function ProductModal({
               {isEdit ? 'Update product details' : 'Create a new shop product'}
             </p>
           </div>
-          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors text-xl cursor-pointer">✕</button>
+          <button
+            onClick={onClose}
+            className="text-white/30 hover:text-white transition-colors text-xl cursor-pointer"
+          >
+            ✕
+          </button>
         </div>
 
         {/* Tabs */}
@@ -388,9 +659,14 @@ function ProductModal({
           {TABS.map(t => (
             <button
               key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-black tracking-widest uppercase transition-all duration-150 cursor-pointer
-                ${tab === t.id ? 'bg-purple-600/25 text-purple-300 border border-purple-500/30' : 'text-white/30 hover:text-white/60'}`}
+              onClick={() => setTab(t.id as typeof tab)}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-black tracking-widest uppercase
+                          transition-all duration-150 cursor-pointer
+                ${
+                  tab === t.id
+                    ? 'bg-purple-600/25 text-purple-300 border border-purple-500/30'
+                    : 'text-white/30 hover:text-white/60'
+                }`}
             >
               {t.label}
             </button>
@@ -398,14 +674,16 @@ function ProductModal({
         </div>
 
         {/* Body */}
-        <div className="overflow-y-auto flex-1 px-6 py-3" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-
+        <div
+          className="overflow-y-auto flex-1 px-6 py-3"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
           {/* ── GENERAL TAB ── */}
           {tab === 'general' && (
             <div className="space-y-5">
               {/* Banner */}
               <div>
-                <label className={labelClass}>Primary / Banner Image</label>
+                <label className={labelCls}>Primary / Banner Image</label>
                 <div className="flex items-start gap-4">
                   <div
                     className="w-40 h-40 rounded-2xl border-2 border-dashed border-white/10 flex items-center
@@ -425,7 +703,13 @@ function ProductModal({
                     )}
                   </div>
                   <div className="flex-1 space-y-2">
-                    <input ref={bannerRef} type="file" accept="image/*" onChange={handleBannerFile} className="hidden" />
+                    <input
+                      ref={bannerRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleBannerFile}
+                      className="hidden"
+                    />
                     <button
                       type="button"
                       onClick={() => bannerRef.current?.click()}
@@ -442,9 +726,9 @@ function ProductModal({
                 </div>
               </div>
 
-              {/* Gallery images */}
+              {/* Gallery */}
               <div>
-                <label className={labelClass}>
+                <label className={labelCls}>
                   Gallery Images
                   <span className="normal-case text-white/20 ml-1">
                     ({existingImages.length + stagedImages.length})
@@ -462,51 +746,57 @@ function ProductModal({
               {/* Basic info */}
               <div className="space-y-3">
                 <div>
-                  <label className={labelClass}>Product Name *</label>
+                  <label className={labelCls}>Product Name *</label>
                   <input
                     placeholder="e.g. NBL Esport Official Jersey 2026"
                     value={form.name}
                     onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                    className={inputClass}
+                    className={inputCls}
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Price (DZD) *</label>
+                  <label className={labelCls}>Price (DZD) *</label>
                   <input
-                    type="number" min="0" step="0.01" placeholder="e.g. 4500"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 4500"
                     value={form.price}
                     onChange={e => setForm(p => ({ ...p, price: e.target.value }))}
-                    className={inputClass}
+                    className={inputCls}
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Category</label>
+                  <label className={labelCls}>Category</label>
                   <select
                     value={form.category}
                     onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
-                    className={selectClass}
+                    className={selectCls}
                   >
                     {Object.entries(CATEGORY_LABELS).map(([v, l]) => (
-                      <option key={v} value={v} className="bg-[#1a0030]">{l}</option>
+                      <option key={v} value={v} className="bg-[#1a0030]">
+                        {l}
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className={labelClass}>Display Order</label>
+                  <label className={labelCls}>Display Order</label>
                   <input
-                    type="number" min="0"
+                    type="number"
+                    min="0"
                     value={form.display_order}
                     onChange={e => setForm(p => ({ ...p, display_order: parseInt(e.target.value) || 0 }))}
-                    className={inputClass}
+                    className={inputCls}
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Description</label>
+                  <label className={labelCls}>Description</label>
                   <textarea
                     placeholder="Describe the product — material, fit, design details…"
                     value={form.description}
                     onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                    className={inputClass + ' h-20 resize-none'}
+                    className={inputCls + ' h-20 resize-none'}
                   />
                 </div>
               </div>
@@ -516,22 +806,25 @@ function ProductModal({
           {/* ── VARIANTS TAB ── */}
           {tab === 'variants' && (
             <div className="py-1">
-              <p className="text-white/25 text-[10px] tracking-widest mb-4">
-                Define available size and color combinations.
-                {form.track_stock && ' Stock quantities will be tracked per variant.'}
+              <p className="text-white/25 text-xs tracking-widest mb-4">
+                Create dynamic variant attributes and generate all combinations
+                {form.track_stock ? ' with stock tracking' : ''}.
               </p>
-              <VariantEditor
-                variants={variants}
-                onChange={setVariants}
-                trackStock={form.track_stock}
-              />
+              <VariantBuilder config={variantConfig} onChange={setVariantConfig} trackStock={form.track_stock} />
+            </div>
+          )}
+
+          {/* ── CUSTOM FIELDS TAB ── */}
+          {tab === 'custom' && (
+            <div className="py-1">
+              <CustomFieldEditor fields={customFields} onChange={setCustomFields} />
             </div>
           )}
 
           {/* ── SETTINGS TAB ── */}
           {tab === 'settings' && (
             <div className="space-y-3 py-1">
-              <p className="text-white/25 text-[10px] tracking-widest">Product behavior and visibility</p>
+              <p className="text-white/25 text-xs tracking-widest">Product behavior and visibility</p>
               {TOGGLES.map(({ key, on, off, sub }) => (
                 <div key={key} className="flex items-center gap-3 bg-white/3 border border-white/8 rounded-xl p-3">
                   <button
@@ -555,7 +848,6 @@ function ProductModal({
               ))}
             </div>
           )}
-
         </div>
 
         {/* Footer */}
@@ -570,14 +862,17 @@ function ProductModal({
           >
             {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Product'}
           </button>
-          <ActionButton variant="ghost" onClick={onClose}>Cancel</ActionButton>
+          <ActionButton variant="ghost" onClick={onClose}>
+            Cancel
+          </ActionButton>
         </div>
       </div>
     </div>
   )
 }
 
-// OrderModal
+// ── OrderModal ────────────────────────────────────────────────────────────────
+
 function OrderModal({
   order,
   onSave,
@@ -588,23 +883,18 @@ function OrderModal({
   onClose: () => void
 }) {
   const [status, setStatus] = useState(order.status)
-  const [notes,  setNotes]  = useState(order.notes || '')
+  const [notes, setNotes] = useState(order.notes || '')
   const [saving, setSaving] = useState(false)
   const backdropRef = useRef<HTMLDivElement>(null)
-  const modalRef = useRef<HTMLDivElement>(null)
-
-  const selectClass =
-    'bg-[#1a0030] border border-white/10 rounded-lg px-3 py-2 text-white text-xs ' +
-    'focus:outline-none focus:border-purple-500/60 w-full cursor-pointer'
 
   const STATUS_STEPS = ['pending', 'confirmed', 'shipped', 'delivered']
-  const currentStep  = STATUS_STEPS.indexOf(status)
+  const currentStep = STATUS_STEPS.indexOf(status)
 
   const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-    pending:   { label: 'Pending',   color: '#fbbf24', bg: 'rgba(251,191,36,0.15)'  },
-    confirmed: { label: 'Confirmed', color: '#a855f7', bg: 'rgba(168,85,247,0.15)'  },
-    shipped:   { label: 'Shipped',   color: '#60a5fa', bg: 'rgba(96,165,250,0.15)'  },
-    delivered: { label: 'Delivered', color: '#34d399', bg: 'rgba(52,211,153,0.15)'  },
+    pending: { label: 'Pending', color: '#fbbf24', bg: 'rgba(251,191,36,0.15)' },
+    confirmed: { label: 'Confirmed', color: '#a855f7', bg: 'rgba(168,85,247,0.15)' },
+    shipped: { label: 'Shipped', color: '#60a5fa', bg: 'rgba(96,165,250,0.15)' },
+    delivered: { label: 'Delivered', color: '#34d399', bg: 'rgba(52,211,153,0.15)' },
     cancelled: { label: 'Cancelled', color: '#f87171', bg: 'rgba(248,113,113,0.15)' },
   }
 
@@ -623,7 +913,6 @@ function OrderModal({
   }
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // Only close if backdrop was clicked AND there's no text selection
     if (e.target === backdropRef.current && window.getSelection()?.toString() === '') {
       onClose()
     }
@@ -632,12 +921,19 @@ function OrderModal({
   const formattedDate = (() => {
     try {
       return new Date(order.submitted_at).toLocaleDateString('en-GB', {
-        day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
       })
     } catch {
       return order.submitted_at
     }
   })()
+
+  const customEntries = Object.entries(order.custom_field_values || {}).filter(([, v]) => v)
+  const variantEntries = Object.entries(order.variant_values || {}).filter(([, v]) => v)
 
   return (
     <div
@@ -647,10 +943,11 @@ function OrderModal({
       onClick={handleBackdropClick}
     >
       <div
-        ref={modalRef}
-        className="bg-[#13001f] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl shadow-purple-900/30 flex flex-col my-auto"
+        className="bg-[#13001f] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl
+                   shadow-purple-900/30 flex flex-col my-auto"
         style={{ maxHeight: '90vh' }}
       >
+        {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-white/8 shrink-0">
           <div>
             <h3
@@ -668,11 +965,16 @@ function OrderModal({
             >
               {cfg.label}
             </span>
-            <button onClick={onClose} className="text-white/30 hover:text-white transition-colors text-xl cursor-pointer">✕</button>
+            <button onClick={onClose} className="text-white/30 hover:text-white transition-colors text-xl cursor-pointer">
+              ✕
+            </button>
           </div>
         </div>
 
-        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-5" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        <div
+          className="overflow-y-auto flex-1 px-6 py-4 space-y-5"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
           {/* Progress tracker */}
           {status !== 'cancelled' && (
             <div className="relative">
@@ -681,7 +983,7 @@ function OrderModal({
                 <div
                   className="absolute left-0 top-3.5 h-0.5 z-0 transition-all duration-500"
                   style={{
-                    width:      `${currentStep <= 0 ? 0 : (currentStep / (STATUS_STEPS.length - 1)) * 100}%`,
+                    width: `${currentStep <= 0 ? 0 : (currentStep / (STATUS_STEPS.length - 1)) * 100}%`,
                     background: cfg.color,
                   }}
                 />
@@ -693,12 +995,19 @@ function OrderModal({
                       <div
                         className="w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all duration-300"
                         style={{
-                          background:   done ? sCfg.bg : 'rgba(255,255,255,0.05)',
-                          borderColor:  done ? sCfg.color : 'rgba(255,255,255,0.15)',
+                          background: done ? sCfg.bg : 'rgba(255,255,255,0.05)',
+                          borderColor: done ? sCfg.color : 'rgba(255,255,255,0.15)',
                         }}
                       >
                         {done ? (
-                          <svg className="w-3.5 h-3.5" style={{ color: sCfg.color }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <svg
+                            className="w-3.5 h-3.5"
+                            style={{ color: sCfg.color }}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={3}
+                          >
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                           </svg>
                         ) : (
@@ -730,14 +1039,9 @@ function OrderModal({
             <div className="flex-1 min-w-0">
               <p className="text-white font-bold text-sm truncate">{order.product_name}</p>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                {order.variant_size && (
+                {order.variant_display && (
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/20">
-                    {order.variant_size}
-                  </span>
-                )}
-                {order.variant_color && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/8 text-white/50 border border-white/10">
-                    {order.variant_color}
+                    {order.variant_display}
                   </span>
                 )}
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/8 text-white/50 border border-white/10">
@@ -747,42 +1051,80 @@ function OrderModal({
             </div>
           </div>
 
+          {/* Variant values */}
+          {variantEntries.length > 0 && (
+            <div className="bg-blue-500/8 border border-blue-500/20 rounded-2xl p-4 space-y-2">
+              <p className="text-blue-300/60 text-[10px] font-bold tracking-widest uppercase mb-3">
+                Variant Details
+              </p>
+              {variantEntries.map(([label, value]) => (
+                <div key={label} className="flex justify-between items-start py-1.5 border-b border-white/5 gap-3 last:border-0">
+                  <span className="text-white/35 text-xs font-bold tracking-widest uppercase shrink-0">{label}</span>
+                  <span className="text-white text-xs text-right font-bold">{value}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Custom field values */}
+          {customEntries.length > 0 && (
+            <div className="bg-purple-500/8 border border-purple-500/20 rounded-2xl p-4 space-y-2">
+              <p className="text-purple-300/60 text-[10px] font-bold tracking-widest uppercase mb-3">
+                Personalisation
+              </p>
+              {customEntries.map(([label, value]) => (
+                <div key={label} className="flex justify-between items-start py-1.5 border-b border-white/5 gap-3 last:border-0">
+                  <span className="text-white/35 text-xs font-bold tracking-widest uppercase shrink-0">{label}</span>
+                  <span className="text-white text-xs text-right font-bold">{value}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Customer details */}
           <div className="space-y-2">
             <p className="text-white/30 text-[10px] font-bold tracking-widest uppercase mb-2">Customer</p>
             {[
-              { label: 'Name',    value: order.full_name },
-              { label: 'Email',   value: order.email },
-              { label: 'Phone',   value: order.phone },
-              { label: 'Wilaya',  value: order.wilaya_label || order.wilaya },
+              { label: 'Name', value: order.full_name },
+              { label: 'Email', value: order.email },
+              { label: 'Phone', value: order.phone },
+              { label: 'Wilaya', value: order.wilaya_label || order.wilaya },
               { label: 'Address', value: order.address },
-            ].filter(r => r.value).map(row => (
-              <div key={row.label} className="flex justify-between items-start py-2 border-b border-white/5 gap-3">
-                <span className="text-white/35 text-xs font-bold tracking-widest uppercase shrink-0">{row.label}</span>
-                <span className="text-white text-xs text-right">{row.value}</span>
-              </div>
-            ))}
+            ]
+              .filter(r => r.value)
+              .map(row => (
+                <div key={row.label} className="flex justify-between items-start py-2 border-b border-white/5 gap-3">
+                  <span className="text-white/35 text-xs font-bold tracking-widest uppercase shrink-0">{row.label}</span>
+                  <span className="text-white text-xs text-right">{row.value}</span>
+                </div>
+              ))}
           </div>
 
           {/* Status update */}
           <div>
-            <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">Update Status</label>
-            <select value={status} onChange={e => setStatus(e.target.value)} className={selectClass}>
+            <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">
+              Update Status
+            </label>
+            <select value={status} onChange={e => setStatus(e.target.value)} className={selectCls}>
               {Object.entries(STATUS_CONFIG).map(([v, c]) => (
-                <option key={v} value={v} className="bg-[#1a0030]">{c.label}</option>
+                <option key={v} value={v} className="bg-[#1a0030]">
+                  {c.label}
+                </option>
               ))}
             </select>
           </div>
 
           {/* Notes */}
           <div>
-            <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">Staff Notes</label>
+            <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">
+              Staff Notes
+            </label>
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
               placeholder="Internal notes about this order…"
-              className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-xs placeholder-white/20
-                         focus:outline-none focus:border-purple-500/60 resize-none h-20 w-full"
+              className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-xs
+                         placeholder-white/20 focus:outline-none focus:border-purple-500/60 resize-none h-20 w-full"
             />
           </div>
         </div>
@@ -797,7 +1139,9 @@ function OrderModal({
           >
             {saving ? 'Saving…' : 'Save Changes'}
           </button>
-          <ActionButton variant="ghost" onClick={onClose}>Close</ActionButton>
+          <ActionButton variant="ghost" onClick={onClose}>
+            Close
+          </ActionButton>
         </div>
       </div>
     </div>
@@ -824,11 +1168,7 @@ function ProductCard({
     ? 'Out of Stock'
     : `${totalStock} in stock`
 
-  const stockColor = !trackStock
-    ? '#60a5fa'
-    : totalStock === 0 ? '#f87171'
-    : (totalStock ?? 0) < 5 ? '#fbbf24'
-    : '#34d399'
+  const stockColor = !trackStock ? '#60a5fa' : totalStock === 0 ? '#f87171' : (totalStock ?? 0) < 5 ? '#fbbf24' : '#34d399'
 
   return (
     <div
@@ -849,7 +1189,7 @@ function ProductCard({
         )}
         <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, #0c001a 0%, transparent 60%)' }} />
 
-        {/* Top-left badges */}
+        {/* Badges */}
         <div className="absolute top-3 left-3 flex gap-1.5 flex-wrap max-w-[60%]">
           {product.is_featured && (
             <span
@@ -872,9 +1212,16 @@ function ProductCard({
               ∞ No Tracking
             </span>
           )}
+          {(product.custom_fields?.length ?? 0) > 0 && (
+            <span
+              className="text-[9px] font-black tracking-widest uppercase px-2 py-1 rounded-full"
+              style={{ background: 'rgba(168,85,247,0.15)', color: '#c084fc', border: '1px solid rgba(168,85,247,0.25)' }}
+            >
+              ✏ {product.custom_fields.length} field{product.custom_fields.length > 1 ? 's' : ''}
+            </span>
+          )}
         </div>
 
-        {/* Stock badge top-right */}
         <div className="absolute top-3 right-3">
           <span
             className="text-[9px] font-black tracking-widest uppercase px-2 py-1 rounded-full"
@@ -884,7 +1231,6 @@ function ProductCard({
           </span>
         </div>
 
-        {/* Gallery image count badge */}
         {(product.images?.length ?? 0) > 0 && (
           <div className="absolute bottom-3 right-3">
             <span className="text-[9px] font-bold px-2 py-1 rounded-full bg-black/50 text-white/50 border border-white/10 flex items-center gap-1">
@@ -918,20 +1264,30 @@ function ProductCard({
           </span>
         </div>
 
-        {/* Variant pills */}
-        {product.variants.length > 0 && (
+        {product.variant_config?.variants && product.variant_config.variants.length > 0 && (
           <div className="flex flex-wrap gap-1">
-            {product.variants.slice(0, 4).map((v, i) => (
+            {product.variant_config.variants.slice(0, 4).map((v, i) => (
               <span key={i} className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-white/30 border border-white/8">
-                {[v.size, v.color].filter(Boolean).join(' / ')}
+                {Object.values(v.values).join(' / ')}
                 {trackStock && ` (${v.stock})`}
               </span>
             ))}
-            {product.variants.length > 4 && (
+            {(product.variant_config?.variants?.length ?? 0) > 4 && (
               <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-white/25">
-                +{product.variants.length - 4}
+                +{(product.variant_config?.variants?.length ?? 0) - 4}
               </span>
             )}
+          </div>
+        )}
+
+        {(product.custom_fields?.length ?? 0) > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {product.custom_fields.map((f, i) => (
+              <span key={i} className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400/60 border border-purple-500/15">
+                {f.label}
+                {f.required ? ' *' : ''}
+              </span>
+            ))}
           </div>
         )}
 
@@ -963,15 +1319,15 @@ function ProductCard({
 export default function ShopSection() {
   const [tab, setTab] = useState<'products' | 'orders'>('products')
 
-  const [products,       setProducts]       = useState<Product[]>([])
+  const [products, setProducts] = useState<Product[]>([])
   const [showAddProduct, setShowAddProduct] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
 
-  const [orders,          setOrders]          = useState<Order[]>([])
-  const [reviewingOrder,  setReviewingOrder]  = useState<Order | null>(null)
-  const [orderFilter,     setOrderFilter]     = useState('')
-  const [orderSearch,     setOrderSearch]     = useState('')
-  const [orderPage,       setOrderPage]       = useState(1)
+  const [orders, setOrders] = useState<Order[]>([])
+  const [reviewingOrder, setReviewingOrder] = useState<Order | null>(null)
+  const [orderFilter, setOrderFilter] = useState('')
+  const [orderSearch, setOrderSearch] = useState('')
+  const [orderPage, setOrderPage] = useState(1)
 
   const loadProducts = useCallback(() => {
     fetch('/api/shop/all/', { credentials: 'include' })
@@ -988,15 +1344,20 @@ export default function ShopSection() {
       .catch(() => {})
   }, [orderFilter])
 
-  useEffect(() => { loadProducts() }, [loadProducts])
-  useEffect(() => { if (tab === 'orders') loadOrders() }, [tab, loadOrders])
+  useEffect(() => {
+    loadProducts()
+  }, [loadProducts])
+
+  useEffect(() => {
+    if (tab === 'orders') loadOrders()
+  }, [tab, loadOrders])
 
   const handleAddProduct = async (fd: FormData, _deletedIds: number[]) => {
     await fetch('/api/shop/create/', {
-      method:      'POST',
+      method: 'POST',
       credentials: 'include',
-      headers:     { 'X-CSRFToken': getCsrf() },
-      body:        fd,
+      headers: { 'X-CSRFToken': getCsrf() },
+      body: fd,
     })
     loadProducts()
   }
@@ -1007,18 +1368,18 @@ export default function ShopSection() {
     await Promise.all(
       deletedImageIds.map(imgId =>
         fetch(`/api/shop/${editingProduct.id}/images/${imgId}/delete/`, {
-          method:      'DELETE',
+          method: 'DELETE',
           credentials: 'include',
-          headers:     { 'X-CSRFToken': getCsrf() },
+          headers: { 'X-CSRFToken': getCsrf() },
         })
       )
     )
 
     await fetch(`/api/shop/${editingProduct.id}/update/`, {
-      method:      'PATCH',
+      method: 'PATCH',
       credentials: 'include',
-      headers:     { 'X-CSRFToken': getCsrf() },
-      body:        fd,
+      headers: { 'X-CSRFToken': getCsrf() },
+      body: fd,
     })
 
     loadProducts()
@@ -1027,19 +1388,19 @@ export default function ShopSection() {
   const handleDeleteProduct = async (id: number, name: string) => {
     if (!confirm(`Delete "${name}"? This cannot be undone.`)) return
     await fetch(`/api/shop/${id}/delete/`, {
-      method:      'DELETE',
+      method: 'DELETE',
       credentials: 'include',
-      headers:     { 'X-CSRFToken': getCsrf() },
+      headers: { 'X-CSRFToken': getCsrf() },
     })
     loadProducts()
   }
 
   const handleSaveOrder = async (id: number, data: { status: string; notes: string }) => {
     await fetch(`/api/shop/orders/${id}/`, {
-      method:      'PATCH',
+      method: 'PATCH',
       credentials: 'include',
-      headers:     { 'X-CSRFToken': getCsrf(), 'Content-Type': 'application/json' },
-      body:        JSON.stringify(data),
+      headers: { 'X-CSRFToken': getCsrf(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
     })
     loadOrders()
   }
@@ -1047,9 +1408,9 @@ export default function ShopSection() {
   const handleDeleteOrder = async (id: number) => {
     if (!confirm('Delete this order permanently?')) return
     await fetch(`/api/shop/orders/${id}/delete/`, {
-      method:      'DELETE',
+      method: 'DELETE',
       credentials: 'include',
-      headers:     { 'X-CSRFToken': getCsrf() },
+      headers: { 'X-CSRFToken': getCsrf() },
     })
     loadOrders()
   }
@@ -1065,27 +1426,34 @@ export default function ShopSection() {
     )
   })
 
-  const orderTotalPages  = Math.max(1, Math.ceil(filteredOrders.length / PAGE_SIZE))
-  const displayedOrders  = filteredOrders.slice((orderPage - 1) * PAGE_SIZE, orderPage * PAGE_SIZE)
+  const orderTotalPages = Math.max(1, Math.ceil(filteredOrders.length / PAGE_SIZE))
+  const displayedOrders = filteredOrders.slice((orderPage - 1) * PAGE_SIZE, orderPage * PAGE_SIZE)
 
   const orderStats = {
-    total:     orders.length,
-    pending:   orders.filter(o => o.status === 'pending').length,
+    total: orders.length,
+    pending: orders.filter(o => o.status === 'pending').length,
     confirmed: orders.filter(o => o.status === 'confirmed').length,
-    shipped:   orders.filter(o => o.status === 'shipped').length,
+    shipped: orders.filter(o => o.status === 'shipped').length,
     delivered: orders.filter(o => o.status === 'delivered').length,
   }
 
   const STATUS_DOT: Record<string, string> = {
-    pending: '#fbbf24', confirmed: '#a855f7', shipped: '#60a5fa',
-    delivered: '#34d399', cancelled: '#f87171',
+    pending: '#fbbf24',
+    confirmed: '#a855f7',
+    shipped: '#60a5fa',
+    delivered: '#34d399',
+    cancelled: '#f87171',
   }
 
   return (
     <div>
+      {/* Tab switcher */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl p-1">
-          {([['products', '🛍 Products'], ['orders', '📦 Orders']] as const).map(([t, l]) => (
+          {([
+            ['products', '🛍 Products'],
+            ['orders', '📦 Orders'],
+          ] as const).map(([t, l]) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -1107,6 +1475,7 @@ export default function ShopSection() {
         )}
       </div>
 
+      {/* ── Products tab ── */}
       {tab === 'products' && (
         <>
           {products.length === 0 ? (
@@ -1136,14 +1505,15 @@ export default function ShopSection() {
         </>
       )}
 
+      {/* ── Orders tab ── */}
       {tab === 'orders' && (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
             {[
-              { label: 'Total',     val: orderStats.total,     color: '#a855f7' },
-              { label: 'Pending',   val: orderStats.pending,   color: '#fbbf24' },
+              { label: 'Total', val: orderStats.total, color: '#a855f7' },
+              { label: 'Pending', val: orderStats.pending, color: '#fbbf24' },
               { label: 'Confirmed', val: orderStats.confirmed, color: '#a855f7' },
-              { label: 'Shipped',   val: orderStats.shipped,   color: '#60a5fa' },
+              { label: 'Shipped', val: orderStats.shipped, color: '#60a5fa' },
               { label: 'Delivered', val: orderStats.delivered, color: '#34d399' },
             ].map(s => (
               <div key={s.label} className="bg-white/4 border border-white/8 rounded-2xl p-4 text-center">
@@ -1158,10 +1528,19 @@ export default function ShopSection() {
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <SearchBar
               value={orderSearch}
-              onChange={v => { setOrderSearch(v); setOrderPage(1) }}
+              onChange={v => {
+                setOrderSearch(v)
+                setOrderPage(1)
+              }}
               placeholder="Search orders…"
             />
-            <FilterSelect value={orderFilter} onChange={v => { setOrderFilter(v); setOrderPage(1) }}>
+            <FilterSelect
+              value={orderFilter}
+              onChange={v => {
+                setOrderFilter(v)
+                setOrderPage(1)
+              }}
+            >
               <FilterOption value="">All Statuses</FilterOption>
               <FilterOption value="pending">Pending</FilterOption>
               <FilterOption value="confirmed">Confirmed</FilterOption>
@@ -1178,16 +1557,20 @@ export default function ShopSection() {
               </div>
             )}
             {displayedOrders.map(o => {
-              const dotColor     = STATUS_DOT[o.status] || '#fff'
+              const dotColor = STATUS_DOT[o.status] || '#fff'
               const formattedDate = (() => {
                 try {
                   return new Date(o.submitted_at).toLocaleDateString('en-GB', {
-                    day: 'numeric', month: 'short', year: 'numeric',
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
                   })
                 } catch {
                   return o.submitted_at
                 }
               })()
+
+              const firstCustom = Object.entries(o.custom_field_values || {}).find(([, v]) => v)
 
               return (
                 <div
@@ -1196,10 +1579,11 @@ export default function ShopSection() {
                              hover:border-purple-500/20 transition-colors"
                 >
                   <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-white/10 bg-purple-900/20 flex items-center justify-center">
-                    {o.product_banner
-                      ? <img src={o.product_banner} className="w-full h-full object-cover" alt="" />
-                      : <span className="text-purple-400 text-lg">🛒</span>
-                    }
+                    {o.product_banner ? (
+                      <img src={o.product_banner} className="w-full h-full object-cover" alt="" />
+                    ) : (
+                      <span className="text-purple-400 text-lg">🛒</span>
+                    )}
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -1215,17 +1599,25 @@ export default function ShopSection() {
                     </div>
                     <p className="text-white/40 text-xs truncate">
                       {o.product_name}
-                      {o.variant_size  && ` · ${o.variant_size}`}
-                      {o.variant_color && ` / ${o.variant_color}`}
+                      {o.variant_display && ` · ${o.variant_display}`}
                       {` · Qty: ${o.quantity}`}
-                      {o.wilaya_label  && ` · ${o.wilaya_label}`}
+                      {o.wilaya_label && ` · ${o.wilaya_label}`}
                     </p>
-                    <p className="text-white/20 text-[10px] mt-0.5">{formattedDate} · {o.email}</p>
+                    {firstCustom && (
+                      <p className="text-purple-400/50 text-[10px] mt-0.5 truncate">
+                        ✏ {firstCustom[0]}: <span className="text-purple-300/70">{firstCustom[1]}</span>
+                      </p>
+                    )}
+                    <p className="text-white/20 text-[10px] mt-0.5">
+                      {formattedDate} · {o.email}
+                    </p>
                   </div>
 
                   <div className="flex gap-2 shrink-0">
                     <ActionButton onClick={() => setReviewingOrder(o)}>Manage</ActionButton>
-                    <ActionButton variant="danger" onClick={() => handleDeleteOrder(o.id)}>Delete</ActionButton>
+                    <ActionButton variant="danger" onClick={() => handleDeleteOrder(o.id)}>
+                      Delete
+                    </ActionButton>
                   </div>
                 </div>
               )
@@ -1236,6 +1628,7 @@ export default function ShopSection() {
         </>
       )}
 
+      {/* Modals */}
       {showAddProduct && (
         <ProductModal
           initial={{}}

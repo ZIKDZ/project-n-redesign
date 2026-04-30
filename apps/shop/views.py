@@ -1,17 +1,13 @@
-# views.py
-
 import json
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
-from .models import Product, ProductImage, Order
+from .models import Product, ProductImage, Order, WILAYA_CHOICES
 
-
-# ── helpers ────────────────────────────────────────────────────────────────────
 
 def _product_dict(product):
-    """Return product.to_dict() always including gallery images."""
+    """Return product with gallery images."""
     data = product.to_dict()
     data['images'] = [img.to_dict() for img in product.images.all()]
     return data
@@ -31,7 +27,7 @@ def list_products(request):
 
 @require_http_methods(['GET'])
 def get_product(request, pk):
-    """Public — single product detail with gallery images."""
+    """Public — single product detail."""
     try:
         product = Product.objects.prefetch_related('images').get(pk=pk, is_active=True)
         return JsonResponse(_product_dict(product))
@@ -56,12 +52,20 @@ def submit_order(request):
             except Product.DoesNotExist:
                 pass
 
+        variant_values     = data.get('variant_values', {})
+        custom_field_values = data.get('custom_field_values', {})
+
+        if not isinstance(variant_values, dict):
+            variant_values = {}
+        if not isinstance(custom_field_values, dict):
+            custom_field_values = {}
+
         order = Order.objects.create(
             product=product,
             product_name=product_name,
-            variant_size=data.get('variant_size', ''),
-            variant_color=data.get('variant_color', ''),
+            variant_values=variant_values,
             quantity=int(data.get('quantity', 1)),
+            custom_field_values=custom_field_values,
             full_name=data['full_name'],
             email=data['email'],
             phone=data['phone'],
@@ -81,7 +85,7 @@ def submit_order(request):
 @login_required
 @require_http_methods(['GET'])
 def list_products_all(request):
-    """Staff — all products including inactive, WITH gallery images."""
+    """Staff — all products with gallery images."""
     qs = Product.objects.all().prefetch_related('images').order_by('display_order', 'id')
     return JsonResponse({'products': [_product_dict(p) for p in qs]})
 
@@ -89,7 +93,7 @@ def list_products_all(request):
 @login_required
 @require_http_methods(['POST'])
 def create_product(request):
-    """Staff only — create a product. Accepts multipart."""
+    """Staff only — create a product."""
     try:
         if request.content_type and 'multipart' in request.content_type:
             data        = request.POST
@@ -98,11 +102,19 @@ def create_product(request):
             data        = json.loads(request.body)
             banner_file = None
 
-        variants_raw = data.get('variants', '[]')
+        # Parse variant_config
+        variant_config_raw = data.get('variant_config', '{}')
         try:
-            variants = json.loads(variants_raw)
+            variant_config = json.loads(variant_config_raw)
         except (json.JSONDecodeError, TypeError):
-            variants = []
+            variant_config = {'attributes': [], 'variants': []}
+
+        # Parse custom_fields
+        custom_fields_raw = data.get('custom_fields', '[]')
+        try:
+            custom_fields = json.loads(custom_fields_raw)
+        except (json.JSONDecodeError, TypeError):
+            custom_fields = []
 
         product = Product(
             name=data['name'],
@@ -110,7 +122,8 @@ def create_product(request):
             price=data['price'],
             category=data.get('category', 'jersey'),
             banner_url=data.get('banner_url', '') if not banner_file else '',
-            variants=variants,
+            variant_config=variant_config,
+            custom_fields=custom_fields,
             track_stock=str(data.get('track_stock', 'true')).lower() != 'false',
             is_active=str(data.get('is_active', 'true')).lower() != 'false',
             is_featured=str(data.get('is_featured', 'false')).lower() == 'true',
@@ -120,7 +133,7 @@ def create_product(request):
             product.banner = banner_file
         product.save()
 
-        # Handle gallery images sent as gallery_0, gallery_1, …
+        # Add gallery images
         gallery_keys = sorted(
             [k for k in request.FILES if k.startswith('gallery_')],
             key=lambda k: int(k.split('_', 1)[1]) if k.split('_', 1)[1].isdigit() else 999,
@@ -132,7 +145,6 @@ def create_product(request):
                 display_order=order_idx,
             )
 
-        # Refresh to pick up any newly created images
         product.refresh_from_db()
         return JsonResponse(_product_dict(product), status=201)
 
@@ -170,9 +182,16 @@ def update_product(request, pk):
             product.is_featured = str(data['is_featured']).lower() == 'true'
         if 'track_stock' in data:
             product.track_stock = str(data['track_stock']).lower() != 'false'
-        if 'variants' in data:
+
+        if 'variant_config' in data:
             try:
-                product.variants = json.loads(data['variants'])
+                product.variant_config = json.loads(data['variant_config'])
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        if 'custom_fields' in data:
+            try:
+                product.custom_fields = json.loads(data['custom_fields'])
             except (json.JSONDecodeError, TypeError):
                 pass
 
@@ -185,7 +204,6 @@ def update_product(request, pk):
 
         product.save()
 
-        # Handle new gallery images appended during edit
         if hasattr(files, 'keys'):
             gallery_keys = sorted(
                 [k for k in files if k.startswith('gallery_')],
@@ -218,12 +236,9 @@ def delete_product(request, pk):
         return JsonResponse({'error': 'Not found'}, status=404)
 
 
-# ── Gallery image endpoints ────────────────────────────────────────────────────
-
 @login_required
 @require_http_methods(['POST'])
 def add_gallery_image(request, pk):
-    """Staff — add a gallery image to a product."""
     try:
         product    = Product.objects.get(pk=pk)
         image_file = request.FILES.get('image')
