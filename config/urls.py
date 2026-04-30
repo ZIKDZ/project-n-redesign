@@ -16,6 +16,7 @@ urlpatterns = [
     path('api/teams/', include('apps.teams.urls')),
     path('api/games/', include('apps.games.urls')),
     path('api/spotlight/', include('apps.spotlight.urls')),
+    path('api/shop/', include('apps.shop.urls')),
 ]
 
 # Serve media properly 

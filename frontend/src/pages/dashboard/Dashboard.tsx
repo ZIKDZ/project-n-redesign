@@ -13,9 +13,10 @@ import PlayersSection   from './components/sections/PlayersSection'
 import TeamsSection     from './components/sections/TeamsSection'
 import GamesSection     from './components/sections/GamesSection'
 import SpotlightSection from './components/sections/SpotlightSection'
+import ShopSection from './components/sections/ShopSection'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Section = 'overview' | 'joins' | 'matches' | 'news' | 'players' | 'teams' | 'games' | 'spotlight'
+type Section = 'overview' | 'joins' | 'matches' | 'news' | 'players' | 'teams' | 'games' | 'spotlight' | 'shop'
 
 const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode }[] = [
   {
@@ -104,6 +105,16 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode }[] = [
       </svg>
     ),
   },
+  {
+  id: 'shop',
+  label: 'Shop',
+  icon: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round"
+        d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+    </svg>
+  ),
+},
 ]
 
 const SECTIONS: Record<Section, React.ReactNode> = {
@@ -115,6 +126,7 @@ const SECTIONS: Record<Section, React.ReactNode> = {
   teams:     <TeamsSection />,
   games:     <GamesSection />,
   spotlight: <SpotlightSection />,
+  shop:      <ShopSection />,
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────

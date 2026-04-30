@@ -143,3 +143,27 @@ export const spotlight = {
   delete: (id: number) =>
     request(`/api/spotlight/${id}/delete/`, { method: 'DELETE' }),
 }
+
+// ── Shop ──────────────────────────────────────────────────────────────────────
+export const shop = {
+  list: (category?: string) =>
+    request(`/api/shop/${category ? `?category=${category}` : ''}`),
+  get: (id: number) =>
+    request(`/api/shop/${id}/`),
+  submitOrder: (data: object) =>
+    request('/api/shop/order/', { method: 'POST', body: JSON.stringify(data) }),
+  listAll: () =>
+    request('/api/shop/all/'),
+  create: (data: object) =>
+    request('/api/shop/create/', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: number, data: object) =>
+    request(`/api/shop/${id}/update/`, { method: 'PATCH', body: JSON.stringify(data) }),
+  delete: (id: number) =>
+    request(`/api/shop/${id}/delete/`, { method: 'DELETE' }),
+  listOrders: (status?: string) =>
+    request(`/api/shop/orders/${status ? `?status=${status}` : ''}`),
+  updateOrder: (id: number, data: object) =>
+    request(`/api/shop/orders/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteOrder: (id: number) =>
+    request(`/api/shop/orders/${id}/delete/`, { method: 'DELETE' }),
+}

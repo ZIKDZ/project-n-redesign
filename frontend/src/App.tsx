@@ -7,6 +7,8 @@ import Dashboard from './pages/dashboard/Dashboard'
 import RosterPage from './pages/RosterPage'
 import NewsArticlePage from './pages/NewsArticlePage'
 import PlayerPage from './pages/PlayerPage'
+import ShopPage   from './pages/ShopPage'
+import ProductPage from './pages/ProductPage'
 
 // ── Auth context ──────────────────────────────────────────────────────────────
 interface AuthUser {
@@ -64,6 +66,8 @@ export default function App() {
         <Route path="/roster/:gameSlug" element={<RosterPage />} />
         <Route path="/player/:id" element={<PlayerPage />} />
         <Route path="/news/:id" element={<NewsArticlePage />} />
+        <Route path="/shop"      element={<ShopPage />} />
+        <Route path="/shop/:id"  element={<ProductPage />} />
         <Route
           path="/dashboard/*"
           element={
