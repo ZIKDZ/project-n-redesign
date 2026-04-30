@@ -8,6 +8,15 @@ from django.contrib.auth.decorators import login_required
 from .models import Product, ProductImage, Order
 
 
+# ── helpers ────────────────────────────────────────────────────────────────────
+
+def _product_dict(product):
+    """Return product.to_dict() always including gallery images."""
+    data = product.to_dict()
+    data['images'] = [img.to_dict() for img in product.images.all()]
+    return data
+
+
 # ── Public ─────────────────────────────────────────────────────────────────────
 
 @require_http_methods(['GET'])
@@ -17,7 +26,7 @@ def list_products(request):
     category = request.GET.get('category')
     if category:
         qs = qs.filter(category=category)
-    return JsonResponse({'products': [p.to_dict() for p in qs]})
+    return JsonResponse({'products': [_product_dict(p) for p in qs]})
 
 
 @require_http_methods(['GET'])
@@ -25,9 +34,7 @@ def get_product(request, pk):
     """Public — single product detail with gallery images."""
     try:
         product = Product.objects.prefetch_related('images').get(pk=pk, is_active=True)
-        data = product.to_dict()
-        data['images'] = [img.to_dict() for img in product.images.all()]
-        return JsonResponse(data)
+        return JsonResponse(_product_dict(product))
     except Product.DoesNotExist:
         return JsonResponse({'error': 'Not found'}, status=404)
 
@@ -37,7 +44,7 @@ def get_product(request, pk):
 def submit_order(request):
     """Public — submit an order."""
     try:
-        data = json.loads(request.body)
+        data         = json.loads(request.body)
         product_id   = data.get('product_id')
         product      = None
         product_name = data.get('product_name', '')
@@ -74,9 +81,9 @@ def submit_order(request):
 @login_required
 @require_http_methods(['GET'])
 def list_products_all(request):
-    """Staff — all products including inactive."""
-    qs = Product.objects.all().prefetch_related('images')
-    return JsonResponse({'products': [p.to_dict() for p in qs]})
+    """Staff — all products including inactive, WITH gallery images."""
+    qs = Product.objects.all().prefetch_related('images').order_by('display_order', 'id')
+    return JsonResponse({'products': [_product_dict(p) for p in qs]})
 
 
 @login_required
@@ -104,7 +111,6 @@ def create_product(request):
             category=data.get('category', 'jersey'),
             banner_url=data.get('banner_url', '') if not banner_file else '',
             variants=variants,
-            # ── stock tracking ──
             track_stock=str(data.get('track_stock', 'true')).lower() != 'false',
             is_active=str(data.get('is_active', 'true')).lower() != 'false',
             is_featured=str(data.get('is_featured', 'false')).lower() == 'true',
@@ -117,7 +123,7 @@ def create_product(request):
         # Handle gallery images sent as gallery_0, gallery_1, …
         gallery_keys = sorted(
             [k for k in request.FILES if k.startswith('gallery_')],
-            key=lambda k: int(k.split('_', 1)[1]) if k.split('_', 1)[1].isdigit() else 999
+            key=lambda k: int(k.split('_', 1)[1]) if k.split('_', 1)[1].isdigit() else 999,
         )
         for order_idx, key in enumerate(gallery_keys):
             ProductImage.objects.create(
@@ -126,10 +132,9 @@ def create_product(request):
                 display_order=order_idx,
             )
 
-        # Return full dict including gallery images
-        data_out = product.to_dict()
-        data_out['images'] = [img.to_dict() for img in product.images.all()]
-        return JsonResponse(data_out, status=201)
+        # Refresh to pick up any newly created images
+        product.refresh_from_db()
+        return JsonResponse(_product_dict(product), status=201)
 
     except KeyError as e:
         return JsonResponse({'error': f'Missing field: {e}'}, status=400)
@@ -142,14 +147,14 @@ def create_product(request):
 def update_product(request, pk):
     """Staff only — update a product."""
     try:
-        product = Product.objects.get(pk=pk)
+        product = Product.objects.prefetch_related('images').get(pk=pk)
 
         if request.content_type and 'multipart' in request.content_type:
             from django.http.multipartparser import MultiPartParser
-            parser            = MultiPartParser(request.META, request, request.upload_handlers)
-            post_data, files  = parser.parse()
-            data              = post_data
-            banner_file       = files.get('banner')
+            parser           = MultiPartParser(request.META, request, request.upload_handlers)
+            post_data, files = parser.parse()
+            data             = post_data
+            banner_file      = files.get('banner')
         else:
             data        = json.loads(request.body)
             banner_file = None
@@ -163,7 +168,6 @@ def update_product(request, pk):
             product.is_active = str(data['is_active']).lower() != 'false'
         if 'is_featured' in data:
             product.is_featured = str(data['is_featured']).lower() == 'true'
-        # ── stock tracking ──
         if 'track_stock' in data:
             product.track_stock = str(data['track_stock']).lower() != 'false'
         if 'variants' in data:
@@ -185,7 +189,7 @@ def update_product(request, pk):
         if hasattr(files, 'keys'):
             gallery_keys = sorted(
                 [k for k in files if k.startswith('gallery_')],
-                key=lambda k: int(k.split('_', 1)[1]) if k.split('_', 1)[1].isdigit() else 999
+                key=lambda k: int(k.split('_', 1)[1]) if k.split('_', 1)[1].isdigit() else 999,
             )
             base_order = product.images.count()
             for order_idx, key in enumerate(gallery_keys):
@@ -195,9 +199,8 @@ def update_product(request, pk):
                     display_order=base_order + order_idx,
                 )
 
-        data_out = product.to_dict()
-        data_out['images'] = [img.to_dict() for img in product.images.all()]
-        return JsonResponse(data_out)
+        product.refresh_from_db()
+        return JsonResponse(_product_dict(product))
 
     except Product.DoesNotExist:
         return JsonResponse({'error': 'Not found'}, status=404)
