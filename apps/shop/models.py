@@ -1,5 +1,4 @@
 from django.db import models
-from django.contrib.postgres.fields import ArrayField  # or use JSONField for flexibility
 
 CATEGORY_CHOICES = [
     ('jersey',    'Jersey'),
@@ -46,26 +45,22 @@ class Product(models.Model):
     banner        = models.ImageField(upload_to='shop/banners/', blank=True, null=True)
     banner_url    = models.URLField(blank=True, help_text='External URL fallback')
 
-    # Variant system (NEW — dynamic attributes):
+    # Variant system schema:
     # {
     #   "attributes": [
-    #     {"name": "Size", "type": "select", "values": ["XS", "S", "M", "L", "XL"]},
-    #     {"name": "Color", "type": "select", "values": ["Black", "White", "Red"]}
+    #     {"name": "Size"},
+    #     {"name": "Color"}
     #   ],
     #   "variants": [
-    #     {
-    #       "id": "var_1",
-    #       "values": {"Size": "M", "Color": "Black"},
-    #       "stock": 10,
-    #       "sku": "NBL-JERSEY-M-BLK"
-    #     },
-    #     ...
+    #     {"id": "var_123_abc", "attribute": "Size",  "value": "S",     "stock": 10},
+    #     {"id": "var_124_def", "attribute": "Size",  "value": "M",     "stock": 5},
+    #     {"id": "var_125_ghi", "attribute": "Color", "value": "Black", "stock": 8}
     #   ]
     # }
     variant_config = models.JSONField(
         default=dict,
         blank=True,
-        help_text='Dynamic variant attributes and combinations'
+        help_text='Dynamic variant attributes and their individual values'
     )
 
     # Custom fields: [{"label": "Back Name", "placeholder": "e.g. SMITH", "required": true}, ...]
@@ -102,7 +97,7 @@ class Product(models.Model):
         return self.variant_config.get('attributes', [])
 
     def get_variants(self):
-        """Return list of variant combinations."""
+        """Return list of individual variant values."""
         return self.variant_config.get('variants', [])
 
     def total_stock(self):
@@ -113,19 +108,19 @@ class Product(models.Model):
 
     def to_dict(self):
         return {
-            'id':              self.id,
-            'name':            self.name,
-            'description':     self.description,
-            'price':           str(self.price),
-            'category':        self.category,
-            'banner':          self.get_banner(),
-            'variant_config':  self.variant_config or {},
-            'custom_fields':   self.custom_fields or [],
-            'track_stock':     self.track_stock,
-            'total_stock':     self.total_stock(),
-            'is_active':       self.is_active,
-            'is_featured':     self.is_featured,
-            'display_order':   self.display_order,
+            'id':             self.id,
+            'name':           self.name,
+            'description':    self.description,
+            'price':          str(self.price),
+            'category':       self.category,
+            'banner':         self.get_banner(),
+            'variant_config': self.variant_config or {},
+            'custom_fields':  self.custom_fields or [],
+            'track_stock':    self.track_stock,
+            'total_stock':    self.total_stock(),
+            'is_active':      self.is_active,
+            'is_featured':    self.is_featured,
+            'display_order':  self.display_order,
         }
 
 
@@ -192,15 +187,17 @@ class Order(models.Model):
 
     def to_dict(self):
         wilaya_label = dict(WILAYA_CHOICES).get(self.wilaya, self.wilaya)
-        # Format variant values as readable string
-        variant_str = ' / '.join(self.variant_values.values()) if self.variant_values else ''
+        # Format: "Size: M / Color: Black"
+        variant_str = ' / '.join(
+            f"{k}: {v}" for k, v in self.variant_values.items()
+        ) if self.variant_values else ''
         return {
             'id':                  self.id,
             'product_id':          self.product_id,
             'product_name':        self.product.name if self.product else self.product_name,
             'product_banner':      self.product.get_banner() if self.product else '',
             'variant_values':      self.variant_values or {},
-            'variant_display':     variant_str,  # Human-readable
+            'variant_display':     variant_str,
             'quantity':            self.quantity,
             'custom_field_values': self.custom_field_values or {},
             'full_name':           self.full_name,

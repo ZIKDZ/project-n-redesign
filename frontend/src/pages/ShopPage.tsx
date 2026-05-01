@@ -1,3 +1,4 @@
+// ShopPage.tsx
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { asset } from "../utils/asset";
@@ -29,7 +30,7 @@ interface Product {
   price: string;
   category: string;
   banner: string;
-  variant_config: VariantConfig;  // ← Updated from variants
+  variant_config: VariantConfig;
   track_stock: boolean;
   total_stock: number | null;
   is_active: boolean;
@@ -57,13 +58,30 @@ const CATEGORY_ICONS: Record<string, string> = {
 function ProductCard({ product, onClick }: { product: Product; onClick: () => void }) {
   const [hovered, setHovered] = useState(false);
 
-  // Get all unique attribute values from variants
+  // Get all unique attribute values from variants - handles both schemas
   const getAllAttributeValues = (attributeName: string): string[] => {
-    return [...new Set(
-      product.variant_config?.variants
-        .map(v => v.values[attributeName])
-        .filter(Boolean) || []
-    )];
+    const config = product.variant_config;
+    if (!config || !config.variants) return [];
+    
+    // Check if it's the new flat schema (variants have {attribute, value})
+    const isNewSchema = config.variants.some((v: any) => v?.attribute !== undefined);
+    
+    if (isNewSchema) {
+      // New flat schema - filter by attribute name
+      return [...new Set(
+        config.variants
+          .filter((v: any) => v?.attribute === attributeName)
+          .map((v: any) => v?.value)
+          .filter(Boolean)
+      )] as string[];
+    } else {
+      // Old schema - variants have {values: {AttributeName: "value"}}
+      return [...new Set(
+        config.variants
+          .map((v: any) => v?.values?.[attributeName])
+          .filter(Boolean)
+      )] as string[];
+    }
   };
 
   // Display first 2 attribute types
@@ -290,7 +308,10 @@ export default function ShopPage() {
     fetch(url)
       .then((r) => r.json())
       .then((r) => {
-        console.log("Products loaded:", r.products); // Debug log
+        console.log("Products loaded:", r.products);
+        if (r.products && r.products.length > 0) {
+          console.log("First product variant_config:", r.products[0].variant_config);
+        }
         setProducts(r.products || []);
       })
       .catch((err) => {

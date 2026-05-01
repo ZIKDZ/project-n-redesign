@@ -1,4 +1,4 @@
-// ProductPage.tsx - Updated for dynamic variants
+// ProductPage.tsx
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { asset } from "../utils/asset";
@@ -6,49 +6,47 @@ import { asset } from "../utils/asset";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface VariantAttribute {
-  name: string;
-  type: 'select' | 'text';
-  values: string[];
+  name: string
 }
 
-interface VariantCombination {
-  id: string;
-  values: Record<string, string>;
-  stock: number;
-  sku?: string;
+interface Variant {
+  id: string
+  attribute: string
+  value: string
+  stock: number
 }
 
 interface VariantConfig {
-  attributes: VariantAttribute[];
-  variants: VariantCombination[];
+  attributes: VariantAttribute[]
+  variants: Variant[]
 }
 
 interface GalleryImage {
-  id: number;
-  url: string;
-  display_order: number;
+  id: number
+  url: string
+  display_order: number
 }
 
 interface CustomField {
-  label: string;
-  placeholder: string;
-  required: boolean;
+  label: string
+  placeholder: string
+  required: boolean
 }
 
 interface Product {
-  id: number;
-  name: string;
-  description: string;
-  price: string;
-  category: string;
-  banner: string;
-  variant_config: VariantConfig;
-  images: GalleryImage[];
-  custom_fields: CustomField[];
-  track_stock: boolean;
-  total_stock: number | null;
-  is_active: boolean;
-  is_featured: boolean;
+  id: number
+  name: string
+  description: string
+  price: string
+  category: string
+  banner: string
+  variant_config: VariantConfig
+  images: GalleryImage[]
+  custom_fields: CustomField[]
+  track_stock: boolean
+  total_stock: number | null
+  is_active: boolean
+  is_featured: boolean
 }
 
 const WILAYA_CHOICES: [string, string][] = [
@@ -68,88 +66,174 @@ const WILAYA_CHOICES: [string, string][] = [
   ["51","Ouled Djellal"],["52","Bordj Badji Mokhtar"],["53","Béni Abbès"],
   ["54","Timimoun"],["55","Touggourt"],["56","Djanet"],["57","In Salah"],
   ["58","In Guezzam"],
-];
+]
 
-// ── Order Form ────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Normalise whatever shape variant_config arrives in from the API.
+ * Handles both the new flat schema AND the old schema.
+ */
+function normaliseVariantConfig(raw: any): VariantConfig {
+  if (!raw || typeof raw !== "object") {
+    return { attributes: [], variants: [] }
+  }
+
+  const rawAttrs    = Array.isArray(raw.attributes) ? raw.attributes : []
+  const rawVariants = Array.isArray(raw.variants)   ? raw.variants   : []
+
+  // ── New flat schema: variants have {attribute, value, stock} ──
+  const isNewSchema = rawVariants.every((v: any) => 
+    v?.attribute !== undefined && v?.value !== undefined
+  )
+
+  if (isNewSchema || rawVariants.length > 0) {
+    // Build attributes list from explicit attributes array
+    const explicitAttrNames = rawAttrs
+      .map((a: any) => a?.name)
+      .filter(Boolean) as string[]
+
+    // Also derive from variants if not in explicit list
+    const variantAttrNames = Array.from(
+      new Set(rawVariants.map((v: any) => v?.attribute).filter(Boolean))
+    ) as string[]
+
+    // Merge: explicit first, then any from variants
+    const mergedAttrNames = [
+      ...explicitAttrNames,
+      ...variantAttrNames.filter(n => !explicitAttrNames.includes(n)),
+    ]
+
+    const attributes: VariantAttribute[] = mergedAttrNames.map(name => ({ name }))
+
+    const variants: Variant[] = rawVariants
+      .filter((v: any) => v?.attribute && v?.value !== undefined)
+      .map((v: any) => ({
+        id:        v.id || `var_${Math.random().toString(36).slice(2)}`,
+        attribute: String(v.attribute),
+        value:     String(v.value),
+        stock:     Number(v.stock) || 0,
+      }))
+
+    return { attributes, variants }
+  }
+
+  // ── Old schema fallback ──
+  const attributes: VariantAttribute[] = rawAttrs.map((a: any) => ({ name: a.name }))
+  const variants: Variant[] = []
+
+  for (const oldVariant of rawVariants) {
+    if (!oldVariant?.values || typeof oldVariant.values !== "object") continue
+    for (const [attrName, value] of Object.entries(oldVariant.values)) {
+      const already = variants.some(
+        v => v.attribute === attrName && v.value === String(value)
+      )
+      if (!already) {
+        variants.push({
+          id:        `var_${Math.random().toString(36).slice(2)}`,
+          attribute: attrName,
+          value:     String(value),
+          stock:     Number(oldVariant.stock) || 0,
+        })
+      }
+    }
+  }
+
+  return { attributes, variants }
+}
+
+// ── OrderForm ─────────────────────────────────────────────────────────────────
 
 function OrderForm({
   product,
-  selectedVariant,
+  selectedVariantValues,
   customValues,
   onCustomValuesChange,
   onSuccess,
 }: {
-  product: Product;
-  selectedVariant: VariantCombination | null;
-  customValues: Record<string, string>;
-  onCustomValuesChange: (values: Record<string, string>) => void;
-  onSuccess: () => void;
+  product: Product
+  selectedVariantValues: Record<string, string>
+  customValues: Record<string, string>
+  onCustomValuesChange: (values: Record<string, string>) => void
+  onSuccess: () => void
 }) {
   const [form, setForm] = useState({
     full_name: "",
-    email: "",
-    phone: "",
-    wilaya: "",
-    address: "",
-    quantity: 1,
-  });
+    email:     "",
+    phone:     "",
+    wilaya:    "",
+    address:   "",
+    quantity:  1,
+  })
 
-  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
-  const [errorMsg, setErrorMsg] = useState("");
+  const [status, setStatus]     = useState<"idle" | "loading" | "success" | "error">("idle")
+  const [errorMsg, setErrorMsg] = useState("")
 
   const inputClass =
     "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm " +
-    "placeholder-white/25 focus:outline-none focus:border-purple-500/60 transition-all duration-200";
+    "placeholder-white/25 focus:outline-none focus:border-purple-500/60 transition-all duration-200"
 
-  const maxQty = product.track_stock
-    ? selectedVariant?.stock ?? 99
-    : 999;
+  // Resolve the active variant for stock/qty purposes
+  const activeVariant: Variant | null = (() => {
+    const entries = Object.entries(selectedVariantValues).filter(([, v]) => v)
+    if (entries.length === 0) return null
+    const [lastAttr, lastVal] = entries[entries.length - 1]
+    return (
+      product.variant_config?.variants?.find(
+        v => v.attribute === lastAttr && v.value === lastVal
+      ) ?? null
+    )
+  })()
+
+  const maxQty = product.track_stock ? (activeVariant?.stock ?? 99) : 999
 
   const customFieldsValid = (product.custom_fields || []).every(
     f => !f.required || (customValues[f.label] || "").trim() !== ""
-  );
+  )
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.full_name || !form.email || !form.phone) return;
-    if (!customFieldsValid) return;
+    e.preventDefault()
+    if (!form.full_name || !form.email || !form.phone) return
+    if (!customFieldsValid) return
 
-    setStatus("loading");
-    setErrorMsg("");
+    setStatus("loading")
+    setErrorMsg("")
     try {
       const res = await fetch("/api/shop/order/", {
-        method: "POST",
+        method:  "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          product_id: product.id,
-          product_name: product.name,
-          variant_values: selectedVariant?.values || {},
-          quantity: form.quantity,
+          product_id:          product.id,
+          product_name:        product.name,
+          variant_values:      selectedVariantValues,
+          quantity:            form.quantity,
           custom_field_values: customValues,
-          full_name: form.full_name,
-          email: form.email,
-          phone: form.phone,
-          wilaya: form.wilaya,
-          address: form.address,
+          full_name:           form.full_name,
+          email:               form.email,
+          phone:               form.phone,
+          wilaya:              form.wilaya,
+          address:             form.address,
         }),
-      });
+      })
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Failed to submit");
+        const err = await res.json()
+        throw new Error(err.error || "Failed to submit")
       }
-      setStatus("success");
-      onSuccess();
+      setStatus("success")
+      onSuccess()
     } catch (e: any) {
-      setErrorMsg(e.message || "Something went wrong.");
-      setStatus("error");
+      setErrorMsg(e.message || "Something went wrong.")
+      setStatus("error")
     }
-  };
+  }
 
   if (status === "success") {
     return (
       <div className="text-center py-10">
-        <div className="w-16 h-16 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center mx-auto mb-5">
-          <svg className="w-8 h-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <div className="w-16 h-16 rounded-full bg-green-500/20 border border-green-500/30
+                        flex items-center justify-center mx-auto mb-5">
+          <svg className="w-8 h-8 text-green-400" fill="none" viewBox="0 0 24 24"
+            stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
         </div>
@@ -163,7 +247,7 @@ function OrderForm({
           We've received your order and will get in touch with you shortly to confirm.
         </p>
       </div>
-    );
+    )
   }
 
   return (
@@ -271,9 +355,9 @@ function OrderForm({
           >
             +
           </button>
-          {product.track_stock && selectedVariant && (
+          {product.track_stock && activeVariant && (
             <span className="text-white/30 text-xs ml-2">
-              {selectedVariant.stock} in stock
+              {activeVariant.stock} in stock
             </span>
           )}
         </div>
@@ -290,7 +374,8 @@ function OrderForm({
       </div>
 
       {errorMsg && (
-        <p className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+        <p className="text-red-400 text-sm bg-red-500/10 border border-red-500/20
+                      rounded-xl px-4 py-3">
           ⚠ {errorMsg}
         </p>
       )}
@@ -310,27 +395,25 @@ function OrderForm({
         Our team will contact you to confirm payment and delivery details.
       </p>
     </form>
-  );
+  )
 }
 
-// ── Personalisation Section ────────────────────────────────────────────────────
+// ── PersonalisationSection ────────────────────────────────────────────────────
 
 function PersonalisationSection({
   product,
   customValues,
   onCustomValuesChange,
 }: {
-  product: Product;
-  customValues: Record<string, string>;
-  onCustomValuesChange: (values: Record<string, string>) => void;
+  product: Product
+  customValues: Record<string, string>
+  onCustomValuesChange: (values: Record<string, string>) => void
 }) {
   const inputClass =
     "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm " +
-    "placeholder-white/25 focus:outline-none focus:border-purple-500/60 transition-all duration-200";
+    "placeholder-white/25 focus:outline-none focus:border-purple-500/60 transition-all duration-200"
 
-  if (!product.custom_fields || product.custom_fields.length === 0) {
-    return null;
-  }
+  if (!product.custom_fields || product.custom_fields.length === 0) return null
 
   return (
     <div className="space-y-3 mb-8">
@@ -340,7 +423,6 @@ function PersonalisationSection({
           Personalisation
         </span>
       </div>
-
       <div
         className="rounded-2xl border border-purple-500/20 p-4 space-y-3"
         style={{ background: "rgba(168,85,247,0.05)" }}
@@ -349,9 +431,7 @@ function PersonalisationSection({
           <div key={field.label}>
             <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-2">
               {field.label}
-              {field.required && (
-                <span className="text-purple-400 ml-1">*</span>
-              )}
+              {field.required && <span className="text-purple-400 ml-1">*</span>}
             </label>
             <input
               type="text"
@@ -359,10 +439,7 @@ function PersonalisationSection({
               placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}…`}
               value={customValues[field.label] || ""}
               onChange={e =>
-                onCustomValuesChange({
-                  ...customValues,
-                  [field.label]: e.target.value,
-                })
+                onCustomValuesChange({ ...customValues, [field.label]: e.target.value })
               }
               className={inputClass}
               style={{ textTransform: "uppercase" }}
@@ -371,53 +448,66 @@ function PersonalisationSection({
         ))}
       </div>
     </div>
-  );
+  )
 }
 
-// ── Main Product Page ─────────────────────────────────────────────────────────
+// ── Main ProductPage ──────────────────────────────────────────────────────────
 
 export default function ProductPage() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const { id }   = useParams<{ id: string }>()
+  const navigate = useNavigate()
 
-  const [product, setProduct] = useState<Product | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [scrolled, setScrolled] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<string>("");
-  const [selectedVariant, setSelectedVariant] = useState<Record<string, string>>({});
-  const [orderSuccess, setOrderSuccess] = useState(false);
-  const [revealed, setRevealed] = useState(false);
-  const [customValues, setCustomValues] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 60);
-    window.addEventListener("scroll", onScroll);
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  const [product, setProduct]             = useState<Product | null>(null)
+  const [variantConfig, setVariantConfig] = useState<VariantConfig>({ attributes: [], variants: [] })
+  const [loading, setLoading]             = useState(true)
+  const [scrolled, setScrolled]           = useState(false)
+  const [selectedImage, setSelectedImage] = useState<string>("")
+  const [selectedVariantValues, setSelectedVariantValues] =
+    useState<Record<string, string>>({})
+  const [orderSuccess, setOrderSuccess] = useState(false)
+  const [revealed, setRevealed]         = useState(false)
+  const [customValues, setCustomValues] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    if (!id) return;
-    setLoading(true);
+    const onScroll = () => setScrolled(window.scrollY > 60)
+    window.addEventListener("scroll", onScroll)
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [])
+
+  useEffect(() => {
+    if (!id) return
+    setLoading(true)
     fetch(`/api/shop/${id}/`)
       .then(r => {
-        if (!r.ok) throw new Error("Not found");
-        return r.json();
+        if (!r.ok) throw new Error("Not found")
+        return r.json()
       })
       .then((data: Product) => {
-        setProduct(data);
-        setSelectedImage(data.banner || data.images?.[0]?.url || "");
+        setProduct(data)
+        setSelectedImage(data.banner || data.images?.[0]?.url || "")
         setCustomValues(
           Object.fromEntries((data.custom_fields || []).map(f => [f.label, ""]))
-        );
-        // Initialize selected variant with empty values
-        setSelectedVariant(
-          Object.fromEntries((data.variant_config?.attributes || []).map(a => [a.name, ""]))
-        );
-        setTimeout(() => setRevealed(true), 80);
+        )
+
+        // Normalise variant config
+        const normConfig = normaliseVariantConfig(data.variant_config)
+        setVariantConfig(normConfig)
+
+        // Init selections with all attributes
+        const initialSelections: Record<string, string> = {}
+        normConfig.attributes.forEach(a => {
+          initialSelections[a.name] = ""
+        })
+        setSelectedVariantValues(initialSelections)
+
+        setTimeout(() => setRevealed(true), 80)
       })
-      .catch(() => navigate("/shop", { replace: true }))
-      .finally(() => setLoading(false));
-  }, [id]);
+      .catch(err => {
+        console.error("Error loading product:", err)
+        navigate("/shop", { replace: true })
+      })
+      .finally(() => setLoading(false))
+  }, [id, navigate])
 
   if (loading) {
     return (
@@ -430,26 +520,55 @@ export default function ProductPage() {
           <p className="text-white/25 text-xs tracking-widest uppercase">Loading product…</p>
         </div>
       </div>
-    );
+    )
   }
 
-  if (!product) return null;
+  if (!product) return null
 
   const allImages = [
     ...(product.banner ? [{ id: -1, url: product.banner, display_order: -1 }] : []),
     ...(product.images || []),
-  ];
+  ]
 
-  // Find matching variant combination
-  const matchingVariant = product.variant_config?.variants.find(v =>
-    Object.entries(selectedVariant).every(([key, val]) => v.values[key] === val)
-  ) || null;
+  // Get unique values per attribute from the normalised flat variants list
+  const getValuesForAttribute = (attrName: string): string[] => {
+    const seen   = new Set<string>()
+    const result: string[] = []
+    for (const v of variantConfig.variants) {
+      if (v.attribute === attrName && !seen.has(v.value)) {
+        seen.add(v.value)
+        result.push(v.value)
+      }
+    }
+    return result
+  }
 
-  const inStock = !product.track_stock
-    ? true
-    : matchingVariant
-    ? matchingVariant.stock > 0
-    : (product.total_stock ?? 0) > 0;
+  // Find the flat variant for a specific attribute + value
+  const getVariantForSelection = (attrName: string, value: string): Variant | undefined =>
+    variantConfig.variants.find(v => v.attribute === attrName && v.value === value)
+
+  // Overall in-stock check
+  const checkInStock = (): boolean => {
+    if (!product.track_stock) return true
+    const entries = Object.entries(selectedVariantValues).filter(([, v]) => v)
+    if (entries.length === 0) return (product.total_stock ?? 0) > 0
+    return entries.every(([attr, val]) => {
+      const variant = getVariantForSelection(attr, val)
+      return variant ? variant.stock > 0 : true
+    })
+  }
+
+  const inStock = checkInStock()
+
+  const handleVariantSelect = (attrName: string, value: string) => {
+    setSelectedVariantValues(prev => ({
+      ...prev,
+      [attrName]: prev[attrName] === value ? "" : value,
+    }))
+  }
+
+  const hasVariants =
+    variantConfig.attributes.length > 0 && variantConfig.variants.length > 0
 
   return (
     <div
@@ -458,16 +577,36 @@ export default function ProductPage() {
     >
       <style>{`
         @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(24px); }
+                             to   { opacity: 1; transform: translateY(0);    } }
+            
+        /* Variant button hover animation */
+        .variant-btn {
+          transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+            
+        .variant-btn:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 16px rgba(168, 85, 247, 0.15);
+        }
+            
+        .variant-btn:active:not(:disabled) {
+          transform: translateY(0px);
+        }
+            
+        /* Stock indicator animation */
+        .stock-indicator {
+          animation: slideUp 0.3s ease-out;
+        }
       `}</style>
 
       {/* Navbar */}
       <nav
         className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
         style={{
-          background: scrolled ? "rgba(13,0,20,0.95)" : "transparent",
-          backdropFilter: scrolled ? "blur(14px)" : "none",
-          boxShadow: scrolled ? "0 1px 0 rgba(255,255,255,0.06)" : "none",
+          background:     scrolled ? "rgba(13,0,20,0.95)" : "transparent",
+          backdropFilter: scrolled ? "blur(14px)"         : "none",
+          boxShadow:      scrolled ? "0 1px 0 rgba(255,255,255,0.06)" : "none",
         }}
       >
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-4">
@@ -476,10 +615,8 @@ export default function ProductPage() {
             className="flex items-center gap-2 text-white/40 hover:text-white transition-colors
                        text-xs font-bold tracking-wider uppercase group cursor-pointer"
           >
-            <svg
-              className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
-              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-            >
+            <svg className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
             Back to Store
@@ -504,13 +641,14 @@ export default function ProductPage() {
       <div
         className="max-w-7xl mx-auto px-6 pt-28 pb-24"
         style={{
-          opacity: revealed ? 1 : 0,
-          transform: revealed ? "none" : "translateY(20px)",
+          opacity:    revealed ? 1 : 0,
+          transform:  revealed ? "none" : "translateY(20px)",
           transition: "opacity 0.7s ease-out, transform 0.7s ease-out",
         }}
       >
         <div className="grid lg:grid-cols-2 gap-12 items-start">
-          {/* Left: image gallery */}
+
+          {/* ── Left: image gallery ── */}
           <div className="space-y-4">
             <div
               className="relative rounded-3xl overflow-hidden border border-white/10"
@@ -532,9 +670,9 @@ export default function ProductPage() {
 
               {product.is_featured && (
                 <div className="absolute top-4 left-4">
-                  <span className="inline-flex items-center gap-1 text-[10px] font-black tracking-widest
-                                   uppercase px-3 py-1.5 rounded-full bg-yellow-500/20 text-yellow-400
-                                   border border-yellow-500/35">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-black
+                                   tracking-widest uppercase px-3 py-1.5 rounded-full
+                                   bg-yellow-500/20 text-yellow-400 border border-yellow-500/35">
                     ⭐ Featured
                   </span>
                 </div>
@@ -542,9 +680,10 @@ export default function ProductPage() {
 
               {!inStock && (
                 <div className="absolute top-4 right-4">
-                  <span className="inline-flex items-center gap-1 text-[10px] font-black tracking-widest
-                                   uppercase px-3 py-1.5 rounded-full bg-red-500/25 text-red-300
-                                   border border-red-500/40 backdrop-blur-sm">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-black
+                                   tracking-widest uppercase px-3 py-1.5 rounded-full
+                                   bg-red-500/25 text-red-300 border border-red-500/40
+                                   backdrop-blur-sm">
                     Out of Stock
                   </span>
                 </div>
@@ -557,10 +696,15 @@ export default function ProductPage() {
                   <button
                     key={img.id}
                     onClick={() => setSelectedImage(img.url)}
-                    className="w-20 h-20 rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer shrink-0"
+                    className="w-20 h-20 rounded-xl overflow-hidden border-2 transition-all
+                               duration-200 cursor-pointer shrink-0"
                     style={{
-                      borderColor: selectedImage === img.url ? "rgba(168,85,247,0.8)" : "rgba(255,255,255,0.1)",
-                      boxShadow: selectedImage === img.url ? "0 0 12px rgba(168,85,247,0.4)" : "none",
+                      borderColor: selectedImage === img.url
+                        ? "rgba(168,85,247,0.8)"
+                        : "rgba(255,255,255,0.1)",
+                      boxShadow: selectedImage === img.url
+                        ? "0 0 12px rgba(168,85,247,0.4)"
+                        : "none",
                     }}
                   >
                     <img src={img.url} alt="" className="w-full h-full object-cover" />
@@ -570,41 +714,43 @@ export default function ProductPage() {
             )}
           </div>
 
-          {/* Right: product info + order form */}
+          {/* ── Right: product info + order form ── */}
           <div className="lg:sticky lg:top-28">
-            {/* Category + stock badges */}
+
+            {/* Badges */}
             <div className="flex items-center gap-3 mb-4 flex-wrap">
               <span
                 className="text-[10px] font-black tracking-widest uppercase px-3 py-1.5 rounded-full"
-                style={{ background: "rgba(168,85,247,0.2)", color: "#c084fc", border: "1px solid rgba(168,85,247,0.4)" }}
+                style={{
+                  background: "rgba(168,85,247,0.2)",
+                  color:      "#c084fc",
+                  border:     "1px solid rgba(168,85,247,0.4)",
+                }}
               >
                 {product.category}
               </span>
-
               {product.track_stock && !inStock && (
                 <span className="text-[10px] font-black tracking-widest uppercase px-3 py-1.5
                                  rounded-full bg-red-500/15 text-red-400 border border-red-500/25">
                   Out of Stock
                 </span>
               )}
-
               {!product.track_stock && (
                 <span className="text-[10px] font-black tracking-widest uppercase px-3 py-1.5
                                  rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/25">
                   ∞ Always Available
                 </span>
               )}
-
               {(product.custom_fields || []).length > 0 && (
                 <span className="text-[10px] font-black tracking-widest uppercase px-3 py-1.5
-                                 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/25
-                                 flex items-center gap-1">
+                                 rounded-full bg-purple-500/15 text-purple-300
+                                 border border-purple-500/25 flex items-center gap-1">
                   ✏ Personalised
                 </span>
               )}
             </div>
 
-            {/* Product name */}
+            {/* Name */}
             <h1
               className="font-black text-5xl md:text-6xl uppercase leading-none mb-4"
               style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
@@ -629,87 +775,110 @@ export default function ProductPage() {
               </p>
             )}
 
-            {/* Variant Attributes */}
-            {(product.variant_config?.attributes || []).length > 0 && (
+            {/* ── Variant selectors ── */}
+            {hasVariants && (
               <div className="space-y-5 mb-8">
-                {product.variant_config.attributes.map(attr => (
-                  <div key={attr.name}>
-                    <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-3">
-                      {attr.name}
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {attr.values.map(value => {
-                        const variantWithValue = product.variant_config.variants.find(v =>
-                          v.values[attr.name] === value &&
-                          Object.entries(selectedVariant).every(([k, v]) =>
-                            k === attr.name || v === "" || v === product.variant_config.variants.find(var_ =>
-                              var_.values[k] === v && var_.values[attr.name] === value
-                            )?.values[k]
-                          )
-                        );
-                        const active = selectedVariant[attr.name] === value;
-                        const noStock = product.track_stock && (!variantWithValue || variantWithValue.stock === 0);
+                {variantConfig.attributes.map(attr => {
+                  const values = getValuesForAttribute(attr.name)
+                  if (values.length === 0) return null
 
+                  return (
+                    <div key={attr.name}>
+                      <label className="block text-white/50 text-[10px] font-bold
+                                        tracking-widest uppercase mb-3">
+                        {attr.name}
+                        {selectedVariantValues[attr.name] && (
+                          <span className="text-purple-400 ml-2 normal-case font-bold">
+                            — {selectedVariantValues[attr.name]}
+                          </span>
+                        )}
+                      </label>
+
+                      <div className="flex flex-wrap gap-2">
+                        {values.map(value => {
+                          const variant = getVariantForSelection(attr.name, value)
+                          const active  = selectedVariantValues[attr.name] === value
+                          const noStock = product.track_stock &&
+                            (!variant || variant.stock === 0)
+
+                          return (
+                            <button
+                              key={value}
+                              onClick={() => handleVariantSelect(attr.name, value)}
+                              disabled={noStock}
+                              className="variant-btn px-5 py-2.5 rounded-xl text-sm font-black uppercase
+                                         tracking-wider cursor-pointer
+                                         disabled:opacity-30 disabled:cursor-not-allowed"
+                              style={{
+                                background: active
+                                  ? "rgba(168,85,247,0.35)"
+                                  : "rgba(255,255,255,0.06)",
+                                color: active ? "#c084fc" : "rgba(255,255,255,0.6)",
+                                border: active
+                                  ? "1px solid rgba(168,85,247,0.6)"
+                                  : "1px solid rgba(255,255,255,0.1)",
+                              }}
+                            >
+                              {value}
+                              {product.track_stock &&
+                                variant &&
+                                variant.stock > 0 &&
+                                variant.stock <= 3 && (
+                                  <span className="ml-1.5 text-[9px] text-yellow-400/80">
+                                    ({variant.stock} left)
+                                  </span>
+                                )}
+                            </button>
+                          )
+                        })}
+                      </div>
+
+                      {/* Per-value stock indicator */}
+                      {selectedVariantValues[attr.name] && (() => {
+                        const v = getVariantForSelection(
+                          attr.name,
+                          selectedVariantValues[attr.name]
+                        )
+                        if (!product.track_stock || !v) return null
+                        const color =
+                          v.stock > 5 ? "#34d399" :
+                          v.stock > 0 ? "#fbbf24" : "#f87171"
                         return (
-                          <button
-                            key={value}
-                            onClick={() =>
-                              setSelectedVariant(prev => ({
-                                ...prev,
-                                [attr.name]: active ? "" : value,
-                              }))
-                            }
-                            disabled={noStock}
-                            className="px-5 py-2.5 rounded-xl text-sm font-black uppercase tracking-wider
-                                       transition-all duration-200 cursor-pointer
-                                       disabled:opacity-30 disabled:cursor-not-allowed"
+                          <div
+                            className="stock-indicator mt-2 inline-flex items-center gap-2 px-3 py-1.5
+                                       rounded-xl border text-xs font-bold"
                             style={{
-                              background: active ? "rgba(168,85,247,0.35)" : "rgba(255,255,255,0.06)",
-                              color: active ? "#c084fc" : "rgba(255,255,255,0.6)",
-                              border: active ? "1px solid rgba(168,85,247,0.6)" : "1px solid rgba(255,255,255,0.1)",
+                              background:  `${color}15`,
+                              borderColor: `${color}30`,
+                              color,
                             }}
                           >
-                            {value}
-                          </button>
-                        );
-                      })}
+                            <span
+                              className="w-1.5 h-1.5 rounded-full shrink-0"
+                              style={{ background: color }}
+                            />
+                            {v.stock > 5
+                              ? `${v.stock} in stock`
+                              : v.stock > 0
+                              ? `Only ${v.stock} left!`
+                              : "Out of stock"}
+                          </div>
+                        )
+                      })()}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
 
-            {/* Stock indicator */}
-            {product.track_stock && matchingVariant && (
-              <div
-                className="flex items-center gap-2 mb-6 px-4 py-2.5 rounded-xl border"
-                style={{
-                  background:
-                    matchingVariant.stock > 5 ? "rgba(52,211,153,0.1)" : matchingVariant.stock > 0 ? "rgba(251,191,36,0.1)" : "rgba(248,113,113,0.1)",
-                  borderColor:
-                    matchingVariant.stock > 5 ? "rgba(52,211,153,0.25)" : matchingVariant.stock > 0 ? "rgba(251,191,36,0.25)" : "rgba(248,113,113,0.25)",
-                  color: matchingVariant.stock > 5 ? "#34d399" : matchingVariant.stock > 0 ? "#fbbf24" : "#f87171",
-                }}
-              >
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "currentColor" }} />
-                <span className="text-xs font-bold tracking-wider">
-                  {matchingVariant.stock > 5
-                    ? `${matchingVariant.stock} in stock`
-                    : matchingVariant.stock > 0
-                    ? `Only ${matchingVariant.stock} left!`
-                    : "Out of stock"}
-                </span>
-              </div>
-            )}
-
-            {/* Personalisation section */}
+            {/* Personalisation */}
             <PersonalisationSection
               product={product}
               customValues={customValues}
               onCustomValuesChange={setCustomValues}
             />
 
-            {/* Order form card */}
+            {/* Order form */}
             <div
               className="rounded-3xl border border-white/10 p-6"
               style={{ background: "rgba(255,255,255,0.03)" }}
@@ -722,7 +891,7 @@ export default function ProductPage() {
               </h3>
               <OrderForm
                 product={product}
-                selectedVariant={matchingVariant}
+                selectedVariantValues={selectedVariantValues}
                 customValues={customValues}
                 onCustomValuesChange={setCustomValues}
                 onSuccess={() => setOrderSuccess(true)}
@@ -740,10 +909,8 @@ export default function ProductPage() {
             className="text-white/30 hover:text-white text-xs font-bold tracking-widest uppercase
                        transition-colors flex items-center gap-2 group cursor-pointer"
           >
-            <svg
-              className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
-              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-            >
+            <svg className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
             Back to Store
@@ -757,5 +924,5 @@ export default function ProductPage() {
         </div>
       </div>
     </div>
-  );
+  )
 }

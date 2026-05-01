@@ -52,7 +52,7 @@ def submit_order(request):
             except Product.DoesNotExist:
                 pass
 
-        variant_values     = data.get('variant_values', {})
+        variant_values      = data.get('variant_values', {})
         custom_field_values = data.get('custom_field_values', {})
 
         if not isinstance(variant_values, dict):
@@ -108,6 +108,25 @@ def create_product(request):
             variant_config = json.loads(variant_config_raw)
         except (json.JSONDecodeError, TypeError):
             variant_config = {'attributes': [], 'variants': []}
+
+        # Ensure clean schema — strip any legacy SKU/type/values fields
+        if isinstance(variant_config, dict):
+            clean_attrs = [
+                {'name': a['name']}
+                for a in variant_config.get('attributes', [])
+                if isinstance(a, dict) and a.get('name')
+            ]
+            clean_variants = [
+                {
+                    'id':        v.get('id', ''),
+                    'attribute': v.get('attribute', ''),
+                    'value':     v.get('value', ''),
+                    'stock':     int(v.get('stock', 0)),
+                }
+                for v in variant_config.get('variants', [])
+                if isinstance(v, dict) and v.get('attribute') and v.get('value')
+            ]
+            variant_config = {'attributes': clean_attrs, 'variants': clean_variants}
 
         # Parse custom_fields
         custom_fields_raw = data.get('custom_fields', '[]')
@@ -185,7 +204,24 @@ def update_product(request, pk):
 
         if 'variant_config' in data:
             try:
-                product.variant_config = json.loads(data['variant_config'])
+                variant_config = json.loads(data['variant_config'])
+                if isinstance(variant_config, dict):
+                    clean_attrs = [
+                        {'name': a['name']}
+                        for a in variant_config.get('attributes', [])
+                        if isinstance(a, dict) and a.get('name')
+                    ]
+                    clean_variants = [
+                        {
+                            'id':        v.get('id', ''),
+                            'attribute': v.get('attribute', ''),
+                            'value':     v.get('value', ''),
+                            'stock':     int(v.get('stock', 0)),
+                        }
+                        for v in variant_config.get('variants', [])
+                        if isinstance(v, dict) and v.get('attribute') and v.get('value')
+                    ]
+                    product.variant_config = {'attributes': clean_attrs, 'variants': clean_variants}
             except (json.JSONDecodeError, TypeError):
                 pass
 
