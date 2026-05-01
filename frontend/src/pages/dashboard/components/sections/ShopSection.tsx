@@ -64,6 +64,7 @@ type Order = {
   phone: string
   wilaya: string
   wilaya_label: string
+  baladiya: string  
   address: string
   status: string
   notes: string
@@ -1341,6 +1342,7 @@ function OrderModal({
               { label: 'Email',   value: order.email },
               { label: 'Phone',   value: order.phone },
               { label: 'Wilaya',  value: order.wilaya_label || order.wilaya },
+              { label: 'Baladiya', value: order.baladiya },
               { label: 'Address', value: order.address },
             ]
               .filter(r => r.value)
@@ -1929,6 +1931,7 @@ export default function ShopSection() {
                       {o.variant_display && ` · ${o.variant_display}`}
                       {` · Qty: ${o.quantity}`}
                       {o.wilaya_label && ` · ${o.wilaya_label}`}
+                      {o.baladiya && ` · ${o.baladiya}`}
                     </p>
                     {firstCustom && (
                       <p className="text-purple-400/50 text-[10px] mt-0.5 truncate">

@@ -329,7 +329,7 @@ function OrderForm({
           <input
             type="tel"
             required
-            placeholder="+213 5XX XXX XXX"
+            placeholder="05 XX XX XX XX"
             value={form.phone}
             onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
             className={inputClass}

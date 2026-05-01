@@ -70,6 +70,7 @@ def submit_order(request):
             email=data['email'],
             phone=data['phone'],
             wilaya=data.get('wilaya', ''),
+            baladiya=data.get('baladiya', ''),
             address=data.get('address', ''),
         )
         return JsonResponse({'success': True, 'id': order.id}, status=201)
@@ -78,7 +79,6 @@ def submit_order(request):
         return JsonResponse({'error': f'Missing field: {e}'}, status=400)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
-
 
 # ── Staff ──────────────────────────────────────────────────────────────────────
 
