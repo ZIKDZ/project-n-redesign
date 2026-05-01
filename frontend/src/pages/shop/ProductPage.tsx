@@ -123,10 +123,6 @@ const WILAYA_CHOICES: [string, string][] = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/**
- * Normalise whatever shape variant_config arrives in from the API.
- * Handles both the new flat schema AND the old schema.
- */
 function normaliseVariantConfig(raw: any): VariantConfig {
   if (!raw || typeof raw !== "object") {
     return { attributes: [], variants: [] }
@@ -135,23 +131,19 @@ function normaliseVariantConfig(raw: any): VariantConfig {
   const rawAttrs    = Array.isArray(raw.attributes) ? raw.attributes : []
   const rawVariants = Array.isArray(raw.variants)   ? raw.variants   : []
 
-  // ── New flat schema: variants have {attribute, value, stock} ──
-  const isNewSchema = rawVariants.every((v: any) => 
+  const isNewSchema = rawVariants.every((v: any) =>
     v?.attribute !== undefined && v?.value !== undefined
   )
 
   if (isNewSchema || rawVariants.length > 0) {
-    // Build attributes list from explicit attributes array
     const explicitAttrNames = rawAttrs
       .map((a: any) => a?.name)
       .filter(Boolean) as string[]
 
-    // Also derive from variants if not in explicit list
     const variantAttrNames = Array.from(
       new Set(rawVariants.map((v: any) => v?.attribute).filter(Boolean))
     ) as string[]
 
-    // Merge: explicit first, then any from variants
     const mergedAttrNames = [
       ...explicitAttrNames,
       ...variantAttrNames.filter(n => !explicitAttrNames.includes(n)),
@@ -171,7 +163,6 @@ function normaliseVariantConfig(raw: any): VariantConfig {
     return { attributes, variants }
   }
 
-  // ── Old schema fallback ──
   const attributes: VariantAttribute[] = rawAttrs.map((a: any) => ({ name: a.name }))
   const variants: Variant[] = []
 
@@ -199,12 +190,14 @@ function normaliseVariantConfig(raw: any): VariantConfig {
 
 function OrderForm({
   product,
+  variantConfig,
   selectedVariantValues,
   customValues,
   onCustomValuesChange,
   onSuccess,
 }: {
   product: Product
+  variantConfig: VariantConfig
   selectedVariantValues: Record<string, string>
   customValues: Record<string, string>
   onCustomValuesChange: (values: Record<string, string>) => void
@@ -227,7 +220,6 @@ function OrderForm({
     "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm " +
     "placeholder-white/25 focus:outline-none focus:border-purple-500/60 transition-all duration-200"
 
-  // Resolve the active variant for stock/qty purposes
   const activeVariant: Variant | null = (() => {
     const entries = Object.entries(selectedVariantValues).filter(([, v]) => v)
     if (entries.length === 0) return null
@@ -245,11 +237,23 @@ function OrderForm({
     f => !f.required || (customValues[f.label] || "").trim() !== ""
   )
 
+  // Attributes that haven't been selected yet
+  const unselectedAttributes = variantConfig.attributes.filter(
+    attr => !selectedVariantValues[attr.name]
+  )
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Email is now optional, only check full_name and phone
     if (!form.full_name || !form.phone) return
     if (!customFieldsValid) return
+
+    // Block submission if any variant attribute has no selection
+    if (unselectedAttributes.length > 0) {
+      setErrorMsg(
+        `Please select a ${unselectedAttributes.map(a => a.name).join(" and ")} before placing your order.`
+      )
+      return
+    }
 
     setStatus("loading")
     setErrorMsg("")
@@ -452,7 +456,16 @@ function OrderForm({
 
       <button
         type="submit"
-        disabled={status === "loading" || !customFieldsValid}
+        disabled={
+          status === "loading" ||
+          !customFieldsValid ||
+          unselectedAttributes.length > 0 ||
+          !form.full_name ||
+          !form.phone ||
+          !form.wilaya ||
+          !form.baladiya ||
+          !form.address
+        }
         className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50
                    disabled:cursor-not-allowed text-white font-black py-4 rounded-xl
                    text-sm tracking-widest uppercase transition-all duration-200
@@ -558,11 +571,9 @@ export default function ProductPage() {
           Object.fromEntries((data.custom_fields || []).map(f => [f.label, ""]))
         )
 
-        // Normalise variant config
         const normConfig = normaliseVariantConfig(data.variant_config)
         setVariantConfig(normConfig)
 
-        // Init selections with all attributes
         const initialSelections: Record<string, string> = {}
         normConfig.attributes.forEach(a => {
           initialSelections[a.name] = ""
@@ -599,7 +610,6 @@ export default function ProductPage() {
     ...(product.images || []),
   ]
 
-  // Get unique values per attribute from the normalised flat variants list
   const getValuesForAttribute = (attrName: string): string[] => {
     const seen   = new Set<string>()
     const result: string[] = []
@@ -612,11 +622,9 @@ export default function ProductPage() {
     return result
   }
 
-  // Find the flat variant for a specific attribute + value
   const getVariantForSelection = (attrName: string, value: string): Variant | undefined =>
     variantConfig.variants.find(v => v.attribute === attrName && v.value === value)
 
-  // Overall in-stock check
   const checkInStock = (): boolean => {
     if (!product.track_stock) return true
     const entries = Object.entries(selectedVariantValues).filter(([, v]) => v)
@@ -648,22 +656,16 @@ export default function ProductPage() {
         @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(24px); }
                              to   { opacity: 1; transform: translateY(0);    } }
-            
-        /* Variant button hover animation */
         .variant-btn {
           transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
-            
         .variant-btn:hover:not(:disabled) {
           transform: translateY(-2px);
           box-shadow: 0 8px 16px rgba(168, 85, 247, 0.15);
         }
-            
         .variant-btn:active:not(:disabled) {
           transform: translateY(0px);
         }
-            
-        /* Stock indicator animation */
         .stock-indicator {
           animation: slideUp 0.3s ease-out;
         }
@@ -856,9 +858,13 @@ export default function ProductPage() {
                       <label className="block text-white/50 text-[10px] font-bold
                                         tracking-widest uppercase mb-3">
                         {attr.name}
-                        {selectedVariantValues[attr.name] && (
+                        {selectedVariantValues[attr.name] ? (
                           <span className="text-purple-400 ml-2 normal-case font-bold">
                             — {selectedVariantValues[attr.name]}
+                          </span>
+                        ) : (
+                          <span className="text-red-400/60 ml-2 normal-case font-bold">
+                            — Required
                           </span>
                         )}
                       </label>
@@ -960,6 +966,7 @@ export default function ProductPage() {
               </h3>
               <OrderForm
                 product={product}
+                variantConfig={variantConfig}
                 selectedVariantValues={selectedVariantValues}
                 customValues={customValues}
                 onCustomValuesChange={setCustomValues}
