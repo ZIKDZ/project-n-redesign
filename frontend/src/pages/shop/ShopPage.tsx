@@ -1,7 +1,7 @@
 // ShopPage.tsx
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { asset } from "../utils/asset";
+import { asset } from "../../utils/asset";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

@@ -13,7 +13,7 @@ import PlayersSection   from './components/sections/PlayersSection'
 import TeamsSection     from './components/sections/TeamsSection'
 import GamesSection     from './components/sections/GamesSection'
 import SpotlightSection from './components/sections/SpotlightSection'
-import ShopSection from './components/sections/ShopSection'
+import ShopSection from './components/sections/shop/ShopSection'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Section = 'overview' | 'joins' | 'matches' | 'news' | 'players' | 'teams' | 'games' | 'spotlight' | 'shop'

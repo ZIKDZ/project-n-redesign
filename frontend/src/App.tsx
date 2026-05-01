@@ -7,8 +7,8 @@ import Dashboard from './pages/dashboard/Dashboard'
 import RosterPage from './pages/RosterPage'
 import NewsArticlePage from './pages/NewsArticlePage'
 import PlayerPage from './pages/PlayerPage'
-import ShopPage   from './pages/ShopPage'
-import ProductPage from './pages/ProductPage'
+import ShopPage   from './pages/shop/ShopPage'
+import ProductPage from './pages/shop/ProductPage'
 
 // ── Auth context ──────────────────────────────────────────────────────────────
 interface AuthUser {
