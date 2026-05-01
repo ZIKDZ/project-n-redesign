@@ -512,7 +512,6 @@ function PersonalisationSection({
                 onCustomValuesChange({ ...customValues, [field.label]: e.target.value })
               }
               className={inputClass}
-              style={{ textTransform: "uppercase" }}
             />
           </div>
         ))}
