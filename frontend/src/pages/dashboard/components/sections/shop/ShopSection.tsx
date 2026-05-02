@@ -1,14 +1,14 @@
 // ShopSection.tsx
 import { useState, useCallback } from 'react'
-import { ActionButton } from '../../DashboardShared'
 import ProductsTab from './ProductsTab'
 import OrdersTab   from './OrdersTab'
+import CouponsTab  from './CouponsTab'
 
-type Tab = 'products' | 'orders'
+type Tab = 'products' | 'orders' | 'coupons'
 
 export default function ShopSection() {
-  const [tab, setTab]               = useState<Tab>('products')
-  const [pendingCount, setPending]  = useState(0)
+  const [tab, setTab]              = useState<Tab>('products')
+  const [pendingCount, setPending] = useState(0)
 
   const handlePendingCount = useCallback((n: number) => setPending(n), [])
 
@@ -20,6 +20,7 @@ export default function ShopSection() {
           {([
             ['products', '🛍 Products'],
             ['orders',   '📦 Orders'],
+            ['coupons',  '🏷 Coupons'],
           ] as const).map(([t, l]) => (
             <button
               key={t}
@@ -42,13 +43,12 @@ export default function ShopSection() {
             </button>
           ))}
         </div>
-
-        {/* "Add Product" lives inside ProductsTab; kept here only if you want it at the top level */}
       </div>
 
       {/* ── Tab content ── */}
       {tab === 'products' && <ProductsTab />}
       {tab === 'orders'   && <OrdersTab onPendingCount={handlePendingCount} />}
+      {tab === 'coupons'  && <CouponsTab />}
     </div>
   )
 }

@@ -1,9 +1,10 @@
 import json
+from datetime import date
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
-from .models import Product, ProductImage, Order, WILAYA_CHOICES
+from .models import Product, ProductImage, Order, Coupon, WILAYA_CHOICES
 
 
 def _product_dict(product):
@@ -60,6 +61,11 @@ def submit_order(request):
         if not isinstance(custom_field_values, dict):
             custom_field_values = {}
 
+        # ── Coupon / pricing fields ───────────────────────────────────────────
+        coupon_code     = str(data.get('coupon_code', '') or '').strip().upper()
+        discount_amount = float(data.get('discount_amount', 0) or 0)
+        total_amount    = float(data.get('total_amount', 0) or 0)
+
         order = Order.objects.create(
             product=product,
             product_name=product_name,
@@ -67,11 +73,14 @@ def submit_order(request):
             quantity=int(data.get('quantity', 1)),
             custom_field_values=custom_field_values,
             full_name=data['full_name'],
-            email=data['email'],
+            email=data.get('email', ''),
             phone=data['phone'],
             wilaya=data.get('wilaya', ''),
             baladiya=data.get('baladiya', ''),
             address=data.get('address', ''),
+            coupon_code=coupon_code,
+            discount_amount=discount_amount,
+            total_amount=total_amount,
         )
         return JsonResponse({'success': True, 'id': order.id}, status=201)
 
@@ -80,7 +89,8 @@ def submit_order(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-# ── Staff ──────────────────────────────────────────────────────────────────────
+
+# ── Staff — Products ───────────────────────────────────────────────────────────
 
 @login_required
 @require_http_methods(['GET'])
@@ -102,14 +112,12 @@ def create_product(request):
             data        = json.loads(request.body)
             banner_file = None
 
-        # Parse variant_config
         variant_config_raw = data.get('variant_config', '{}')
         try:
             variant_config = json.loads(variant_config_raw)
         except (json.JSONDecodeError, TypeError):
             variant_config = {'attributes': [], 'variants': []}
 
-        # Ensure clean schema — strip any legacy SKU/type/values fields
         if isinstance(variant_config, dict):
             clean_attrs = [
                 {'name': a['name']}
@@ -128,7 +136,6 @@ def create_product(request):
             ]
             variant_config = {'attributes': clean_attrs, 'variants': clean_variants}
 
-        # Parse custom_fields
         custom_fields_raw = data.get('custom_fields', '[]')
         try:
             custom_fields = json.loads(custom_fields_raw)
@@ -152,7 +159,6 @@ def create_product(request):
             product.banner = banner_file
         product.save()
 
-        # Add gallery images
         gallery_keys = sorted(
             [k for k in request.FILES if k.startswith('gallery_')],
             key=lambda k: int(k.split('_', 1)[1]) if k.split('_', 1)[1].isdigit() else 999,
@@ -309,7 +315,7 @@ def delete_gallery_image(request, pk, img_pk):
         return JsonResponse({'error': 'Not found'}, status=404)
 
 
-# ── Orders ─────────────────────────────────────────────────────────────────────
+# ── Staff — Orders ─────────────────────────────────────────────────────────────
 
 @login_required
 @require_http_methods(['GET'])
@@ -346,4 +352,82 @@ def delete_order(request, pk):
         Order.objects.get(pk=pk).delete()
         return JsonResponse({'success': True})
     except Order.DoesNotExist:
+        return JsonResponse({'error': 'Not found'}, status=404)
+
+
+# ── Staff — Coupons ────────────────────────────────────────────────────────────
+
+@login_required
+@require_http_methods(['GET'])
+def list_coupons(request):
+    """Staff — list all coupons."""
+    coupons = Coupon.objects.all()
+    return JsonResponse({'coupons': [c.to_dict() for c in coupons]})
+
+
+@login_required
+@require_http_methods(['POST'])
+def create_coupon(request):
+    """Staff — create a coupon."""
+    try:
+        data = json.loads(request.body)
+
+        expiration_date = data.get('expiration_date') or None
+        if isinstance(expiration_date, str) and expiration_date:
+            expiration_date = date.fromisoformat(expiration_date)
+
+        coupon = Coupon.objects.create(
+            code=data['code'].strip().upper(),
+            discount_type=data['discount_type'],
+            value=data['value'],
+            allowed_products=data.get('allowed_products', []),
+            minimum_order_amount=data.get('minimum_order_amount', 0),
+            expiration_date=expiration_date,
+            is_active=data.get('is_active', True),
+        )
+        return JsonResponse(coupon.to_dict(), status=201)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+@require_http_methods(['PATCH'])
+def update_coupon(request, pk):
+    """Staff — update a coupon."""
+    try:
+        coupon = Coupon.objects.get(pk=pk)
+        data   = json.loads(request.body)
+        if 'code' in data:
+            coupon.code = data['code'].strip().upper()
+        if 'discount_type' in data:
+            coupon.discount_type = data['discount_type']
+        if 'value' in data:
+            coupon.value = data['value']
+        if 'allowed_products' in data:
+            coupon.allowed_products = data['allowed_products']
+        if 'minimum_order_amount' in data:
+            coupon.minimum_order_amount = data['minimum_order_amount']
+        if 'expiration_date' in data:
+            raw = data['expiration_date'] or None
+            if isinstance(raw, str) and raw:
+                raw = date.fromisoformat(raw)
+            coupon.expiration_date = raw
+        if 'is_active' in data:
+            coupon.is_active = bool(data['is_active'])
+        coupon.save()
+        return JsonResponse(coupon.to_dict())
+    except Coupon.DoesNotExist:
+        return JsonResponse({'error': 'Not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@login_required
+@require_http_methods(['DELETE'])
+def delete_coupon(request, pk):
+    """Staff — delete a coupon."""
+    try:
+        Coupon.objects.get(pk=pk).delete()
+        return JsonResponse({'success': True})
+    except Coupon.DoesNotExist:
         return JsonResponse({'error': 'Not found'}, status=404)

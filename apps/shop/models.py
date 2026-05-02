@@ -82,7 +82,7 @@ WILAYA_CHOICES = [
     ('63', 'El Abiodh Sidi Cheikh'),
     ('64', 'Ksar Chellala'),
     ('65', 'Ain Ouessara'),
-    ('66', 'M\'Sila'),
+    ('66', "M'Sila"),
     ('67', 'Ksar El Boukhari'),
     ('68', 'Bou Saâda'),
     ('69', 'El Abiodh Sidi Cheikh'),
@@ -98,25 +98,12 @@ class Product(models.Model):
     banner        = models.ImageField(upload_to='shop/banners/', blank=True, null=True)
     banner_url    = models.URLField(blank=True, help_text='External URL fallback')
 
-    # Variant system schema:
-    # {
-    #   "attributes": [
-    #     {"name": "Size"},
-    #     {"name": "Color"}
-    #   ],
-    #   "variants": [
-    #     {"id": "var_123_abc", "attribute": "Size",  "value": "S",     "stock": 10},
-    #     {"id": "var_124_def", "attribute": "Size",  "value": "M",     "stock": 5},
-    #     {"id": "var_125_ghi", "attribute": "Color", "value": "Black", "stock": 8}
-    #   ]
-    # }
     variant_config = models.JSONField(
         default=dict,
         blank=True,
         help_text='Dynamic variant attributes and their individual values'
     )
 
-    # Custom fields: [{"label": "Back Name", "placeholder": "e.g. SMITH", "required": true}, ...]
     custom_fields = models.JSONField(
         default=list,
         blank=True,
@@ -146,15 +133,12 @@ class Product(models.Model):
         return self.banner_url or ''
 
     def get_attributes(self):
-        """Return list of variant attributes."""
         return self.variant_config.get('attributes', [])
 
     def get_variants(self):
-        """Return list of individual variant values."""
         return self.variant_config.get('variants', [])
 
     def total_stock(self):
-        """Sum of all variant stocks."""
         if not self.track_stock:
             return None
         return sum(v.get('stock', 0) for v in self.get_variants())
@@ -201,12 +185,62 @@ class ProductImage(models.Model):
         }
 
 
+# ── Coupons ───────────────────────────────────────────────────────────────────
+
+class Coupon(models.Model):
+    DISCOUNT_TYPE_CHOICES = [
+        ('fixed',      'Fixed Amount (DZD)'),
+        ('percentage', 'Percentage (%)'),
+    ]
+
+    code                 = models.CharField(max_length=50, unique=True)
+    discount_type        = models.CharField(max_length=10, choices=DISCOUNT_TYPE_CHOICES)
+    value                = models.DecimalField(max_digits=10, decimal_places=2)
+    allowed_products     = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='List of product IDs this coupon applies to. Empty = all products.',
+    )
+    minimum_order_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text='Minimum cart value required to use this coupon.',
+    )
+    expiration_date      = models.DateField(
+        null=True, blank=True,
+        help_text='Coupon expires at end of this date. Leave blank for no expiry.',
+    )
+    is_active            = models.BooleanField(default=True)
+    created_at           = models.DateTimeField(auto_now_add=True)
+    updated_at           = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.code} ({self.discount_type})"
+
+    def to_dict(self):
+        return {
+            'id':                   self.id,
+            'code':                 self.code,
+            'discount_type':        self.discount_type,
+            'value':                str(self.value),
+            'allowed_products':     self.allowed_products or [],
+            'minimum_order_amount': str(self.minimum_order_amount),
+            'expiration_date':      self.expiration_date.isoformat() if self.expiration_date else None,
+            'is_active':            self.is_active,
+            'created_at':           self.created_at.isoformat(),
+        }
+
+
+# ── Orders ────────────────────────────────────────────────────────────────────
+
 class Order(models.Model):
-    product       = models.ForeignKey(
+    product      = models.ForeignKey(
         Product, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='orders'
     )
-    product_name  = models.CharField(max_length=200, blank=True)
+    product_name = models.CharField(max_length=200, blank=True)
 
     # Variant selection: {"Size": "M", "Color": "Black"}
     variant_values = models.JSONField(
@@ -214,24 +248,38 @@ class Order(models.Model):
         blank=True,
         help_text='Selected variant attribute values'
     )
-    quantity       = models.PositiveSmallIntegerField(default=1)
+    quantity = models.PositiveSmallIntegerField(default=1)
 
     # Custom field answers: {"Back Name": "SMITH"}
     custom_field_values = models.JSONField(default=dict, blank=True)
 
-    full_name      = models.CharField(max_length=150)
-    email          = models.EmailField(blank=True)  # Made optional
-    phone          = models.CharField(max_length=30)
-    wilaya         = models.CharField(max_length=3, choices=WILAYA_CHOICES, blank=True)
-    baladiya       = models.CharField(max_length=100, blank=True)  # New field
-    address        = models.TextField(blank=True)
+    full_name = models.CharField(max_length=150)
+    email     = models.EmailField(blank=True)
+    phone     = models.CharField(max_length=30)
+    wilaya    = models.CharField(max_length=3, choices=WILAYA_CHOICES, blank=True)
+    baladiya  = models.CharField(max_length=100, blank=True)
+    address   = models.TextField(blank=True)
 
-    status         = models.CharField(
+    # ── Coupon / pricing ──────────────────────────────────────────────────────
+    coupon_code     = models.CharField(
+        max_length=50, blank=True,
+        help_text='Coupon code applied at checkout, if any'
+    )
+    discount_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text='Monetary discount applied (0 if no coupon)'
+    )
+    total_amount    = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text='Final amount after discount (0 means not recorded)'
+    )
+
+    status       = models.CharField(
         max_length=20, choices=ORDER_STATUS_CHOICES, default='pending'
     )
-    notes          = models.TextField(blank=True)
-    submitted_at   = models.DateTimeField(auto_now_add=True)
-    updated_at     = models.DateTimeField(auto_now=True)
+    notes        = models.TextField(blank=True)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    updated_at   = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-submitted_at']
@@ -241,15 +289,19 @@ class Order(models.Model):
 
     def to_dict(self):
         wilaya_label = dict(WILAYA_CHOICES).get(self.wilaya, self.wilaya)
-        # Format: "Size: M / Color: Black"
-        variant_str = ' / '.join(
+        variant_str  = ' / '.join(
             f"{k}: {v}" for k, v in self.variant_values.items()
         ) if self.variant_values else ''
+
+        # Derive the unit price from the linked product if available
+        unit_price = str(self.product.price) if self.product else ''
+
         return {
             'id':                  self.id,
             'product_id':          self.product_id,
             'product_name':        self.product.name if self.product else self.product_name,
             'product_banner':      self.product.get_banner() if self.product else '',
+            'price':               unit_price,
             'variant_values':      self.variant_values or {},
             'variant_display':     variant_str,
             'quantity':            self.quantity,
@@ -261,6 +313,9 @@ class Order(models.Model):
             'wilaya_label':        wilaya_label,
             'baladiya':            self.baladiya,
             'address':             self.address,
+            'coupon_code':         self.coupon_code,
+            'discount_amount':     str(self.discount_amount),
+            'total_amount':        str(self.total_amount),
             'status':              self.status,
             'notes':               self.notes,
             'submitted_at':        self.submitted_at.isoformat(),

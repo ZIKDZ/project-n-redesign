@@ -21,4 +21,10 @@ urlpatterns = [
     path('orders/', views.list_orders, name='list-orders'),
     path('orders/<int:pk>/', views.update_order, name='update-order'),
     path('orders/<int:pk>/delete/', views.delete_order, name='delete-order'),
+
+    # ── Staff — Coupons ───────────────────────────────────────────────────────
+    path('coupons/', views.list_coupons, name='list-coupons'),
+    path('coupons/create/', views.create_coupon, name='create-coupon'),
+    path('coupons/<int:pk>/', views.update_coupon, name='update-coupon'),
+    path('coupons/<int:pk>/delete/', views.delete_coupon, name='delete-coupon'),
 ]

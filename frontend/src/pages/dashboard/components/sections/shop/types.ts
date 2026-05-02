@@ -48,6 +48,8 @@ export type Order = {
   product_id: number | null
   product_name: string
   product_banner: string
+  // Unit price of the product at order time (from linked product)
+  price: string
   variant_values: Record<string, string>
   variant_display: string
   quantity: number
@@ -59,6 +61,10 @@ export type Order = {
   wilaya_label: string
   baladiya: string
   address: string
+  // Coupon / pricing
+  coupon_code: string       // empty string if no coupon
+  discount_amount: string   // "0.00" if no discount
+  total_amount: string      // "0.00" for orders created before this feature
   status: string
   notes: string
   submitted_at: string

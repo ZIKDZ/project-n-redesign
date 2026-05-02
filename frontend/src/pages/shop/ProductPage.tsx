@@ -1,5 +1,5 @@
 // ProductPage.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { asset } from "../../utils/asset";
 
@@ -47,6 +47,14 @@ interface Product {
   total_stock: number | null
   is_active: boolean
   is_featured: boolean
+}
+
+interface CouponResult {
+  code: string
+  discount_type: 'fixed' | 'percentage'
+  value: number
+  discountAmount: number
+  finalPrice: number
 }
 
 const WILAYA_CHOICES: [string, string][] = [
@@ -186,6 +194,213 @@ function normaliseVariantConfig(raw: any): VariantConfig {
   return { attributes, variants }
 }
 
+// ── CouponInput ───────────────────────────────────────────────────────────────
+
+function CouponInput({
+  productId,
+  subtotal,
+  onApply,
+  onRemove,
+  applied,
+}: {
+  productId: number
+  subtotal: number
+  onApply: (result: CouponResult) => void
+  onRemove: () => void
+  applied: CouponResult | null
+}) {
+  const [code, setCode]       = useState("")
+  const [status, setStatus]   = useState<"idle" | "loading" | "success" | "error">("idle")
+  const [errorMsg, setError]  = useState("")
+  const inputRef              = useRef<HTMLInputElement>(null)
+
+  const handleApply = async () => {
+    const trimmed = code.trim().toUpperCase()
+    if (!trimmed) return
+    setStatus("loading")
+    setError("")
+
+    try {
+      // Fetch all coupons and find the matching one client-side
+      // (no dedicated validate endpoint needed)
+      const res  = await fetch("/api/shop/coupons/", { credentials: "include" })
+      if (!res.ok) throw new Error("Could not validate coupon")
+      const data = await res.json()
+      const coupons: any[] = data.coupons || []
+
+      const coupon = coupons.find(
+        (c: any) => c.code === trimmed && c.is_active
+      )
+
+      if (!coupon) {
+        throw new Error("Invalid or inactive coupon code.")
+      }
+
+      // Check expiry
+      if (coupon.expiration_date) {
+        const expiry = new Date(coupon.expiration_date + "T23:59:59")
+        if (expiry < new Date()) {
+          throw new Error("This coupon has expired.")
+        }
+      }
+
+      // Check allowed products
+      if (
+        coupon.allowed_products.length > 0 &&
+        !coupon.allowed_products.includes(productId)
+      ) {
+        throw new Error("This coupon doesn't apply to this product.")
+      }
+
+      // Check minimum order amount
+      const minAmount = parseFloat(coupon.minimum_order_amount || "0")
+      if (subtotal < minAmount) {
+        throw new Error(
+          `Minimum order of ${minAmount.toLocaleString()} DZD required for this coupon.`
+        )
+      }
+
+      // Calculate discount
+      const value          = parseFloat(coupon.value)
+      let discountAmount   = 0
+
+      if (coupon.discount_type === "percentage") {
+        discountAmount = Math.round((subtotal * value) / 100)
+      } else {
+        discountAmount = Math.min(value, subtotal)
+      }
+
+      const finalPrice = Math.max(0, subtotal - discountAmount)
+
+      onApply({
+        code:           coupon.code,
+        discount_type:  coupon.discount_type,
+        value,
+        discountAmount,
+        finalPrice,
+      })
+      setStatus("success")
+    } catch (e: any) {
+      setError(e.message || "Failed to apply coupon.")
+      setStatus("error")
+    }
+  }
+
+  const handleRemove = () => {
+    setCode("")
+    setStatus("idle")
+    setError("")
+    onRemove()
+    setTimeout(() => inputRef.current?.focus(), 50)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault()
+      handleApply()
+    }
+  }
+
+  // If a coupon is already applied, show the applied state
+  if (applied) {
+    return (
+      <div
+        className="rounded-2xl border border-green-500/25 p-4"
+        style={{ background: "rgba(52,211,153,0.06)" }}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {/* Green check */}
+            <div className="w-8 h-8 rounded-full bg-green-500/20 border border-green-500/30
+                            flex items-center justify-center shrink-0">
+              <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-green-400 font-black text-sm tracking-widest font-mono">
+                {applied.code}
+              </p>
+              <p className="text-green-400/60 text-[10px] font-bold tracking-wider mt-0.5">
+                {applied.discount_type === "percentage"
+                  ? `${applied.value}% off applied`
+                  : `${applied.discountAmount.toLocaleString()} DZD off applied`}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleRemove}
+            className="text-white/25 hover:text-red-400 transition-colors text-xs font-bold
+                       tracking-wider uppercase cursor-pointer"
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase">
+        Coupon Code
+      </label>
+      <div className="flex gap-2">
+        <input
+          ref={inputRef}
+          type="text"
+          placeholder="Enter coupon code…"
+          value={code}
+          onChange={e => {
+            setCode(e.target.value.toUpperCase())
+            if (status === "error") { setStatus("idle"); setError("") }
+          }}
+          onKeyDown={handleKeyDown}
+          disabled={status === "loading"}
+          className={
+            "flex-1 bg-white/5 border rounded-xl px-4 py-3 text-white text-sm font-mono " +
+            "tracking-widest placeholder-white/20 focus:outline-none transition-all duration-200 " +
+            (status === "error"
+              ? "border-red-500/40 focus:border-red-500/60"
+              : "border-white/10 focus:border-purple-500/60")
+          }
+          style={{ letterSpacing: "0.12em" }}
+        />
+        <button
+          type="button"
+          onClick={handleApply}
+          disabled={!code.trim() || status === "loading"}
+          className="bg-purple-600/20 hover:bg-purple-600/35 disabled:opacity-40
+                     disabled:cursor-not-allowed border border-purple-500/30
+                     hover:border-purple-500/50 text-purple-300 font-black px-5 py-3
+                     rounded-xl text-xs tracking-widest uppercase transition-all
+                     cursor-pointer whitespace-nowrap"
+        >
+          {status === "loading" ? (
+            <span className="flex items-center gap-2">
+              <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10"
+                  stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor"
+                  d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
+              Checking…
+            </span>
+          ) : "Apply"}
+        </button>
+      </div>
+
+      {status === "error" && errorMsg && (
+        <p className="text-red-400 text-[11px] font-bold flex items-center gap-1.5">
+          <span>⚠</span> {errorMsg}
+        </p>
+      )}
+    </div>
+  )
+}
+
 // ── OrderForm ─────────────────────────────────────────────────────────────────
 
 function OrderForm({
@@ -213,8 +428,9 @@ function OrderForm({
     quantity:  1,
   })
 
-  const [status, setStatus]     = useState<"idle" | "loading" | "success" | "error">("idle")
-  const [errorMsg, setErrorMsg] = useState("")
+  const [appliedCoupon, setAppliedCoupon] = useState<CouponResult | null>(null)
+  const [status, setStatus]               = useState<"idle" | "loading" | "success" | "error">("idle")
+  const [errorMsg, setErrorMsg]           = useState("")
 
   const inputClass =
     "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm " +
@@ -237,17 +453,42 @@ function OrderForm({
     f => !f.required || (customValues[f.label] || "").trim() !== ""
   )
 
-  // Attributes that haven't been selected yet
   const unselectedAttributes = variantConfig.attributes.filter(
     attr => !selectedVariantValues[attr.name]
   )
+
+  // ── Price calculations ────────────────────────────────────────────────────
+
+  const unitPrice  = parseFloat(product.price)
+  const subtotal   = unitPrice * form.quantity
+
+  // Recompute coupon amounts whenever quantity changes
+  const couponDiscount = (() => {
+    if (!appliedCoupon) return 0
+    if (appliedCoupon.discount_type === "percentage") {
+      return Math.round((subtotal * appliedCoupon.value) / 100)
+    }
+    return Math.min(appliedCoupon.value, subtotal)
+  })()
+
+  const total = Math.max(0, subtotal - couponDiscount)
+
+  // When quantity changes, clear coupon if minimum is no longer met
+  // (handled by re-render — coupon recomputes dynamically)
+
+  const handleCouponApply = (result: CouponResult) => {
+    setAppliedCoupon(result)
+  }
+
+  const handleCouponRemove = () => {
+    setAppliedCoupon(null)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.full_name || !form.phone) return
     if (!customFieldsValid) return
 
-    // Block submission if any variant attribute has no selection
     if (unselectedAttributes.length > 0) {
       setErrorMsg(
         `Please select a ${unselectedAttributes.map(a => a.name).join(" and ")} before placing your order.`
@@ -273,6 +514,9 @@ function OrderForm({
           wilaya:              form.wilaya,
           baladiya:            form.baladiya,
           address:             form.address,
+          coupon_code:         appliedCoupon?.code || "",
+          discount_amount:     couponDiscount,
+          total_amount:        total,
         }),
       })
       if (!res.ok) {
@@ -398,6 +642,7 @@ function OrderForm({
         />
       </div>
 
+      {/* Quantity */}
       <div>
         <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-2">
           Quantity
@@ -437,14 +682,73 @@ function OrderForm({
         </div>
       </div>
 
-      <div className="flex items-center justify-between py-3 border-t border-white/8">
-        <span className="text-white/50 text-sm font-bold tracking-widest uppercase">Total</span>
-        <span
-          className="text-purple-300 font-black text-2xl"
-          style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-        >
-          {(parseFloat(product.price) * form.quantity).toLocaleString()} DZD
-        </span>
+      {/* ── Coupon input ── */}
+      <CouponInput
+        productId={product.id}
+        subtotal={subtotal}
+        onApply={handleCouponApply}
+        onRemove={handleCouponRemove}
+        applied={appliedCoupon}
+      />
+
+      {/* ── Price summary ── */}
+      <div
+        className="rounded-2xl border border-white/8 overflow-hidden"
+        style={{ background: "rgba(255,255,255,0.02)" }}
+      >
+        {/* Subtotal row — only show when there's a coupon */}
+        {appliedCoupon && (
+          <>
+            <div className="flex items-center justify-between px-4 py-3">
+              <span className="text-white/40 text-xs font-bold tracking-wider uppercase">
+                Subtotal
+                {form.quantity > 1 && (
+                  <span className="text-white/25 normal-case font-normal ml-1">
+                    ({form.quantity} × {unitPrice.toLocaleString()} DZD)
+                  </span>
+                )}
+              </span>
+              <span className="text-white/60 text-sm font-bold">
+                {subtotal.toLocaleString()} DZD
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between px-4 py-3 border-t border-white/5">
+              <span className="text-green-400/80 text-xs font-bold tracking-wider uppercase flex items-center gap-2">
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24"
+                  stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                Coupon — {appliedCoupon.code}
+              </span>
+              <span className="text-green-400 text-sm font-black">
+                −{couponDiscount.toLocaleString()} DZD
+              </span>
+            </div>
+
+            <div className="h-px bg-white/8 mx-4" />
+          </>
+        )}
+
+        {/* Total row */}
+        <div className="flex items-center justify-between px-4 py-4">
+          <span className="text-white/50 text-sm font-bold tracking-widest uppercase">
+            Total
+          </span>
+          <div className="text-right">
+            <span
+              className="text-purple-300 font-black text-2xl"
+              style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+            >
+              {total.toLocaleString()} DZD
+            </span>
+            {!appliedCoupon && form.quantity > 1 && (
+              <p className="text-white/20 text-[10px] mt-0.5">
+                {form.quantity} × {unitPrice.toLocaleString()} DZD
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
       {errorMsg && (
@@ -846,7 +1150,7 @@ export default function ProductPage() {
               </p>
             )}
 
-            {/* ── Variant selectors ── */}
+            {/* Variant selectors */}
             {hasVariants && (
               <div className="space-y-5 mb-8">
                 {variantConfig.attributes.map(attr => {
@@ -908,7 +1212,6 @@ export default function ProductPage() {
                         })}
                       </div>
 
-                      {/* Per-value stock indicator */}
                       {selectedVariantValues[attr.name] && (() => {
                         const v = getVariantForSelection(
                           attr.name,
