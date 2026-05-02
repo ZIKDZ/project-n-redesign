@@ -519,12 +519,21 @@ function OrderForm({
           total_amount:        total,
         }),
       })
+    
       if (!res.ok) {
         const err = await res.json()
         throw new Error(err.error || "Failed to submit")
       }
-      setStatus("success")
-      onSuccess()
+    
+      const result = await res.json()
+      if (result.checkout_url) {
+        window.location.href = result.checkout_url
+      } else {
+        // Chargily unavailable — fall back to inline success
+        setStatus("success")
+        onSuccess()
+      }
+    
     } catch (e: any) {
       setErrorMsg(e.message || "Something went wrong.")
       setStatus("error")

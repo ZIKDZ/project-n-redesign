@@ -274,6 +274,16 @@ class Order(models.Model):
         help_text='Final amount after discount (0 means not recorded)'
     )
 
+    # ── Chargily ──────────────────────────────────────────────────────────────
+    chargily_checkout_id  = models.CharField(
+        max_length=200, blank=True,
+        help_text='Chargily checkout entity ID'
+    )
+    chargily_checkout_url = models.URLField(
+        blank=True,
+        help_text='Redirect URL for the Chargily payment page'
+    )
+
     status       = models.CharField(
         max_length=20, choices=ORDER_STATUS_CHOICES, default='pending'
     )
@@ -293,30 +303,31 @@ class Order(models.Model):
             f"{k}: {v}" for k, v in self.variant_values.items()
         ) if self.variant_values else ''
 
-        # Derive the unit price from the linked product if available
         unit_price = str(self.product.price) if self.product else ''
 
         return {
-            'id':                  self.id,
-            'product_id':          self.product_id,
-            'product_name':        self.product.name if self.product else self.product_name,
-            'product_banner':      self.product.get_banner() if self.product else '',
-            'price':               unit_price,
-            'variant_values':      self.variant_values or {},
-            'variant_display':     variant_str,
-            'quantity':            self.quantity,
-            'custom_field_values': self.custom_field_values or {},
-            'full_name':           self.full_name,
-            'email':               self.email,
-            'phone':               self.phone,
-            'wilaya':              self.wilaya,
-            'wilaya_label':        wilaya_label,
-            'baladiya':            self.baladiya,
-            'address':             self.address,
-            'coupon_code':         self.coupon_code,
-            'discount_amount':     str(self.discount_amount),
-            'total_amount':        str(self.total_amount),
-            'status':              self.status,
-            'notes':               self.notes,
-            'submitted_at':        self.submitted_at.isoformat(),
+            'id':                   self.id,
+            'product_id':           self.product_id,
+            'product_name':         self.product.name if self.product else self.product_name,
+            'product_banner':       self.product.get_banner() if self.product else '',
+            'price':                unit_price,
+            'variant_values':       self.variant_values or {},
+            'variant_display':      variant_str,
+            'quantity':             self.quantity,
+            'custom_field_values':  self.custom_field_values or {},
+            'full_name':            self.full_name,
+            'email':                self.email,
+            'phone':                self.phone,
+            'wilaya':               self.wilaya,
+            'wilaya_label':         wilaya_label,
+            'baladiya':             self.baladiya,
+            'address':              self.address,
+            'coupon_code':          self.coupon_code,
+            'discount_amount':      str(self.discount_amount),
+            'total_amount':         str(self.total_amount),
+            'chargily_checkout_id': self.chargily_checkout_id,
+            'chargily_checkout_url':self.chargily_checkout_url,
+            'status':               self.status,
+            'notes':                self.notes,
+            'submitted_at':         self.submitted_at.isoformat(),
         }

@@ -107,9 +107,6 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # ── Storage backends ──────────────────────────────────────────────────────────
-# Uses STORAGES dict (Django 4.2+) — replaces DEFAULT_FILE_STORAGE
-# and STATICFILES_STORAGE which no longer work reliably in Django 5.x
-# ── Storage backends ──────────────────────────────────────────────────────────
 STORAGES = {
     "default": {
         "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
@@ -119,7 +116,6 @@ STORAGES = {
     },
 }
 
-# Required by django-cloudinary-storage which reads this setting directly
 STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
 
 WHITENOISE_ROOT = BASE_DIR / 'frontend' / 'dist'
@@ -135,3 +131,16 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "https://nblesport.up.railway.app",
 ]
+
+# ── Chargily Pay ──────────────────────────────────────────────────────────────
+CHARGILY_KEY    = config('CHARGILY_KEY',    default='')
+CHARGILY_SECRET = config('CHARGILY_SECRET', default='')
+CHARGILY_MODE   = config('CHARGILY_MODE',   default='test')  # 'test' or 'live'
+CHARGILY_URL    = (
+    "https://pay.chargily.net/api/v2/"
+    if CHARGILY_MODE == "live"
+    else "https://pay.chargily.net/test/api/v2/"
+)
+
+# Base URL of the site — used to build Chargily callback URLs
+SITE_URL = config('SITE_URL', default='http://localhost:8000')

@@ -1,10 +1,13 @@
 import json
+import logging
 from datetime import date
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from .models import Product, ProductImage, Order, Coupon, WILAYA_CHOICES
+
+logger = logging.getLogger(__name__)
 
 
 def _product_dict(product):
@@ -39,7 +42,12 @@ def get_product(request, pk):
 @csrf_exempt
 @require_http_methods(['POST'])
 def submit_order(request):
-    """Public — submit an order."""
+    """
+    Public — submit an order.
+    Creates the Order record then attempts to open a Chargily checkout.
+    Returns: { success, id, checkout_url }
+    If Chargily is unavailable the order is still saved; checkout_url will be ''.
+    """
     try:
         data         = json.loads(request.body)
         product_id   = data.get('product_id')
@@ -61,7 +69,6 @@ def submit_order(request):
         if not isinstance(custom_field_values, dict):
             custom_field_values = {}
 
-        # ── Coupon / pricing fields ───────────────────────────────────────────
         coupon_code     = str(data.get('coupon_code', '') or '').strip().upper()
         discount_amount = float(data.get('discount_amount', 0) or 0)
         total_amount    = float(data.get('total_amount', 0) or 0)
@@ -82,12 +89,105 @@ def submit_order(request):
             discount_amount=discount_amount,
             total_amount=total_amount,
         )
-        return JsonResponse({'success': True, 'id': order.id}, status=201)
+
+        # ── Chargily checkout ─────────────────────────────────────────────────
+        checkout_url = ''
+        try:
+            from .chargily_service import create_chargily_checkout
+            chargily_response             = create_chargily_checkout(order)
+            order.chargily_checkout_id    = chargily_response.get('id', '')
+            order.chargily_checkout_url   = chargily_response.get('checkout_url', '')
+            order.save(update_fields=['chargily_checkout_id', 'chargily_checkout_url'])
+            checkout_url = order.chargily_checkout_url
+        except Exception as exc:
+            # Order is already saved — log and continue gracefully
+            logger.error("Chargily checkout creation failed for order #%s: %s", order.id, exc)
+
+        return JsonResponse({
+            'success':      True,
+            'id':           order.id,
+            'checkout_url': checkout_url,
+        }, status=201)
 
     except KeyError as e:
         return JsonResponse({'error': f'Missing field: {e}'}, status=400)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+
+
+# ── Chargily webhook ───────────────────────────────────────────────────────────
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def chargily_webhook(request):
+    """
+    Receives Chargily payment events and updates the matching order's status.
+    Chargily docs: https://dev.chargily.com/pay-v2/webhooks
+    """
+    signature = request.headers.get('signature', '')
+    payload   = request.body.decode('utf-8')
+
+    if not signature:
+        return JsonResponse({'error': 'Missing signature header'}, status=400)
+
+    try:
+        from .chargily_service import validate_webhook
+        if not validate_webhook(signature, payload):
+            logger.warning("Chargily webhook: invalid signature")
+            return JsonResponse({'error': 'Invalid signature'}, status=403)
+    except Exception as exc:
+        logger.error("Chargily signature validation error: %s", exc)
+        return JsonResponse({'error': 'Signature validation failed'}, status=403)
+
+    try:
+        event         = json.loads(payload)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    event_type    = event.get('type', '')
+    checkout_data = event.get('data', {})
+
+    logger.info("Chargily webhook received: %s", event_type)
+
+    # Resolve the order — prefer metadata.order_id (set by us), fall back to checkout id
+    metadata = checkout_data.get('metadata') or {}
+    order_id = metadata.get('order_id')
+    order    = None
+
+    if order_id:
+        try:
+            order = Order.objects.get(pk=order_id)
+        except Order.DoesNotExist:
+            logger.error("Chargily webhook: order #%s not found (from metadata)", order_id)
+
+    if order is None:
+        checkout_id = checkout_data.get('id', '')
+        try:
+            order = Order.objects.get(chargily_checkout_id=checkout_id)
+        except Order.DoesNotExist:
+            logger.error("Chargily webhook: no order found for checkout %s", checkout_id)
+            return JsonResponse({'error': 'Order not found'}, status=404)
+
+    # Map Chargily event → order status
+    if event_type == 'checkout.paid':
+        order.status = 'confirmed'
+        logger.info("Order #%s marked as confirmed (payment received)", order.id)
+    elif event_type == 'checkout.failed':
+        order.status = 'cancelled'
+        order.notes  = (order.notes + '\nPayment failed via Chargily.').strip()
+    elif event_type == 'checkout.canceled':
+        order.status = 'cancelled'
+        order.notes  = (order.notes + '\nCancelled by customer on Chargily.').strip()
+    elif event_type == 'checkout.expired':
+        order.status = 'cancelled'
+        order.notes  = (order.notes + '\nChargily checkout expired.').strip()
+    else:
+        # Unknown event type — acknowledge without changing status
+        logger.info("Chargily webhook: unhandled event type '%s'", event_type)
+        return JsonResponse({'received': True}, status=200)
+
+    order.save()
+    return JsonResponse({'success': True}, status=200)
 
 
 # ── Staff — Products ───────────────────────────────────────────────────────────
@@ -360,7 +460,6 @@ def delete_order(request, pk):
 @login_required
 @require_http_methods(['GET'])
 def list_coupons(request):
-    """Staff — list all coupons."""
     coupons = Coupon.objects.all()
     return JsonResponse({'coupons': [c.to_dict() for c in coupons]})
 
@@ -368,7 +467,6 @@ def list_coupons(request):
 @login_required
 @require_http_methods(['POST'])
 def create_coupon(request):
-    """Staff — create a coupon."""
     try:
         data = json.loads(request.body)
 
@@ -393,7 +491,6 @@ def create_coupon(request):
 @login_required
 @require_http_methods(['PATCH'])
 def update_coupon(request, pk):
-    """Staff — update a coupon."""
     try:
         coupon = Coupon.objects.get(pk=pk)
         data   = json.loads(request.body)
@@ -425,7 +522,6 @@ def update_coupon(request, pk):
 @login_required
 @require_http_methods(['DELETE'])
 def delete_coupon(request, pk):
-    """Staff — delete a coupon."""
     try:
         Coupon.objects.get(pk=pk).delete()
         return JsonResponse({'success': True})

@@ -1,14 +1,16 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useState, useEffect, createContext, useContext } from 'react'
 import { auth } from './utils/api'
-import Landing from './pages/Landing'
-import Login from './pages/Login'
-import Dashboard from './pages/dashboard/Dashboard'
-import RosterPage from './pages/RosterPage'
+import Landing         from './pages/Landing'
+import Login           from './pages/Login'
+import Dashboard       from './pages/dashboard/Dashboard'
+import RosterPage      from './pages/RosterPage'
 import NewsArticlePage from './pages/NewsArticlePage'
-import PlayerPage from './pages/PlayerPage'
-import ShopPage   from './pages/shop/ShopPage'
-import ProductPage from './pages/shop/ProductPage'
+import PlayerPage      from './pages/PlayerPage'
+import ShopPage        from './pages/shop/ShopPage'
+import ProductPage     from './pages/shop/ProductPage'
+import PaymentSuccess  from './pages/shop/PaymentSuccess'
+import PaymentFailed   from './pages/shop/PaymentFailed'
 
 // ── Auth context ──────────────────────────────────────────────────────────────
 interface AuthUser {
@@ -61,13 +63,15 @@ export default function App() {
   return (
     <AuthContext.Provider value={{ user, loading, setUser }}>
       <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/roster/:gameSlug" element={<RosterPage />} />
-        <Route path="/player/:id" element={<PlayerPage />} />
-        <Route path="/news/:id" element={<NewsArticlePage />} />
-        <Route path="/shop"      element={<ShopPage />} />
-        <Route path="/shop/:id"  element={<ProductPage />} />
+        <Route path="/"                    element={<Landing />} />
+        <Route path="/login"               element={<Login />} />
+        <Route path="/roster/:gameSlug"    element={<RosterPage />} />
+        <Route path="/player/:id"          element={<PlayerPage />} />
+        <Route path="/news/:id"            element={<NewsArticlePage />} />
+        <Route path="/shop"                 element={<ShopPage />} />
+        <Route path="/shop/payment/success" element={<PaymentSuccess />} />
+        <Route path="/shop/payment/failed"  element={<PaymentFailed />} />
+        <Route path="/shop/:id"             element={<ProductPage />} />
         <Route
           path="/dashboard/*"
           element={
