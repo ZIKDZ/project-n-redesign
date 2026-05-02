@@ -130,6 +130,7 @@ SESSION_COOKIE_HTTPONLY = True
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "https://nblesport.up.railway.app",
+    "https://affection-oblivion-glandular.ngrok-free.dev/",
 ]
 
 # ── Chargily Pay ──────────────────────────────────────────────────────────────

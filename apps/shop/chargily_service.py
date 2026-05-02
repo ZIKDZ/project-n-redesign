@@ -1,3 +1,6 @@
+# apps/shop/chargily_service.py
+import hashlib
+import hmac
 import logging
 from django.conf import settings
 from chargily_pay import ChargilyClient
@@ -13,13 +16,8 @@ client = ChargilyClient(
 
 
 def create_chargily_checkout(order) -> dict:
-    """
-    Creates a Chargily checkout for the given Order.
-    Returns the full Chargily response dict (has 'id' and 'checkout_url').
-    """
     site = settings.SITE_URL.rstrip('/')
 
-    # Amount: use recorded total_amount if set, otherwise product price × qty
     if order.total_amount and float(order.total_amount) > 0:
         amount = int(float(order.total_amount))
     elif order.product:
@@ -45,4 +43,18 @@ def create_chargily_checkout(order) -> dict:
 
 
 def validate_webhook(signature: str, payload: str) -> bool:
-    return client.validate_signature(signature, payload)
+    """
+    Validate the Chargily webhook signature using HMAC-SHA256.
+    The signature header is computed as: HMAC(secret_key, raw_payload, sha256).hexdigest()
+    """
+    try:
+        secret = settings.CHARGILY_SECRET.encode('utf-8')
+        computed = hmac.new(
+            secret,
+            payload.encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
+        return hmac.compare_digest(computed, signature)
+    except Exception as e:
+        logger.error("Webhook signature validation error: %s", e)
+        return False
