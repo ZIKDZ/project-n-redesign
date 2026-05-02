@@ -1,11 +1,72 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { ActionButton, getCsrfToken } from '../../DashboardShared'
 import {
-  VariantConfig, CustomField, GalleryImage, StagedImage, Product,
-  CATEGORY_LABELS, inputCls, selectCls, labelCls,
+  VariantConfig, CustomField, GalleryImage, StagedImage, Product, PaymentMethod,
+  CATEGORY_LABELS, PAYMENT_METHOD_CONFIG, inputCls, selectCls, labelCls,
 } from './types'
 
 const getCsrf = getCsrfToken
+
+// ── PaymentMethodSelector ─────────────────────────────────────────────────────
+
+function PaymentMethodSelector({
+  value,
+  onChange,
+}: {
+  value: PaymentMethod
+  onChange: (v: PaymentMethod) => void
+}) {
+  const options: PaymentMethod[] = ['cod', 'online', 'both']
+
+  return (
+    <div className="space-y-2">
+      {options.map(opt => {
+        const cfg     = PAYMENT_METHOD_CONFIG[opt]
+        const active  = value === opt
+        return (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => onChange(opt)}
+            className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border transition-all duration-150 cursor-pointer text-left"
+            style={{
+              background:  active ? cfg.bg    : 'rgba(255,255,255,0.03)',
+              borderColor: active ? cfg.border : 'rgba(255,255,255,0.08)',
+            }}
+          >
+            {/* Radio dot */}
+            <span
+              className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
+              style={{
+                borderColor: active ? cfg.color : 'rgba(255,255,255,0.2)',
+                background:  active ? cfg.color : 'transparent',
+              }}
+            >
+              {active && (
+                <span className="w-1.5 h-1.5 rounded-full bg-white" />
+              )}
+            </span>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs">{cfg.icon}</span>
+                <span
+                  className="text-xs font-black tracking-widest uppercase"
+                  style={{ color: active ? cfg.color : 'rgba(255,255,255,0.55)' }}
+                >
+                  {cfg.label}
+                </span>
+              </div>
+              <p className="text-white/25 text-[10px] mt-0.5 leading-relaxed">
+                {cfg.description}
+              </p>
+            </div>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 // ── VariantBuilder ────────────────────────────────────────────────────────────
 
@@ -21,10 +82,10 @@ function VariantBuilder({
   const attributes = config.attributes || []
   const variants   = config.variants   || []
 
-  const [addingAttr, setAddingAttr]         = useState(false)
-  const [newAttrName, setNewAttrName]       = useState('')
-  const [addingVariant, setAddingVariant]   = useState(false)
-  const [newVariantAttr, setNewVariantAttr] = useState('')
+  const [addingAttr, setAddingAttr]           = useState(false)
+  const [newAttrName, setNewAttrName]         = useState('')
+  const [addingVariant, setAddingVariant]     = useState(false)
+  const [newVariantAttr, setNewVariantAttr]   = useState('')
   const [newVariantValue, setNewVariantValue] = useState('')
   const [newVariantStock, setNewVariantStock] = useState(0)
 
@@ -88,13 +149,12 @@ function VariantBuilder({
 
   return (
     <div className="space-y-6">
-
       {/* Attributes */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <div>
             <p className="text-white/70 text-xs font-bold tracking-widest uppercase">Attributes</p>
-            <p className="text-white/25 text-[10px] mt-0.5">Define the types of variants your product has (e.g. Size, Color)</p>
+            <p className="text-white/25 text-[10px] mt-0.5">Define the types of variants (e.g. Size, Color)</p>
           </div>
           {!addingAttr && (
             <button type="button" onClick={() => setAddingAttr(true)}
@@ -124,7 +184,7 @@ function VariantBuilder({
                 </span>
               </div>
               <button type="button" onClick={() => handleRemoveAttribute(attr.name)}
-                className="text-red-400/40 hover:text-red-400 transition-colors cursor-pointer shrink-0" title={`Remove ${attr.name}`}>
+                className="text-red-400/40 hover:text-red-400 transition-colors cursor-pointer shrink-0">
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -162,7 +222,7 @@ function VariantBuilder({
           <div className="flex items-center justify-between mb-3">
             <div>
               <p className="text-white/70 text-xs font-bold tracking-widest uppercase">Variants</p>
-              <p className="text-white/25 text-[10px] mt-0.5">Add individual variant values per attribute</p>
+              <p className="text-white/25 text-[10px] mt-0.5">Add individual values per attribute</p>
             </div>
             {!addingVariant && (
               <button type="button" onClick={openAddVariant}
@@ -204,7 +264,7 @@ function VariantBuilder({
                           </div>
                         )}
                         <button type="button" onClick={() => handleRemoveVariant(variant.id)}
-                          className={`text-red-400/40 hover:text-red-400 transition-colors cursor-pointer shrink-0 ${trackStock ? 'ml-2' : 'ml-auto'}`} title="Remove variant">
+                          className={`text-red-400/40 hover:text-red-400 transition-colors cursor-pointer shrink-0 ${trackStock ? 'ml-2' : 'ml-auto'}`}>
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                           </svg>
@@ -254,7 +314,7 @@ function VariantBuilder({
                   className="bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 hover:text-white font-bold px-4 py-2 rounded-lg text-xs tracking-widest uppercase transition-all cursor-pointer">
                   Cancel
                 </button>
-                <span className="text-white/15 text-[10px] ml-1 hidden sm:inline">Press Enter to save quickly</span>
+                <span className="text-white/15 text-[10px] ml-1 hidden sm:inline">Press Enter to save</span>
               </div>
             </div>
           )}
@@ -295,7 +355,7 @@ function CustomFieldEditor({ fields, onChange }: { fields: CustomField[]; onChan
   return (
     <div className="space-y-3">
       <p className="text-white/25 text-[10px] tracking-widest">
-        These fields appear as text inputs on the product page when a customer places an order.
+        These fields appear as text inputs on the product page.
         Use them for things like jersey back names, numbers, or personalisation details.
       </p>
       {fields.map((f, i) => (
@@ -404,18 +464,19 @@ function ProductModal({ initial, isEdit, onSave, onClose }: {
   onSave: (fd: FormData, deletedImageIds: number[]) => Promise<void>
   onClose: () => void
 }) {
-  const [tab, setTab]         = useState<'general' | 'variants' | 'custom' | 'settings'>('general')
-  const backdropRef           = useRef<HTMLDivElement>(null)
+  const [tab, setTab]       = useState<'general' | 'variants' | 'custom' | 'settings'>('general')
+  const backdropRef         = useRef<HTMLDivElement>(null)
 
   const [form, setForm] = useState({
-    name:          initial.name          || '',
-    description:   initial.description   || '',
-    price:         initial.price         || '',
-    category:      initial.category      || 'jersey',
-    is_active:     initial.is_active     !== false,
-    is_featured:   initial.is_featured   || false,
-    track_stock:   initial.track_stock   !== false,
-    display_order: initial.display_order ?? 0,
+    name:           initial.name           || '',
+    description:    initial.description    || '',
+    price:          initial.price          || '',
+    category:       initial.category       || 'jersey',
+    is_active:      initial.is_active      !== false,
+    is_featured:    initial.is_featured    || false,
+    track_stock:    initial.track_stock    !== false,
+    payment_method: (initial.payment_method || 'online') as PaymentMethod,
+    display_order:  initial.display_order  ?? 0,
   })
 
   const [variantConfig, setVariantConfig] = useState<VariantConfig>(() => {
@@ -483,18 +544,19 @@ function ProductModal({ initial, isEdit, onSave, onClose }: {
     finally { setSaving(false) }
   }
 
-  const toggle = (key: keyof typeof form) => setForm(p => ({ ...p, [key]: !(p as any)[key] }))
+  const toggle = (key: 'is_active' | 'is_featured' | 'track_stock') =>
+    setForm(p => ({ ...p, [key]: !p[key] }))
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === backdropRef.current && window.getSelection()?.toString() === '') onClose()
   }
 
   const TOGGLES = [
-    { key: 'is_active',   on: 'Active',          off: 'Inactive',          sub: 'Visible in shop' },
-    { key: 'is_featured', on: 'Featured',         off: 'Not Featured',      sub: 'Shown in hero' },
-    { key: 'track_stock', on: 'Tracking Stock',   off: 'Stock Tracking Off',
+    { key: 'is_active'   as const, on: 'Active',        off: 'Inactive',           sub: 'Visible in shop' },
+    { key: 'is_featured' as const, on: 'Featured',      off: 'Not Featured',       sub: 'Shown in hero' },
+    { key: 'track_stock' as const, on: 'Tracking Stock',off: 'Stock Tracking Off',
       sub: form.track_stock ? 'Stock counts enforced' : 'Always shown as available' },
-  ] as const
+  ]
 
   const TABS = [
     { id: 'general',  label: '🎨 General' },
@@ -502,6 +564,8 @@ function ProductModal({ initial, isEdit, onSave, onClose }: {
     { id: 'custom',   label: `✏️ Custom Fields${customFields.length ? ` (${customFields.length})` : ''}` },
     { id: 'settings', label: '⚙ Settings' },
   ] as const
+
+  const pmCfg = PAYMENT_METHOD_CONFIG[form.payment_method]
 
   return (
     <div ref={backdropRef} className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
@@ -535,6 +599,7 @@ function ProductModal({ initial, isEdit, onSave, onClose }: {
         {/* Body */}
         <div className="overflow-y-auto flex-1 px-6 py-3" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
 
+          {/* ── GENERAL TAB ── */}
           {tab === 'general' && (
             <div className="space-y-5">
               {/* Banner */}
@@ -606,6 +671,7 @@ function ProductModal({ initial, isEdit, onSave, onClose }: {
             </div>
           )}
 
+          {/* ── VARIANTS TAB ── */}
           {tab === 'variants' && (
             <div className="py-1">
               <p className="text-white/25 text-xs tracking-widest mb-4">
@@ -616,27 +682,55 @@ function ProductModal({ initial, isEdit, onSave, onClose }: {
             </div>
           )}
 
+          {/* ── CUSTOM FIELDS TAB ── */}
           {tab === 'custom' && (
             <div className="py-1">
               <CustomFieldEditor fields={customFields} onChange={setCustomFields} />
             </div>
           )}
 
+          {/* ── SETTINGS TAB ── */}
           {tab === 'settings' && (
-            <div className="space-y-3 py-1">
-              <p className="text-white/25 text-xs tracking-widest">Product behavior and visibility</p>
-              {TOGGLES.map(({ key, on, off, sub }) => (
-                <div key={key} className="flex items-center gap-3 bg-white/3 border border-white/8 rounded-xl p-3">
-                  <button type="button" onClick={() => toggle(key)}
-                    className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${(form as any)[key] ? 'bg-purple-600' : 'bg-white/10'}`}>
-                    <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200" style={{ left: (form as any)[key] ? '16px' : '2px' }} />
-                  </button>
-                  <div className="flex-1">
-                    <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">{(form as any)[key] ? on : off}</p>
-                    <p className="text-white/20 text-[10px] mt-0.5">{sub}</p>
-                  </div>
+            <div className="space-y-5 py-1">
+
+              {/* Payment method — prominent section */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <p className="text-white/70 text-xs font-bold tracking-widest uppercase">Payment Method</p>
+                  {/* Current selection pill */}
+                  <span
+                    className="text-[9px] font-black tracking-widest uppercase px-2 py-0.5 rounded-full"
+                    style={{ background: pmCfg.bg, color: pmCfg.color, border: `1px solid ${pmCfg.border}` }}
+                  >
+                    {pmCfg.icon} {pmCfg.short}
+                  </span>
                 </div>
-              ))}
+                <PaymentMethodSelector
+                  value={form.payment_method}
+                  onChange={pm => setForm(p => ({ ...p, payment_method: pm }))}
+                />
+              </div>
+
+              <div className="border-t border-white/8" />
+
+              {/* Visibility & stock toggles */}
+              <div>
+                <p className="text-white/70 text-xs font-bold tracking-widest uppercase mb-3">Visibility & Stock</p>
+                <div className="space-y-3">
+                  {TOGGLES.map(({ key, on, off, sub }) => (
+                    <div key={key} className="flex items-center gap-3 bg-white/3 border border-white/8 rounded-xl p-3">
+                      <button type="button" onClick={() => toggle(key)}
+                        className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${(form as any)[key] ? 'bg-purple-600' : 'bg-white/10'}`}>
+                        <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200" style={{ left: (form as any)[key] ? '16px' : '2px' }} />
+                      </button>
+                      <div className="flex-1">
+                        <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">{(form as any)[key] ? on : off}</p>
+                        <p className="text-white/20 text-[10px] mt-0.5">{sub}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -657,9 +751,14 @@ function ProductModal({ initial, isEdit, onSave, onClose }: {
 
 // ── ProductCard ───────────────────────────────────────────────────────────────
 
-function ProductCard({ product, onEdit, onDelete }: { product: Product; onEdit: () => void; onDelete: () => void }) {
+function ProductCard({ product, onEdit, onDelete }: {
+  product: Product
+  onEdit: () => void
+  onDelete: () => void
+}) {
   const trackStock = product.track_stock
   const totalStock = product.total_stock
+  const pmCfg      = PAYMENT_METHOD_CONFIG[product.payment_method || 'online']
 
   const stockLabel =
     !trackStock      ? 'Always Available' :
@@ -683,6 +782,7 @@ function ProductCard({ product, onEdit, onDelete }: { product: Product; onEdit: 
   return (
     <div className={`relative border border-white/8 rounded-2xl overflow-hidden flex flex-col transition-all duration-200 hover:border-purple-500/30 ${!product.is_active ? 'opacity-50' : ''}`}
       style={{ background: '#0c001a' }}>
+
       {/* Banner */}
       <div className="relative h-44 shrink-0 overflow-hidden">
         {product.banner ? (
@@ -694,7 +794,8 @@ function ProductCard({ product, onEdit, onDelete }: { product: Product; onEdit: 
         )}
         <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, #0c001a 0%, transparent 60%)' }} />
 
-        <div className="absolute top-3 left-3 flex gap-1.5 flex-wrap max-w-[60%]">
+        {/* Top-left badges */}
+        <div className="absolute top-3 left-3 flex gap-1.5 flex-wrap max-w-[calc(100%-4rem)]">
           {product.is_featured && (
             <span className="text-[9px] font-black tracking-widest uppercase px-2 py-1 rounded-full"
               style={{ background: 'rgba(251,191,36,0.2)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>★ Featured</span>
@@ -714,6 +815,7 @@ function ProductCard({ product, onEdit, onDelete }: { product: Product; onEdit: 
           )}
         </div>
 
+        {/* Top-right: stock */}
         <div className="absolute top-3 right-3">
           <span className="text-[9px] font-black tracking-widest uppercase px-2 py-1 rounded-full"
             style={{ background: `${stockColor}18`, color: stockColor, border: `1px solid ${stockColor}30` }}>
@@ -721,6 +823,7 @@ function ProductCard({ product, onEdit, onDelete }: { product: Product; onEdit: 
           </span>
         </div>
 
+        {/* Gallery count */}
         {(product.images?.length ?? 0) > 0 && (
           <div className="absolute bottom-3 right-3">
             <span className="text-[9px] font-bold px-2 py-1 rounded-full bg-black/50 text-white/50 border border-white/10 flex items-center gap-1">
@@ -733,6 +836,7 @@ function ProductCard({ product, onEdit, onDelete }: { product: Product; onEdit: 
         )}
       </div>
 
+      {/* Info */}
       <div className="p-4 flex flex-col flex-1 gap-3">
         <div>
           <div className="flex items-start justify-between gap-2">
@@ -743,11 +847,27 @@ function ProductCard({ product, onEdit, onDelete }: { product: Product; onEdit: 
               {parseInt(product.price).toLocaleString()} <span className="text-xs text-white/40">DZD</span>
             </span>
           </div>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/8 text-white/40 border border-white/10 mt-1 inline-block">
-            {CATEGORY_LABELS[product.category] || product.category}
-          </span>
+
+          {/* Category + Payment method badges */}
+          <div className="flex items-center gap-1.5 flex-wrap mt-1">
+            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-white/8 text-white/40 border border-white/10">
+              {CATEGORY_LABELS[product.category] || product.category}
+            </span>
+            {/* Payment method badge */}
+            <span
+              className="text-[9px] font-black tracking-widest uppercase px-2 py-0.5 rounded-full"
+              style={{
+                background:  pmCfg.bg,
+                color:       pmCfg.color,
+                border:      `1px solid ${pmCfg.border}`,
+              }}
+            >
+              {pmCfg.icon} {pmCfg.short}
+            </span>
+          </div>
         </div>
 
+        {/* Variant summary */}
         {variantSummary && variantSummary.length > 0 && (
           <div className="space-y-1">
             {variantSummary.map(({ attr, values }) => (
@@ -762,6 +882,7 @@ function ProductCard({ product, onEdit, onDelete }: { product: Product; onEdit: 
           </div>
         )}
 
+        {/* Custom fields */}
         {(product.custom_fields?.length ?? 0) > 0 && (
           <div className="flex flex-wrap gap-1">
             {product.custom_fields.map((f, i) => (
@@ -866,7 +987,6 @@ export default function ProductsTab() {
   )
 }
 
-// Export for use in ShopSection's "Add Product" button
 export function useAddProduct() {
   const [show, setShow] = useState(false)
   return { show, open: () => setShow(true), close: () => setShow(false) }

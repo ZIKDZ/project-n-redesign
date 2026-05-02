@@ -16,6 +16,12 @@ ORDER_STATUS_CHOICES = [
     ('cancelled', 'Cancelled'),
 ]
 
+PAYMENT_METHOD_CHOICES = [
+    ('cod',    'Cash on Delivery'),
+    ('online', 'CIB / eDahabia (Chargily)'),
+    ('both',   'Both — customer chooses'),
+]
+
 WILAYA_CHOICES = [
     ('01', 'Adrar'),
     ('02', 'Chlef'),
@@ -115,6 +121,18 @@ class Product(models.Model):
         help_text='When disabled, stock numbers are ignored'
     )
 
+    payment_method = models.CharField(
+        max_length=20,
+        choices=PAYMENT_METHOD_CHOICES,
+        default='online',
+        help_text=(
+            'Controls how the customer pays. '
+            '"cod" = Cash on Delivery only; '
+            '"online" = CIB/eDahabia via Chargily only; '
+            '"both" = customer chooses at checkout.'
+        ),
+    )
+
     is_active     = models.BooleanField(default=True)
     is_featured   = models.BooleanField(default=False)
     display_order = models.PositiveSmallIntegerField(default=0)
@@ -154,6 +172,7 @@ class Product(models.Model):
             'variant_config': self.variant_config or {},
             'custom_fields':  self.custom_fields or [],
             'track_stock':    self.track_stock,
+            'payment_method': self.payment_method,
             'total_stock':    self.total_stock(),
             'is_active':      self.is_active,
             'is_featured':    self.is_featured,

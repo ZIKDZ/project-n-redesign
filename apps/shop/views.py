@@ -44,9 +44,15 @@ def get_product(request, pk):
 def submit_order(request):
     """
     Public — submit an order.
-    Creates the Order record then attempts to open a Chargily checkout.
+
+    Payment routing:
+    - product.payment_method == 'cod'    → skip Chargily, return checkout_url=''
+    - product.payment_method == 'online' → always open Chargily checkout
+    - product.payment_method == 'both'   → honour the 'payment_method' field
+                                           sent by the client ('cod' | 'online')
+
     Returns: { success, id, checkout_url }
-    If Chargily is unavailable the order is still saved; checkout_url will be ''.
+    checkout_url == '' means COD — the frontend should show the inline success screen.
     """
     try:
         data         = json.loads(request.body)
@@ -90,18 +96,35 @@ def submit_order(request):
             total_amount=total_amount,
         )
 
-        # ── Chargily checkout ─────────────────────────────────────────────────
+        # ── Decide payment route ───────────────────────────────────────────────
+        # product_payment_method: 'cod' | 'online' | 'both'
+        # client_payment_method:  what the customer chose when product is 'both'
+        product_pm = getattr(product, 'payment_method', 'online') if product else 'online'
+        client_pm  = str(data.get('payment_method', 'online')).strip().lower()
+
+        # Resolve effective method
+        if product_pm == 'cod':
+            effective_pm = 'cod'
+        elif product_pm == 'online':
+            effective_pm = 'online'
+        else:  # 'both' — trust the client choice
+            effective_pm = client_pm if client_pm in ('cod', 'online') else 'online'
+
         checkout_url = ''
-        try:
-            from .chargily_service import create_chargily_checkout
-            chargily_response             = create_chargily_checkout(order)
-            order.chargily_checkout_id    = chargily_response.get('id', '')
-            order.chargily_checkout_url   = chargily_response.get('checkout_url', '')
-            order.save(update_fields=['chargily_checkout_id', 'chargily_checkout_url'])
-            checkout_url = order.chargily_checkout_url
-        except Exception as exc:
-            # Order is already saved — log and continue gracefully
-            logger.error("Chargily checkout creation failed for order #%s: %s", order.id, exc)
+
+        if effective_pm == 'online':
+            try:
+                from .chargily_service import create_chargily_checkout
+                chargily_response             = create_chargily_checkout(order)
+                order.chargily_checkout_id    = chargily_response.get('id', '')
+                order.chargily_checkout_url   = chargily_response.get('checkout_url', '')
+                order.save(update_fields=['chargily_checkout_id', 'chargily_checkout_url'])
+                checkout_url = order.chargily_checkout_url
+            except Exception as exc:
+                logger.error(
+                    "Chargily checkout creation failed for order #%s: %s", order.id, exc
+                )
+        # COD orders need no extra work — status stays 'pending' until staff confirms
 
         return JsonResponse({
             'success':      True,
@@ -122,7 +145,6 @@ def submit_order(request):
 def chargily_webhook(request):
     """
     Receives Chargily payment events and updates the matching order's status.
-    Chargily docs: https://dev.chargily.com/pay-v2/webhooks
     """
     signature = request.headers.get('signature', '')
     payload   = request.body.decode('utf-8')
@@ -140,7 +162,7 @@ def chargily_webhook(request):
         return JsonResponse({'error': 'Signature validation failed'}, status=403)
 
     try:
-        event         = json.loads(payload)
+        event = json.loads(payload)
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
@@ -149,7 +171,6 @@ def chargily_webhook(request):
 
     logger.info("Chargily webhook received: %s", event_type)
 
-    # Resolve the order — prefer metadata.order_id (set by us), fall back to checkout id
     metadata = checkout_data.get('metadata') or {}
     order_id = metadata.get('order_id')
     order    = None
@@ -158,17 +179,20 @@ def chargily_webhook(request):
         try:
             order = Order.objects.get(pk=order_id)
         except Order.DoesNotExist:
-            logger.error("Chargily webhook: order #%s not found (from metadata)", order_id)
+            logger.error(
+                "Chargily webhook: order #%s not found (from metadata)", order_id
+            )
 
     if order is None:
         checkout_id = checkout_data.get('id', '')
         try:
             order = Order.objects.get(chargily_checkout_id=checkout_id)
         except Order.DoesNotExist:
-            logger.error("Chargily webhook: no order found for checkout %s", checkout_id)
+            logger.error(
+                "Chargily webhook: no order found for checkout %s", checkout_id
+            )
             return JsonResponse({'error': 'Order not found'}, status=404)
 
-    # Map Chargily event → order status
     if event_type == 'checkout.paid':
         order.status = 'confirmed'
         logger.info("Order #%s marked as confirmed (payment received)", order.id)
@@ -182,7 +206,6 @@ def chargily_webhook(request):
         order.status = 'cancelled'
         order.notes  = (order.notes + '\nChargily checkout expired.').strip()
     else:
-        # Unknown event type — acknowledge without changing status
         logger.info("Chargily webhook: unhandled event type '%s'", event_type)
         return JsonResponse({'received': True}, status=200)
 
@@ -195,7 +218,6 @@ def chargily_webhook(request):
 @login_required
 @require_http_methods(['GET'])
 def list_products_all(request):
-    """Staff — all products with gallery images."""
     qs = Product.objects.all().prefetch_related('images').order_by('display_order', 'id')
     return JsonResponse({'products': [_product_dict(p) for p in qs]})
 
@@ -203,7 +225,6 @@ def list_products_all(request):
 @login_required
 @require_http_methods(['POST'])
 def create_product(request):
-    """Staff only — create a product."""
     try:
         if request.content_type and 'multipart' in request.content_type:
             data        = request.POST
@@ -242,6 +263,10 @@ def create_product(request):
         except (json.JSONDecodeError, TypeError):
             custom_fields = []
 
+        payment_method = data.get('payment_method', 'online')
+        if payment_method not in ('cod', 'online', 'both'):
+            payment_method = 'online'
+
         product = Product(
             name=data['name'],
             description=data.get('description', ''),
@@ -251,6 +276,7 @@ def create_product(request):
             variant_config=variant_config,
             custom_fields=custom_fields,
             track_stock=str(data.get('track_stock', 'true')).lower() != 'false',
+            payment_method=payment_method,
             is_active=str(data.get('is_active', 'true')).lower() != 'false',
             is_featured=str(data.get('is_featured', 'false')).lower() == 'true',
             display_order=int(data.get('display_order', 0)),
@@ -282,7 +308,6 @@ def create_product(request):
 @login_required
 @require_http_methods(['PUT', 'PATCH'])
 def update_product(request, pk):
-    """Staff only — update a product."""
     try:
         product = Product.objects.prefetch_related('images').get(pk=pk)
 
@@ -307,6 +332,9 @@ def update_product(request, pk):
             product.is_featured = str(data['is_featured']).lower() == 'true'
         if 'track_stock' in data:
             product.track_stock = str(data['track_stock']).lower() != 'false'
+        if 'payment_method' in data:
+            pm = str(data['payment_method']).strip().lower()
+            product.payment_method = pm if pm in ('cod', 'online', 'both') else 'online'
 
         if 'variant_config' in data:
             try:
@@ -327,7 +355,10 @@ def update_product(request, pk):
                         for v in variant_config.get('variants', [])
                         if isinstance(v, dict) and v.get('attribute') and v.get('value')
                     ]
-                    product.variant_config = {'attributes': clean_attrs, 'variants': clean_variants}
+                    product.variant_config = {
+                        'attributes': clean_attrs,
+                        'variants':   clean_variants,
+                    }
             except (json.JSONDecodeError, TypeError):
                 pass
 

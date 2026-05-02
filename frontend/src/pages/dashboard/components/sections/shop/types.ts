@@ -26,6 +26,8 @@ export type GalleryImage = { id: number; url: string; display_order: number }
 
 export type StagedImage = { file: File; previewUrl: string; key: string }
 
+export type PaymentMethod = 'cod' | 'online' | 'both'
+
 export type Product = {
   id: number
   name: string
@@ -37,6 +39,7 @@ export type Product = {
   custom_fields: CustomField[]
   images: GalleryImage[]
   track_stock: boolean
+  payment_method: PaymentMethod
   total_stock: number | null
   is_active: boolean
   is_featured: boolean
@@ -78,6 +81,44 @@ export const CATEGORY_LABELS: Record<string, string> = {
   cap:       'Cap',
   accessory: 'Accessory',
   other:     'Other',
+}
+
+export const PAYMENT_METHOD_CONFIG: Record<PaymentMethod, {
+  label: string
+  short: string
+  description: string
+  color: string
+  bg: string
+  border: string
+  icon: string
+}> = {
+  cod: {
+    label:       'Cash on Delivery',
+    short:       'COD',
+    description: 'Customer pays in cash upon receiving the order.',
+    color:       '#34d399',
+    bg:          'rgba(52,211,153,0.15)',
+    border:      'rgba(52,211,153,0.3)',
+    icon:        '💵',
+  },
+  online: {
+    label:       'CIB / eDahabia',
+    short:       'CIB',
+    description: 'Customer pays online via Chargily (CIB or eDahabia card).',
+    color:       '#60a5fa',
+    bg:          'rgba(96,165,250,0.15)',
+    border:      'rgba(96,165,250,0.3)',
+    icon:        '💳',
+  },
+  both: {
+    label:       'Both — customer chooses',
+    short:       'COD + CIB',
+    description: 'Customer picks cash or card at checkout.',
+    color:       '#c084fc',
+    bg:          'rgba(192,132,252,0.15)',
+    border:      'rgba(192,132,252,0.3)',
+    icon:        '🔀',
+  },
 }
 
 export const PAGE_SIZE = 8
