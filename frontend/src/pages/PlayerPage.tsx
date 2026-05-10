@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { players as playersApi } from "../utils/api";
 import { asset } from "../utils/asset";
+import Footer from "../components/footer";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Clip {
@@ -837,28 +838,7 @@ export default function PlayerPage() {
       )}
 
       {/* ── Footer ── */}
-      <footer className="border-t border-white/8 py-10 mt-8">
-        <div className="max-w-6xl mx-auto px-6 flex items-center justify-between flex-wrap gap-4">
-          <button
-            onClick={() => navigate("/")}
-            className="flex items-center gap-2 text-white/30 hover:text-white text-sm font-bold tracking-wider uppercase transition-colors group cursor-pointer"
-          >
-            <svg
-              className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
-              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-            Back to NBLEsport
-          </button>
-          <span
-            className="font-black text-sm uppercase tracking-widest"
-            style={{ color: accent, fontFamily: "'Barlow Condensed', sans-serif" }}
-          >
-            NBL<span className="text-white">ESPORT</span>
-          </span>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

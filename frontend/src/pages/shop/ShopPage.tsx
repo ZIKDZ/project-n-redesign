@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { asset } from "../../utils/asset";
+import Footer from "../../components/footer";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -609,35 +610,7 @@ export default function ShopPage() {
       </div>
 
       {/* ── Footer ── */}
-      <div className="border-t border-white/8 py-8">
-        <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
-          <button
-            onClick={() => navigate("/")}
-            className="text-white/30 hover:text-white text-xs font-bold tracking-widest uppercase transition-colors flex items-center gap-2 group cursor-pointer"
-          >
-            <svg
-              className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-            Back to NBLEsport
-          </button>
-          <span
-            className="font-black text-sm uppercase tracking-widest text-purple-400"
-            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-          >
-            NBL<span className="text-white">STORE</span>
-          </span>
-        </div>
-      </div>
+      <Footer />
     </div>
   );
 }
