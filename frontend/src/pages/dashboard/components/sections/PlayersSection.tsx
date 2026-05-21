@@ -73,6 +73,8 @@ type PlayerData = {
   email: string
   phone: string
   address: string
+  nationality: string
+  earnings: string | null
   joined_at: string
 }
 
@@ -102,6 +104,8 @@ const EMPTY_PLAYER: Omit<PlayerData, 'id' | 'joined_at'> = {
   email: '',
   phone: '',
   address: '',
+  nationality: '',
+  earnings: null,
 }
 
 // ── Upload helper with progress ───────────────────────────────────────────────
@@ -239,7 +243,6 @@ function ClipManager({
     }
   }
 
-  // ── No player yet ──
   if (!playerId) {
     return (
       <div className="border border-dashed border-white/10 rounded-xl p-8 text-center">
@@ -256,7 +259,6 @@ function ClipManager({
 
   return (
     <div className="space-y-3">
-      {/* Existing clips */}
       {clips.length === 0 && !adding && (
         <div className="border border-dashed border-white/10 rounded-xl p-6 text-center">
           <p className="text-white/20 text-xs tracking-widest uppercase mb-3">No clips yet</p>
@@ -293,7 +295,6 @@ function ClipManager({
         </div>
       ))}
 
-      {/* Upload form */}
       {adding ? (
         <div className="bg-white/5 border border-purple-500/20 rounded-xl p-4 space-y-3">
           <div>
@@ -597,7 +598,7 @@ function PlayerModal({
       {cropSrc && <ImageCropModal src={cropSrc} onConfirm={handleCropConfirm} onCancel={() => setCropSrc(null)} />}
 
       <Modal size="md" onClose={onClose}>
-        <ModalHeader 
+        <ModalHeader
           title={isEdit ? `Edit — ${initial.username}` : 'Add Player'}
           subtitle="Manage player profile and settings"
           onClose={onClose}
@@ -746,6 +747,11 @@ function PlayerModal({
                   onChange={e => setForm(p => ({ ...p, age: e.target.value ? Number(e.target.value) : null }))} className={inputClass} />
               </div>
               <div>
+                <label className={labelClass}>Nationality</label>
+                <input placeholder="e.g. Algerian" value={form.nationality}
+                  onChange={e => setForm(p => ({ ...p, nationality: e.target.value }))} className={inputClass} />
+              </div>
+              <div>
                 <label className={labelClass}>Discord Username</label>
                 <input placeholder="e.g. username#0000" value={form.discord_username} onChange={e => setForm(p => ({ ...p, discord_username: e.target.value }))} className={inputClass} />
               </div>
@@ -757,12 +763,27 @@ function PlayerModal({
                 <label className={labelClass}>Phone</label>
                 <input placeholder="e.g. +213 555 123456" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} className={inputClass} />
               </div>
+              <div>
+                <label className={labelClass}>Earnings (DZD)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 150000"
+                    value={form.earnings ?? ''}
+                    onChange={e => setForm(p => ({ ...p, earnings: e.target.value || null }))}
+                    className={inputClass + ' pr-12'}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/25 text-[10px] font-bold pointer-events-none">DZD</span>
+                </div>
+              </div>
               <div className="col-span-2">
                 <label className={labelClass}>Address</label>
                 <input placeholder="e.g. Algiers, Algeria" value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} className={inputClass} />
               </div>
-              <div className="col-span-2 pt-2">
-                <p className="text-white/15 text-[10px] tracking-wide">🔒 Personal information is only visible to staff.</p>
+              <div className="col-span-2 pt-2 border-t border-white/5">
+                <p className="text-white/15 text-[10px] tracking-wide">🔒 Personal information is only visible to staff. Earnings can be displayed publicly on the player profile page.</p>
               </div>
             </div>
           )}
@@ -851,7 +872,8 @@ export default function PlayersSection() {
           p.username.toLowerCase().includes(q) ||
           p.ingame_username.toLowerCase().includes(q) ||
           (p.first_name + ' ' + p.last_name).toLowerCase().includes(q) ||
-          p.discord_username.toLowerCase().includes(q)
+          p.discord_username.toLowerCase().includes(q) ||
+          (p.nationality || '').toLowerCase().includes(q)
         )
       }
       return true
@@ -917,6 +939,11 @@ export default function PlayersSection() {
                       🎬 {p.clips.length}
                     </span>
                   )}
+                  {p.earnings && (
+                    <span className="text-[9px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-400 border border-yellow-500/20">
+                      💰 {parseFloat(p.earnings).toLocaleString()} DZD
+                    </span>
+                  )}
                   <Badge color={STATUS_COLORS[p.status] || 'gray'}>{STATUS_LABELS[p.status]}</Badge>
                   <Badge color="purple">{p.role}</Badge>
                   {p.game_title && <Badge color="gray">{p.game_title}</Badge>}
@@ -925,6 +952,7 @@ export default function PlayersSection() {
                 <p className="text-white/35 text-xs truncate">
                   {p.ingame_username}
                   {p.rank && ` · ${p.rank}`}
+                  {p.nationality && ` · ${p.nationality}`}
                   {p.discord_username && ` · ${p.discord_username}`}
                 </p>
               </div>

@@ -72,6 +72,20 @@ class Player(models.Model):
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=30, blank=True)
     address = models.CharField(max_length=255, blank=True)
+    nationality = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text='Player nationality, e.g. Algerian',
+    )
+
+    # ── Competitive ───────────────────────────────────────────────────────────
+    earnings = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Total tournament / competitive earnings (DZD)',
+    )
 
     # ── Meta ──────────────────────────────────────────────────────────────────
     joined_at = models.DateField(auto_now_add=True)
@@ -128,13 +142,16 @@ class Player(models.Model):
             'twitch_url': self.twitch_url,
             'kick_url': self.kick_url,
             'tiktok_url': self.tiktok_url,
-            # Personal
+            # Personal (staff-only)
             'first_name': self.first_name,
             'last_name': self.last_name,
             'age': self.age,
             'email': self.email,
             'phone': self.phone,
             'address': self.address,
+            'nationality': self.nationality,
+            # Competitive
+            'earnings': str(self.earnings) if self.earnings is not None else None,
             # Meta
             'joined_at': self.joined_at.isoformat(),
         }

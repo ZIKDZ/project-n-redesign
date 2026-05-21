@@ -82,8 +82,9 @@ def create_player(request):
         )
         game_slug = data.get('game', '')
 
-        raw_age  = data.get('age', '')
-        raw_team = data.get('team_id', '')
+        raw_age      = data.get('age', '')
+        raw_team     = data.get('team_id', '')
+        raw_earnings = data.get('earnings', '')
 
         player = Player(
             username           = data['username'],
@@ -107,6 +108,8 @@ def create_player(request):
             email              = data.get('email', ''),
             phone              = data.get('phone', ''),
             address            = data.get('address', ''),
+            nationality        = data.get('nationality', ''),
+            earnings           = float(raw_earnings) if raw_earnings and raw_earnings not in ('null', 'None', '') else None,
         )
         if avatar_file:
             player.avatar = avatar_file
@@ -125,10 +128,7 @@ def create_player(request):
 @login_required
 @require_http_methods(['PUT', 'PATCH'])
 def update_player(request, pk):
-    """
-    Staff only — update player info.
-    django-cleanup automatically deletes old avatar from CDN when field changes.
-    """
+    """Staff only — update player info. Supports multipart (avatar) or JSON."""
     try:
         player = (
             Player.objects
@@ -141,7 +141,6 @@ def update_player(request, pk):
             from django.http.multipartparser import MultiPartParser
             parser = MultiPartParser(request.META, request, request.upload_handlers)
             post_data, files = parser.parse()
-
             data        = post_data
             avatar_file = files.get('avatar')
         else:
@@ -159,13 +158,17 @@ def update_player(request, pk):
                 setattr(player, field, data[field])
 
         # Personal info
-        for field in ['first_name', 'last_name', 'email', 'phone', 'address']:
+        for field in ['first_name', 'last_name', 'email', 'phone', 'address', 'nationality']:
             if field in data:
                 setattr(player, field, data[field])
 
         if 'age' in data:
             raw_age = data['age']
             player.age = int(raw_age) if raw_age and str(raw_age) not in ('null', 'None', '') else None
+
+        if 'earnings' in data:
+            raw_earnings = data['earnings']
+            player.earnings = float(raw_earnings) if raw_earnings and str(raw_earnings) not in ('null', 'None', '') else None
 
         # Game FK
         if 'game_id' in data or 'game' in data:
@@ -182,15 +185,14 @@ def update_player(request, pk):
             raw_team = data['team_id']
             player.team_id = int(raw_team) if raw_team and str(raw_team) not in ('null', 'None', '') else None
 
-        # ── Avatar ────────────────────────────────────────────────────────────
-        # django-cleanup detects the field change on save() and deletes old file
+        # Avatar
         clear_avatar = data.get('clear_avatar', '')
         if clear_avatar and str(clear_avatar).lower() not in ('false', '0', ''):
-            player.avatar = None  # Setting to None triggers cleanup of old file
+            player.avatar = None
         elif avatar_file:
             player.avatar = avatar_file
 
-        player.save()  # django-cleanup's pre_save signal fires here
+        player.save()
         return JsonResponse(player.to_dict())
 
     except Player.DoesNotExist:
@@ -204,10 +206,7 @@ def update_player(request, pk):
 @login_required
 @require_http_methods(['DELETE'])
 def delete_player(request, pk):
-    """
-    Staff only — permanently remove a player.
-    django-cleanup automatically removes avatar from CDN via post_delete signal.
-    """
+    """Staff only — permanently remove a player."""
     try:
         Player.objects.get(pk=pk).delete()
         return JsonResponse({'success': True})
@@ -215,9 +214,7 @@ def delete_player(request, pk):
         return JsonResponse({'error': 'Not found'}, status=404)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# ── Clip endpoints ────────────────────────────────────────────────────────────
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Clip endpoints ─────────────────────────────────────────────────────────────
 
 @login_required
 @require_http_methods(['POST'])
@@ -288,10 +285,7 @@ def update_clip(request, pk, clip_pk):
 @login_required
 @require_http_methods(['DELETE'])
 def delete_clip(request, pk, clip_pk):
-    """
-    Staff only — delete a clip.
-    django-cleanup automatically removes video_file from CDN via post_delete signal.
-    """
+    """Staff only — delete a clip and remove it from Cloudinary."""
     try:
         clip = PlayerClip.objects.get(pk=clip_pk, player_id=pk)
         clip.delete()
