@@ -1,6 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 import { games } from '../../../../utils/api'
-import { Badge, SectionHeader, ActionButton } from '../DashboardShared'
+import {
+  Badge,
+  SectionHeader,
+  ActionButton,
+  getCsrfToken,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from '../DashboardShared'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const EMPTY_GAME_FORM = {
@@ -16,9 +25,6 @@ const EMPTY_GAME_FORM = {
   display_order: -1 as number,
   ranks: [] as string[],
 }
-
-const getCsrf = () =>
-  document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1] || ''
 
 // ── ImageUploadField ──────────────────────────────────────────────────────────
 function ImageUploadField({
@@ -73,13 +79,13 @@ function ImageUploadField({
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
-              className="bg-white/5 border border-white/10 hover:border-purple-500/40 text-white/60 hover:text-white text-[10px] font-bold px-3 py-1.5 rounded-lg tracking-wider uppercase transition-all duration-200"
+              className="bg-white/5 border border-white/10 hover:border-purple-500/40 text-white/60 hover:text-white text-[10px] font-bold px-3 py-1.5 rounded-lg tracking-wider uppercase transition-all duration-200 cursor-pointer"
             >
               {file ? 'Change' : 'Choose File'}
             </button>
             {file && (
               <button type="button" onClick={onRemove}
-                className="text-red-400/60 hover:text-red-400 text-[10px] transition-colors">
+                className="text-red-400/60 hover:text-red-400 text-[10px] transition-colors cursor-pointer">
                 Remove
               </button>
             )}
@@ -123,7 +129,9 @@ function GameFormModal({
   const logoRef = useRef<HTMLInputElement>(null)
 
   const inputClass =
-    'bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-purple-500/60 w-full'
+    'bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:border-purple-500/60 w-full placeholder-white/20'
+
+  const labelClass = 'block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1'
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const title = e.target.value
@@ -200,179 +208,159 @@ function GameFormModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.80)', backdropFilter: 'blur(4px)' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div
-        className="bg-[#13001f] rounded-3xl w-full max-w-xl shadow-2xl shadow-purple-900/30 flex flex-col"
-        style={{ maxHeight: 'min(85vh, 680px)' }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-5 pb-3">
-          <h3
-            className="text-white font-black text-lg uppercase tracking-wide"
-            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-          >
-            {isEdit ? 'Manage Game' : 'Add Game'}
-          </h3>
-          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors text-xl">✕</button>
-        </div>
+    <Modal size="md" onClose={onClose}>
+      <ModalHeader
+        title={isEdit ? 'Manage Game' : 'Add Game'}
+        subtitle="Configure game settings and images"
+        onClose={onClose}
+      />
 
-        {/* Body */}
-        <div className="overflow-y-auto flex-1 px-6 py-2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <ModalBody>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
 
-            {/* Title */}
-            <div>
-              <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">Title *</label>
-              <input placeholder="e.g. Rocket League" value={form.title} onChange={handleTitleChange} className={inputClass} />
-            </div>
-
-            {/* Slug */}
-            <div>
-              <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">
-                Slug * {!isEdit && <span className="normal-case text-white/20">(auto)</span>}
-              </label>
-              <input
-                placeholder="e.g. rocket_league"
-                value={form.slug}
-                onChange={e => setForm(p => ({ ...p, slug: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') }))}
-                className={inputClass}
-              />
-            </div>
-
-            {/* Publisher */}
-            <div>
-              <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">Publisher</label>
-              <input placeholder="e.g. Psyonix" value={form.publisher}
-                onChange={e => setForm(p => ({ ...p, publisher: e.target.value }))} className={inputClass} />
-            </div>
-
-            {/* Genre */}
-            <div>
-              <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">Genre</label>
-              <input placeholder="e.g. Tactical FPS" value={form.genre}
-                onChange={e => setForm(p => ({ ...p, genre: e.target.value }))} className={inputClass} />
-            </div>
-
-            {/* Banner upload */}
-            <div className="md:col-span-2">
-              <ImageUploadField
-                label="Banner Image"
-                preview={bannerPreview}
-                file={bannerFile}
-                inputRef={bannerRef}
-                accept="image/*"
-                onChange={handleBannerFile}
-                onRemove={removeBanner}
-                shape="banner"
-              />
-            </div>
-
-            {/* Logo upload */}
-            <div className="md:col-span-2">
-              <ImageUploadField
-                label="Logo / Icon"
-                preview={logoPreview}
-                file={logoFile}
-                inputRef={logoRef}
-                accept="image/*"
-                onChange={handleLogoFile}
-                onRemove={removeLogo}
-                shape="logo"
-              />
-            </div>
-
-            {/* Overlay color */}
-            <div>
-              <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">Overlay Color</label>
-              <input placeholder="rgba(0,48,135,0.4)" value={form.overlay_color}
-                onChange={e => setForm(p => ({ ...p, overlay_color: e.target.value }))} className={inputClass} />
-            </div>
-
-            {/* Display order */}
-            <div>
-              <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">
-                Display Order
-                {form.display_order === -1 && (
-                  <span className="normal-case text-white/20 ml-1">(auto → {autoOrder})</span>
-                )}
-              </label>
-              <input
-                type="number" min="0" placeholder={`auto (${autoOrder})`}
-                value={form.display_order === -1 ? '' : form.display_order}
-                onChange={e => setForm(p => ({ ...p, display_order: e.target.value === '' ? -1 : parseInt(e.target.value) || 0 }))}
-                className={inputClass}
-              />
-            </div>
-
-            {/* Ranks */}
-            <div className="md:col-span-2">
-              <label className="block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1">
-                Ranks <span className="normal-case text-white/20">(one per line)</span>
-              </label>
-              <textarea
-                placeholder={'Bronze I\nBronze II\nSilver I\nGold I\n…'}
-                value={ranksText}
-                onChange={e => setRanksText(e.target.value)}
-                className={inputClass + ' h-24 resize-none font-mono text-xs'}
-              />
-              <p className="text-white/20 text-[10px] mt-1">
-                {ranksText.split('\n').filter(r => r.trim()).length} rank(s) defined
-              </p>
-            </div>
-
-            {/* Toggles */}
-            <div className="md:col-span-2 grid grid-cols-2 gap-3">
-              <div className="flex items-center gap-3">
-                <button type="button"
-                  onClick={() => setForm(p => ({ ...p, is_active: !p.is_active }))}
-                  className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${form.is_active ? 'bg-purple-600' : 'bg-white/10'}`}>
-                  <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
-                    style={{ left: form.is_active ? '16px' : '2px' }} />
-                </button>
-                <div>
-                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">
-                    {form.is_active ? 'Active' : 'Inactive'}
-                  </p>
-                  <p className="text-white/20 text-[10px]">Shown in games showcase</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <button type="button"
-                  onClick={() => setForm(p => ({ ...p, registration_open: !p.registration_open }))}
-                  className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${form.registration_open ? 'bg-green-600' : 'bg-white/10'}`}>
-                  <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
-                    style={{ left: form.registration_open ? '16px' : '2px' }} />
-                </button>
-                <div>
-                  <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">
-                    {form.registration_open ? 'Recruiting' : 'Closed'}
-                  </p>
-                  <p className="text-white/20 text-[10px]">Shown in join form</p>
-                </div>
-              </div>
-            </div>
-
+          {/* Title */}
+          <div>
+            <label className={labelClass}>Title *</label>
+            <input placeholder="e.g. Rocket League" value={form.title} onChange={handleTitleChange} className={inputClass} />
           </div>
-        </div>
 
-        {/* Footer */}
-        <div className="flex gap-3 px-6 py-4 border-t border-white/8">
-          <button
-            onClick={handleSubmit}
-            disabled={saving || !form.title || !form.slug}
-            className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black px-6 py-2 rounded-xl text-xs tracking-widest uppercase transition-all duration-200"
-            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-          >
-            {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Game'}
-          </button>
-          <ActionButton variant="ghost" onClick={onClose}>Cancel</ActionButton>
+          {/* Slug */}
+          <div>
+            <label className={labelClass}>
+              Slug * {!isEdit && <span className="normal-case text-white/20">(auto)</span>}
+            </label>
+            <input
+              placeholder="e.g. rocket_league"
+              value={form.slug}
+              onChange={e => setForm(p => ({ ...p, slug: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') }))}
+              className={inputClass}
+            />
+          </div>
+
+          {/* Publisher */}
+          <div>
+            <label className={labelClass}>Publisher</label>
+            <input placeholder="e.g. Psyonix" value={form.publisher}
+              onChange={e => setForm(p => ({ ...p, publisher: e.target.value }))} className={inputClass} />
+          </div>
+
+          {/* Genre */}
+          <div>
+            <label className={labelClass}>Genre</label>
+            <input placeholder="e.g. Tactical FPS" value={form.genre}
+              onChange={e => setForm(p => ({ ...p, genre: e.target.value }))} className={inputClass} />
+          </div>
+
+          {/* Banner upload */}
+          <div className="md:col-span-2">
+            <ImageUploadField
+              label="Banner Image"
+              preview={bannerPreview}
+              file={bannerFile}
+              inputRef={bannerRef}
+              accept="image/*"
+              onChange={handleBannerFile}
+              onRemove={removeBanner}
+              shape="banner"
+            />
+          </div>
+
+          {/* Logo upload */}
+          <div className="md:col-span-2">
+            <ImageUploadField
+              label="Logo / Icon"
+              preview={logoPreview}
+              file={logoFile}
+              inputRef={logoRef}
+              accept="image/*"
+              onChange={handleLogoFile}
+              onRemove={removeLogo}
+              shape="logo"
+            />
+          </div>
+
+          {/* Overlay color */}
+          <div>
+            <label className={labelClass}>Overlay Color</label>
+            <input placeholder="rgba(0,48,135,0.4)" value={form.overlay_color}
+              onChange={e => setForm(p => ({ ...p, overlay_color: e.target.value }))} className={inputClass} />
+          </div>
+
+          {/* Display order */}
+          <div>
+            <label className={labelClass}>
+              Display Order
+              {form.display_order === -1 && (
+                <span className="normal-case text-white/20 ml-1">(auto → {autoOrder})</span>
+              )}
+            </label>
+            <input
+              type="number" min="0" placeholder={`auto (${autoOrder})`}
+              value={form.display_order === -1 ? '' : form.display_order}
+              onChange={e => setForm(p => ({ ...p, display_order: e.target.value === '' ? -1 : parseInt(e.target.value) || 0 }))}
+              className={inputClass}
+            />
+          </div>
+
+          {/* Ranks */}
+          <div className="md:col-span-2">
+            <label className={labelClass}>
+              Ranks <span className="normal-case text-white/20">(one per line)</span>
+            </label>
+            <textarea
+              placeholder={'Bronze I\nBronze II\nSilver I\nGold I\n…'}
+              value={ranksText}
+              onChange={e => setRanksText(e.target.value)}
+              className={inputClass + ' h-24 resize-none font-mono text-xs'}
+            />
+            <p className="text-white/20 text-[10px] mt-1">
+              {ranksText.split('\n').filter(r => r.trim()).length} rank(s) defined
+            </p>
+          </div>
+
+          {/* Toggles */}
+          <div className="md:col-span-2 grid grid-cols-2 gap-3">
+            <div className="flex items-center gap-3">
+              <button type="button"
+                onClick={() => setForm(p => ({ ...p, is_active: !p.is_active }))}
+                className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 cursor-pointer ${form.is_active ? 'bg-purple-600' : 'bg-white/10'}`}>
+                <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
+                  style={{ left: form.is_active ? '16px' : '2px' }} />
+              </button>
+              <div>
+                <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">
+                  {form.is_active ? 'Active' : 'Inactive'}
+                </p>
+                <p className="text-white/20 text-[10px]">Shown in games showcase</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button type="button"
+                onClick={() => setForm(p => ({ ...p, registration_open: !p.registration_open }))}
+                className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 cursor-pointer ${form.registration_open ? 'bg-green-600' : 'bg-white/10'}`}>
+                <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
+                  style={{ left: form.registration_open ? '16px' : '2px' }} />
+              </button>
+              <div>
+                <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">
+                  {form.registration_open ? 'Recruiting' : 'Closed'}
+                </p>
+                <p className="text-white/20 text-[10px]">Shown in join form</p>
+              </div>
+            </div>
+          </div>
+
         </div>
-      </div>
-    </div>
+      </ModalBody>
+
+      <ModalFooter
+        onSave={handleSubmit}
+        onClose={onClose}
+        saving={saving}
+        disabled={!form.title || !form.slug}
+        saveLabel={isEdit ? 'Save Changes' : 'Add Game'}
+      />
+    </Modal>
   )
 }
 
@@ -396,7 +384,7 @@ export default function GamesSection() {
     await fetch('/api/games/create/', {
       method: 'POST',
       credentials: 'include',
-      headers: { 'X-CSRFToken': getCsrf() },
+      headers: { 'X-CSRFToken': getCsrfToken() },
       body: fd,
     })
     load()
@@ -407,7 +395,7 @@ export default function GamesSection() {
     await fetch(`/api/games/${editingGame.id}/`, {
       method: 'PATCH',
       credentials: 'include',
-      headers: { 'X-CSRFToken': getCsrf() },
+      headers: { 'X-CSRFToken': getCsrfToken() },
       body: fd,
     })
     load()

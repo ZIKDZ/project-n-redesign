@@ -1,7 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { players, games, teams } from '../../../../utils/api'
-import { Badge, SectionHeader, ActionButton, FilterSelect, FilterOption, getCsrfToken, SearchBar, Pagination } from '../DashboardShared'
+import {
+  Badge,
+  SectionHeader,
+  ActionButton,
+  FilterSelect,
+  FilterOption,
+  getCsrfToken,
+  SearchBar,
+  Pagination,
+  Modal,
+  ModalHeader,
+  ModalTabs,
+  ModalBody,
+  ModalFooter,
+} from '../DashboardShared'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const PAGE_SIZE = 10
@@ -90,7 +104,7 @@ const EMPTY_PLAYER: Omit<PlayerData, 'id' | 'joined_at'> = {
   address: '',
 }
 
-// ── Upload helper with progress (mirrors SpotlightSection) ────────────────────
+// ── Upload helper with progress ───────────────────────────────────────────────
 function uploadWithProgress(
   url: string,
   method: string,
@@ -142,8 +156,6 @@ function ProgressBar({ pct }: { pct: number }) {
 }
 
 // ── ClipManager ───────────────────────────────────────────────────────────────
-// Manages Cloudinary video clips for an existing player.
-// For new (unsaved) players, playerId is undefined → shows a placeholder.
 function ClipManager({
   playerId,
   initialClips,
@@ -296,7 +308,6 @@ function ClipManager({
           </div>
           <div>
             <label className={labelClass}>Video File * (mp4, webm)</label>
-            {/* Video preview */}
             <div
               className="w-full h-28 rounded-xl border-2 border-dashed border-white/10 flex items-center justify-center overflow-hidden cursor-pointer hover:border-purple-500/50 transition-colors bg-black/20 mb-2 relative"
               onClick={() => fileRef.current?.click()}
@@ -516,6 +527,8 @@ function StatusDropdown({ currentStatus, onSelect }: { currentStatus: string; on
 }
 
 // ── PlayerModal ───────────────────────────────────────────────────────────────
+type PlayerTab = 'profile' | 'socials' | 'clips' | 'personal'
+
 function PlayerModal({
   initial, isEdit, gamesList, teamsList, onSave, onClose,
 }: {
@@ -526,7 +539,7 @@ function PlayerModal({
   onSave: (data: any, avatarFile: File | null, clearAvatar: boolean) => Promise<void>
   onClose: () => void
 }) {
-  const [tab, setTab] = useState<'profile' | 'socials' | 'clips' | 'personal'>('profile')
+  const [tab, setTab] = useState<PlayerTab>('profile')
   const [form, setForm] = useState(initial)
   const [clips, setClips] = useState<Clip[]>(initial.clips || [])
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
@@ -561,7 +574,6 @@ function PlayerModal({
     if (!form.username) return
     setSaving(true)
     try {
-      // clips are managed separately via ClipManager — don't include in form
       const { clips: _clips, ...formWithoutClips } = form as any
       await onSave(formWithoutClips, avatarFile, clearAvatar)
       onClose()
@@ -574,227 +586,196 @@ function PlayerModal({
   const hasAvatar = avatarPreview && !clearAvatar
 
   const TABS = [
-    { id: 'profile', label: '⚡ Profile' },
-    { id: 'socials', label: '🔗 Socials' },
-    { id: 'clips',   label: `🎬 Clips${clips.length > 0 ? ` (${clips.length})` : ''}` },
-    { id: 'personal', label: '👤 Personal' },
-  ] as const
+    { id: 'profile' as const, label: '⚡ Profile' },
+    { id: 'socials' as const, label: '🔗 Socials' },
+    { id: 'clips' as const,   label: `🎬 Clips${clips.length > 0 ? ` (${clips.length})` : ''}` },
+    { id: 'personal' as const, label: '👤 Personal' },
+  ]
 
   return (
     <>
       {cropSrc && <ImageCropModal src={cropSrc} onConfirm={handleCropConfirm} onCancel={() => setCropSrc(null)} />}
 
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
-        style={{ background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(4px)' }}
-        onClick={e => { if (e.target === e.currentTarget) onClose() }}
-      >
-        <div
-          className="bg-[#13001f] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl shadow-purple-900/30 flex flex-col"
-          style={{ maxHeight: 'min(90vh, 700px)' }}
+      <Modal size="md" onClose={onClose}>
+        <ModalHeader 
+          title={isEdit ? `Edit — ${initial.username}` : 'Add Player'}
+          subtitle="Manage player profile and settings"
+          onClose={onClose}
         >
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-white/8">
-            <div className="flex items-center gap-3">
-              <div className="relative shrink-0 group/av">
-                <div
-                  className="w-12 h-12 rounded-xl border-2 border-dashed border-white/15 flex items-center justify-center overflow-hidden cursor-pointer hover:border-purple-500/50 transition-colors"
-                  onClick={() => avatarRef.current?.click()}
-                >
-                  {hasAvatar ? (
-                    <img src={avatarPreview} className="w-full h-full object-cover" alt="avatar" />
-                  ) : (
-                    <span className="text-white/20 text-lg font-black">{form.username ? form.username[0].toUpperCase() : '?'}</span>
-                  )}
-                </div>
-                {hasAvatar && (
-                  <button type="button" onClick={e => { e.stopPropagation(); handleRemoveAvatar() }}
-                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 hover:bg-red-400 border-2 border-[#13001f] flex items-center justify-center transition-all duration-150 opacity-0 group-hover/av:opacity-100 z-10 cursor-pointer">
-                    <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
+          {/* Avatar */}
+          <div className="relative shrink-0 group/av">
+            <div
+              className="w-12 h-12 rounded-xl border-2 border-dashed border-white/15 flex items-center justify-center overflow-hidden cursor-pointer hover:border-purple-500/50 transition-colors"
+              onClick={() => avatarRef.current?.click()}
+            >
+              {hasAvatar ? (
+                <img src={avatarPreview} className="w-full h-full object-cover" alt="avatar" />
+              ) : (
+                <span className="text-white/20 text-lg font-black">{form.username ? form.username[0].toUpperCase() : '?'}</span>
+              )}
+            </div>
+            {hasAvatar && (
+              <button type="button" onClick={e => { e.stopPropagation(); handleRemoveAvatar() }}
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 hover:bg-red-400 border-2 border-[#13001f] flex items-center justify-center transition-all duration-150 opacity-0 group-hover/av:opacity-100 z-10 cursor-pointer">
+                <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            )}
+          </div>
+          <input ref={avatarRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
+        </ModalHeader>
+
+        <ModalTabs tabs={TABS} active={tab} onChange={setTab} />
+
+        <ModalBody>
+          {/* ── Profile tab ── */}
+          {tab === 'profile' && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>Username *</label>
+                <input placeholder="e.g. NebX" value={form.username} onChange={e => setForm(p => ({ ...p, username: e.target.value }))} className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>In-Game Username *</label>
+                <input placeholder="e.g. Neb#1234" value={form.ingame_username} onChange={e => setForm(p => ({ ...p, ingame_username: e.target.value }))} className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Game</label>
+                <select value={form.game} onChange={e => handleGameChange(e.target.value)} className={selectClass}>
+                  <option value="" className="bg-[#1a0030] text-white">Select game</option>
+                  {gamesList.map(g => <option key={g.slug} value={g.slug} className="bg-[#1a0030] text-white">{g.title}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Rank</label>
+                {ranks.length > 0 ? (
+                  <select value={form.rank} onChange={e => setForm(p => ({ ...p, rank: e.target.value }))} disabled={!form.game} className={selectClass + ' disabled:opacity-40'}>
+                    <option value="" className="bg-[#1a0030] text-white">Select rank</option>
+                    {ranks.map(r => <option key={r} value={r} className="bg-[#1a0030] text-white">{r}</option>)}
+                  </select>
+                ) : (
+                  <input placeholder="e.g. Diamond" value={form.rank} onChange={e => setForm(p => ({ ...p, rank: e.target.value }))} className={inputClass} />
                 )}
               </div>
-              <input ref={avatarRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
               <div>
-                <h3 className="text-white font-black text-base uppercase tracking-wide" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-                  {isEdit ? `Edit — ${initial.username}` : 'Add Player'}
-                </h3>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <button type="button" onClick={() => avatarRef.current?.click()}
-                    className="text-purple-400/60 hover:text-purple-400 text-[10px] tracking-widest transition-colors cursor-pointer">
-                    {hasAvatar ? 'Change photo' : 'Add photo'}
-                  </button>
-                </div>
+                <label className={labelClass}>Role</label>
+                <select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))} className={selectClass}>
+                  {[['player','Player'],['captain','Captain'],['coach','Coach'],['substitute','Substitute'],['content_creator','Content Creator']].map(([v,l]) => <option key={v} value={v} className="bg-[#1a0030] text-white">{l}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Status</label>
+                <select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))} className={selectClass}>
+                  <option value="active" className="bg-[#1a0030] text-white">Active</option>
+                  <option value="suspended" className="bg-[#1a0030] text-white">Suspended</option>
+                  <option value="inactive" className="bg-[#1a0030] text-white">Inactive</option>
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className={labelClass}>Team</label>
+                {(() => {
+                  const filteredTeams = form.game ? teamsList.filter((t: any) => t.game === form.game) : teamsList
+                  const currentTeamValid = filteredTeams.some((t: any) => t.id === form.team_id)
+                  return (
+                    <select value={currentTeamValid ? (form.team_id ?? '') : ''} onChange={e => setForm(p => ({ ...p, team_id: e.target.value ? Number(e.target.value) : null }))} className={selectClass}>
+                      <option value="" className="bg-[#1a0030] text-white">{form.game ? 'No team' : 'Select a game first'}</option>
+                      {filteredTeams.map((t: any) => <option key={t.id} value={t.id} className="bg-[#1a0030] text-white">{t.name}</option>)}
+                    </select>
+                  )
+                })()}
+              </div>
+              <div className="col-span-2">
+                <label className={labelClass}>Bio</label>
+                <textarea placeholder="Short player bio visible on their public profile…" value={form.bio}
+                  onChange={e => setForm(p => ({ ...p, bio: e.target.value }))} className={inputClass + ' h-20 resize-none'} />
               </div>
             </div>
-            <button onClick={onClose} className="text-white/30 hover:text-white transition-colors text-xl cursor-pointer">✕</button>
-          </div>
+          )}
 
-          {/* Tabs */}
-          <div className="flex gap-1 px-6 pt-3 pb-1 flex-wrap">
-            {TABS.map(t => (
-              <button key={t.id} onClick={() => setTab(t.id as any)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-black tracking-widest uppercase transition-all duration-150 cursor-pointer ${tab === t.id ? 'bg-purple-600/25 text-purple-300 border border-purple-500/30' : 'text-white/30 hover:text-white/60'}`}>
-                {t.label}
-              </button>
-            ))}
-          </div>
+          {/* ── Socials tab ── */}
+          {tab === 'socials' && (
+            <div className="space-y-3">
+              <p className="text-white/20 text-[10px] tracking-widest mb-3">Links shown publicly on the player's profile page.</p>
+              {[
+                { field: 'twitter_url', label: 'X URL', placeholder: 'https://x.com/username' },
+                { field: 'instagram_url', label: 'Instagram URL', placeholder: 'https://instagram.com/username' },
+                { field: 'twitch_url', label: 'Twitch URL', placeholder: 'https://twitch.tv/username' },
+                { field: 'kick_url', label: 'Kick URL', placeholder: 'https://kick.com/username' },
+                { field: 'tiktok_url', label: 'TikTok URL', placeholder: 'https://tiktok.com/@username' },
+              ].map(({ field, label, placeholder }) => (
+                <div key={field}>
+                  <label className={labelClass}>{label}</label>
+                  <input
+                    placeholder={placeholder}
+                    value={(form as any)[field] || ''}
+                    onChange={e => setForm(p => ({ ...p, [field]: e.target.value }))}
+                    className={inputClass}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
 
-          {/* Body */}
-          <div className="overflow-y-auto flex-1 px-6 py-3" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          {/* ── Clips tab ── */}
+          {tab === 'clips' && (
+            <div>
+              <p className="text-white/20 text-[10px] tracking-widest mb-4">
+                Upload highlight videos directly to Cloudinary. Videos appear on the player's public profile page.
+              </p>
+              <ClipManager
+                playerId={(initial as any).id}
+                initialClips={clips}
+                onClipsChange={setClips}
+              />
+            </div>
+          )}
 
-            {/* ── Profile tab ── */}
-            {tab === 'profile' && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelClass}>Username *</label>
-                  <input placeholder="e.g. NebX" value={form.username} onChange={e => setForm(p => ({ ...p, username: e.target.value }))} className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>In-Game Username *</label>
-                  <input placeholder="e.g. Neb#1234" value={form.ingame_username} onChange={e => setForm(p => ({ ...p, ingame_username: e.target.value }))} className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>Game</label>
-                  <select value={form.game} onChange={e => handleGameChange(e.target.value)} className={selectClass}>
-                    <option value="" className="bg-[#1a0030] text-white">Select game</option>
-                    {gamesList.map(g => <option key={g.slug} value={g.slug} className="bg-[#1a0030] text-white">{g.title}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelClass}>Rank</label>
-                  {ranks.length > 0 ? (
-                    <select value={form.rank} onChange={e => setForm(p => ({ ...p, rank: e.target.value }))} disabled={!form.game} className={selectClass + ' disabled:opacity-40'}>
-                      <option value="" className="bg-[#1a0030] text-white">Select rank</option>
-                      {ranks.map(r => <option key={r} value={r} className="bg-[#1a0030] text-white">{r}</option>)}
-                    </select>
-                  ) : (
-                    <input placeholder="e.g. Diamond" value={form.rank} onChange={e => setForm(p => ({ ...p, rank: e.target.value }))} className={inputClass} />
-                  )}
-                </div>
-                <div>
-                  <label className={labelClass}>Role</label>
-                  <select value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))} className={selectClass}>
-                    {[['player','Player'],['captain','Captain'],['coach','Coach'],['substitute','Substitute'],['content_creator','Content Creator']].map(([v,l]) => <option key={v} value={v} className="bg-[#1a0030] text-white">{l}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelClass}>Status</label>
-                  <select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))} className={selectClass}>
-                    <option value="active" className="bg-[#1a0030] text-white">Active</option>
-                    <option value="suspended" className="bg-[#1a0030] text-white">Suspended</option>
-                    <option value="inactive" className="bg-[#1a0030] text-white">Inactive</option>
-                  </select>
-                </div>
-                <div className="col-span-2">
-                  <label className={labelClass}>Team</label>
-                  {(() => {
-                    const filteredTeams = form.game ? teamsList.filter((t: any) => t.game === form.game) : teamsList
-                    const currentTeamValid = filteredTeams.some((t: any) => t.id === form.team_id)
-                    return (
-                      <select value={currentTeamValid ? (form.team_id ?? '') : ''} onChange={e => setForm(p => ({ ...p, team_id: e.target.value ? Number(e.target.value) : null }))} className={selectClass}>
-                        <option value="" className="bg-[#1a0030] text-white">{form.game ? 'No team' : 'Select a game first'}</option>
-                        {filteredTeams.map((t: any) => <option key={t.id} value={t.id} className="bg-[#1a0030] text-white">{t.name}</option>)}
-                      </select>
-                    )
-                  })()}
-                </div>
-                <div className="col-span-2">
-                  <label className={labelClass}>Bio</label>
-                  <textarea placeholder="Short player bio visible on their public profile…" value={form.bio}
-                    onChange={e => setForm(p => ({ ...p, bio: e.target.value }))} className={inputClass + ' h-20 resize-none'} />
-                </div>
+          {/* ── Personal tab ── */}
+          {tab === 'personal' && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>First Name</label>
+                <input placeholder="e.g. Yacine" value={form.first_name} onChange={e => setForm(p => ({ ...p, first_name: e.target.value }))} className={inputClass} />
               </div>
-            )}
-
-            {/* ── Socials tab ── */}
-            {tab === 'socials' && (
-              <div className="space-y-3 py-1">
-                <p className="text-white/20 text-[10px] tracking-widest mb-3">Links shown publicly on the player's profile page.</p>
-                {[
-                  { field: 'twitter_url', label: 'X URL', placeholder: 'https://x.com/username' },
-                  { field: 'instagram_url', label: 'Instagram URL', placeholder: 'https://instagram.com/username' },
-                  { field: 'twitch_url', label: 'Twitch URL', placeholder: 'https://twitch.tv/username' },
-                  { field: 'kick_url', label: 'Kick URL', placeholder: 'https://kick.com/username' },
-                  { field: 'tiktok_url', label: 'TikTok URL', placeholder: 'https://tiktok.com/@username' },
-                ].map(({ field, label, placeholder }) => (
-                  <div key={field}>
-                    <label className='block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1'>{label}</label>
-                    <input
-                      placeholder={placeholder}
-                      value={(form as any)[field] || ''}
-                      onChange={e => setForm(p => ({ ...p, [field]: e.target.value }))}
-                      className={inputClass}
-                    />
-                  </div>
-                ))}
+              <div>
+                <label className={labelClass}>Last Name</label>
+                <input placeholder="e.g. Benzema" value={form.last_name} onChange={e => setForm(p => ({ ...p, last_name: e.target.value }))} className={inputClass} />
               </div>
-            )}
-
-            {/* ── Clips tab ── */}
-            {tab === 'clips' && (
-              <div className="py-1">
-                <p className="text-white/20 text-[10px] tracking-widest mb-4">
-                  Upload highlight videos directly to Cloudinary. Videos appear on the player's public profile page.
-                </p>
-                <ClipManager
-                  playerId={(initial as any).id}
-                  initialClips={clips}
-                  onClipsChange={setClips}
-                />
+              <div>
+                <label className={labelClass}>Age</label>
+                <input type="number" min="10" max="99" placeholder="e.g. 21" value={form.age ?? ''}
+                  onChange={e => setForm(p => ({ ...p, age: e.target.value ? Number(e.target.value) : null }))} className={inputClass} />
               </div>
-            )}
-
-            {/* ── Personal tab ── */}
-            {tab === 'personal' && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelClass}>First Name</label>
-                  <input placeholder="e.g. Yacine" value={form.first_name} onChange={e => setForm(p => ({ ...p, first_name: e.target.value }))} className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>Last Name</label>
-                  <input placeholder="e.g. Benzema" value={form.last_name} onChange={e => setForm(p => ({ ...p, last_name: e.target.value }))} className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>Age</label>
-                  <input type="number" min="10" max="99" placeholder="e.g. 21" value={form.age ?? ''}
-                    onChange={e => setForm(p => ({ ...p, age: e.target.value ? Number(e.target.value) : null }))} className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>Discord Username</label>
-                  <input placeholder="e.g. username#0000" value={form.discord_username} onChange={e => setForm(p => ({ ...p, discord_username: e.target.value }))} className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>Email</label>
-                  <input type="email" placeholder="e.g. player@email.com" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>Phone</label>
-                  <input placeholder="e.g. +213 555 123456" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} className={inputClass} />
-                </div>
-                <div className="col-span-2">
-                  <label className={labelClass}>Address</label>
-                  <input placeholder="e.g. Algiers, Algeria" value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} className={inputClass} />
-                </div>
-                <div className="col-span-2 pt-2">
-                  <p className="text-white/15 text-[10px] tracking-wide">🔒 Personal information is only visible to staff.</p>
-                </div>
+              <div>
+                <label className={labelClass}>Discord Username</label>
+                <input placeholder="e.g. username#0000" value={form.discord_username} onChange={e => setForm(p => ({ ...p, discord_username: e.target.value }))} className={inputClass} />
               </div>
-            )}
-          </div>
+              <div>
+                <label className={labelClass}>Email</label>
+                <input type="email" placeholder="e.g. player@email.com" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Phone</label>
+                <input placeholder="e.g. +213 555 123456" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} className={inputClass} />
+              </div>
+              <div className="col-span-2">
+                <label className={labelClass}>Address</label>
+                <input placeholder="e.g. Algiers, Algeria" value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} className={inputClass} />
+              </div>
+              <div className="col-span-2 pt-2">
+                <p className="text-white/15 text-[10px] tracking-wide">🔒 Personal information is only visible to staff.</p>
+              </div>
+            </div>
+          )}
+        </ModalBody>
 
-          {/* Footer */}
-          <div className="flex gap-3 px-6 py-4 border-t border-white/8">
-            <button onClick={handleSubmit} disabled={saving || !form.username}
-              className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black px-6 py-2.5 rounded-xl text-xs tracking-widest uppercase transition-all duration-200 cursor-pointer"
-              style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-              {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Player'}
-            </button>
-            <ActionButton variant="ghost" onClick={onClose}>Cancel</ActionButton>
-          </div>
-        </div>
-      </div>
+        <ModalFooter
+          onSave={handleSubmit}
+          onClose={onClose}
+          saving={saving}
+          disabled={!form.username}
+          saveLabel={isEdit ? 'Save Changes' : 'Add Player'}
+        />
+      </Modal>
     </>
   )
 }
@@ -826,7 +807,6 @@ export default function PlayersSection() {
   const buildFormData = (form: any, avatarFile: File | null, clearAvatar: boolean) => {
     const fd = new FormData()
     Object.entries(form).forEach(([k, v]) => {
-      // clips are managed separately via ClipManager — never include in player form
       if (k === 'clips') return
       if (v !== null && v !== undefined) {
         fd.append(k, String(v))
@@ -916,7 +896,6 @@ export default function PlayersSection() {
         {displayed.map((p: PlayerData) => (
           <div key={p.id} className="bg-white/5 border border-white/8 rounded-2xl px-5 py-4 flex items-center gap-4">
             <div className={`flex items-center gap-4 flex-1 min-w-0 transition-opacity ${p.status === 'inactive' ? 'opacity-40' : p.status === 'suspended' ? 'opacity-70' : ''}`}>
-              {/* Avatar */}
               <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0 border border-white/10 bg-purple-900/30 flex items-center justify-center">
                 {p.avatar
                   ? <img src={p.avatar} className="w-full h-full object-cover" alt={p.username}

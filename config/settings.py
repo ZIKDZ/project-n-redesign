@@ -27,6 +27,10 @@ INSTALLED_APPS = [
     'apps.games',
     'apps.spotlight',
     'apps.shop',
+
+
+
+    'django_cleanup.apps.CleanupConfig',  # ← must be last
 ]
 
 MIDDLEWARE = [

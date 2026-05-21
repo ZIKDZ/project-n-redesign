@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { getCsrfToken } from '../../DashboardShared'
+import { getCsrfToken, Modal, ModalHeader, ModalBody, ModalFooter } from '../../DashboardShared'
 import { inputCls, labelCls, selectCls } from './types'
 
 const getCsrf = getCsrfToken
@@ -196,15 +196,14 @@ function CouponModal({
   onSave: (data: CouponForm) => Promise<void>
   onClose: () => void
 }) {
-  const backdropRef = useRef<HTMLDivElement>(null)
   const [form, setForm] = useState<CouponForm>({
-    code:                 initial.code             || '',
-    discount_type:        initial.discount_type    || 'percentage',
-    value:                initial.value            || '',
-    allowed_products:     initial.allowed_products || [],
-    minimum_order_amount: initial.minimum_order_amount || '0',
-    expiration_date:      initial.expiration_date  || '',
-    is_active:            initial.is_active        !== false,
+    code:                 initial.code                  || '',
+    discount_type:        initial.discount_type         || 'percentage',
+    value:                initial.value                 || '',
+    allowed_products:     initial.allowed_products      || [],
+    minimum_order_amount: initial.minimum_order_amount  || '0',
+    expiration_date:      initial.expiration_date       || '',
+    is_active:            initial.is_active             !== false,
   })
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState('')
@@ -233,45 +232,22 @@ function CouponModal({
     }
   }
 
-  const handleBackdrop = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === backdropRef.current && window.getSelection()?.toString() === '') onClose()
-  }
-
   const generateCode = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-    const code   = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+    const code  = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
     set('code', code)
   }
 
   return (
-    <div
-      ref={backdropRef}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
-      style={{ background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(4px)' }}
-      onClick={handleBackdrop}
-    >
-      <div
-        className="bg-[#13001f] border border-white/10 rounded-3xl w-full max-w-lg shadow-2xl shadow-purple-900/30 flex flex-col my-auto"
-        style={{ maxHeight: '90vh' }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-white/8 shrink-0">
-          <div>
-            <h3
-              className="text-white font-black text-base uppercase tracking-wide"
-              style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-            >
-              {isEdit ? `Edit — ${initial.code}` : 'New Coupon'}
-            </h3>
-            <p className="text-white/30 text-[10px] tracking-widest mt-0.5">
-              {isEdit ? 'Update coupon details' : 'Create a discount coupon'}
-            </p>
-          </div>
-          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors text-xl cursor-pointer">✕</button>
-        </div>
+    <Modal size="md" onClose={onClose}>
+      <ModalHeader
+        title={isEdit ? `Edit — ${initial.code}` : 'New Coupon'}
+        subtitle={isEdit ? 'Update coupon details' : 'Create a discount coupon'}
+        onClose={onClose}
+      />
 
-        {/* Body */}
-        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5" style={{ scrollbarWidth: 'none' }}>
+      <ModalBody>
+        <div className="space-y-5">
 
           {/* Code */}
           <div>
@@ -345,7 +321,9 @@ function CouponModal({
                 onChange={e => set('minimum_order_amount', e.target.value)}
                 className={inputCls + ' pr-12'}
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/25 text-[10px] font-bold pointer-events-none">DZD</span>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/25 text-[10px] font-bold pointer-events-none">
+                DZD
+              </span>
             </div>
             <p className="text-white/20 text-[10px] mt-1">Leave as 0 to allow on any order value.</p>
           </div>
@@ -394,7 +372,9 @@ function CouponModal({
             <button
               type="button"
               onClick={() => set('is_active', !form.is_active)}
-              className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${form.is_active ? 'bg-purple-600' : 'bg-white/10'}`}
+              className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 cursor-pointer ${
+                form.is_active ? 'bg-purple-600' : 'bg-white/10'
+              }`}
             >
               <span
                 className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
@@ -411,36 +391,24 @@ function CouponModal({
             </div>
           </div>
 
+          {/* Error */}
           {error && (
             <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
               ⚠ {error}
             </p>
           )}
-        </div>
 
-        {/* Footer */}
-        <div className="flex gap-3 px-6 py-4 border-t border-white/8 shrink-0">
-          <button
-            onClick={handleSubmit}
-            disabled={saving || !form.code.trim() || !form.value}
-            className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed
-                       text-white font-black px-6 py-2.5 rounded-xl text-xs tracking-widest uppercase
-                       transition-all cursor-pointer"
-            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-          >
-            {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Coupon'}
-          </button>
-          <button
-            onClick={onClose}
-            className="bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white
-                       text-xs font-bold px-4 py-2 rounded-lg tracking-wider uppercase transition-all
-                       duration-200 cursor-pointer"
-          >
-            Cancel
-          </button>
         </div>
-      </div>
-    </div>
+      </ModalBody>
+
+      <ModalFooter
+        onSave={handleSubmit}
+        onClose={onClose}
+        saving={saving}
+        disabled={!form.code.trim() || !form.value}
+        saveLabel={isEdit ? 'Save Changes' : 'Create Coupon'}
+      />
+    </Modal>
   )
 }
 
@@ -459,7 +427,7 @@ function CouponCard({
   onDelete: () => void
   onToggle: () => void
 }) {
-  const expired    = isExpired(coupon.expiration_date)
+  const expired           = isExpired(coupon.expiration_date)
   const effectivelyActive = coupon.is_active && !expired
 
   const allowedNames = coupon.allowed_products.length === 0
@@ -481,7 +449,6 @@ function CouponCard({
       {/* Top row */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          {/* Code */}
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <span
               className="font-black text-white text-xl tracking-widest font-mono"
@@ -489,7 +456,6 @@ function CouponCard({
             >
               {coupon.code}
             </span>
-            {/* Copy button */}
             <button
               type="button"
               onClick={() => navigator.clipboard?.writeText(coupon.code)}
@@ -503,7 +469,6 @@ function CouponCard({
             </button>
           </div>
 
-          {/* Discount badge */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <span
               className="inline-flex items-center text-[10px] font-black tracking-widest uppercase px-2.5 py-1 rounded-full"
@@ -517,7 +482,6 @@ function CouponCard({
                 ? `${coupon.value}% off`
                 : `${parseInt(coupon.value).toLocaleString()} DZD off`}
             </span>
-
             {parseFloat(coupon.minimum_order_amount) > 0 && (
               <span className="text-[10px] text-white/30 font-bold">
                 min {parseInt(coupon.minimum_order_amount).toLocaleString()} DZD
@@ -556,9 +520,7 @@ function CouponCard({
               {allowedNames.map(name => (
                 <p key={name} className="text-white/50 font-semibold truncate">{name}</p>
               ))}
-              {extraCount > 0 && (
-                <p className="text-white/30">+{extraCount} more</p>
-              )}
+              {extraCount > 0 && <p className="text-white/30">+{extraCount} more</p>}
             </div>
           )}
         </div>
@@ -603,12 +565,12 @@ function CouponCard({
 // ── CouponsTab ────────────────────────────────────────────────────────────────
 
 export default function CouponsTab() {
-  const [coupons, setCoupons]       = useState<Coupon[]>([])
-  const [products, setProducts]     = useState<Product[]>([])
-  const [loading, setLoading]       = useState(true)
-  const [showModal, setShowModal]   = useState(false)
-  const [editing, setEditing]       = useState<Coupon | null>(null)
-  const [filterStatus, setFilter]   = useState<'all' | 'active' | 'inactive' | 'expired'>('all')
+  const [coupons, setCoupons]     = useState<Coupon[]>([])
+  const [products, setProducts]   = useState<Product[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [showModal, setShowModal] = useState(false)
+  const [editing, setEditing]     = useState<Coupon | null>(null)
+  const [filterStatus, setFilter] = useState<'all' | 'active' | 'inactive' | 'expired'>('all')
 
   const load = useCallback(() => {
     setLoading(true)

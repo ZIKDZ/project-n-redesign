@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { ActionButton, getCsrfToken } from '../../DashboardShared'
+import { ActionButton, getCsrfToken, Modal, ModalHeader, ModalTabs, ModalBody, ModalFooter } from '../../DashboardShared'
 import {
   VariantConfig, CustomField, GalleryImage, StagedImage, Product, PaymentMethod,
   CATEGORY_LABELS, PAYMENT_METHOD_CONFIG, inputCls, selectCls, labelCls,
@@ -21,8 +21,8 @@ function PaymentMethodSelector({
   return (
     <div className="space-y-2">
       {options.map(opt => {
-        const cfg     = PAYMENT_METHOD_CONFIG[opt]
-        const active  = value === opt
+        const cfg    = PAYMENT_METHOD_CONFIG[opt]
+        const active = value === opt
         return (
           <button
             key={opt}
@@ -34,7 +34,6 @@ function PaymentMethodSelector({
               borderColor: active ? cfg.border : 'rgba(255,255,255,0.08)',
             }}
           >
-            {/* Radio dot */}
             <span
               className="w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all"
               style={{
@@ -42,11 +41,8 @@ function PaymentMethodSelector({
                 background:  active ? cfg.color : 'transparent',
               }}
             >
-              {active && (
-                <span className="w-1.5 h-1.5 rounded-full bg-white" />
-              )}
+              {active && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
             </span>
-
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-xs">{cfg.icon}</span>
@@ -57,9 +53,7 @@ function PaymentMethodSelector({
                   {cfg.label}
                 </span>
               </div>
-              <p className="text-white/25 text-[10px] mt-0.5 leading-relaxed">
-                {cfg.description}
-              </p>
+              <p className="text-white/25 text-[10px] mt-0.5 leading-relaxed">{cfg.description}</p>
             </div>
           </button>
         )
@@ -380,7 +374,7 @@ function CustomFieldEditor({ fields, onChange }: { fields: CustomField[]; onChan
           </div>
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => update(i, 'required', !f.required)}
-              className={`w-8 h-4 rounded-full transition-colors duration-200 relative shrink-0 ${f.required ? 'bg-purple-600' : 'bg-white/10'}`}>
+              className={`w-8 h-4 rounded-full transition-colors duration-200 relative shrink-0 cursor-pointer ${f.required ? 'bg-purple-600' : 'bg-white/10'}`}>
               <span className="absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all duration-200" style={{ left: f.required ? '13px' : '2px' }} />
             </button>
             <span className="text-white/35 text-[10px] font-bold tracking-widest uppercase">{f.required ? 'Required' : 'Optional'}</span>
@@ -458,14 +452,15 @@ function GalleryEditor({ existing, staged, onRemoveExisting, onAddStaged, onRemo
 
 // ── ProductModal ──────────────────────────────────────────────────────────────
 
+type ProductTab = 'general' | 'variants' | 'custom' | 'settings'
+
 function ProductModal({ initial, isEdit, onSave, onClose }: {
   initial: Partial<Product>
   isEdit: boolean
   onSave: (fd: FormData, deletedImageIds: number[]) => Promise<void>
   onClose: () => void
 }) {
-  const [tab, setTab]       = useState<'general' | 'variants' | 'custom' | 'settings'>('general')
-  const backdropRef         = useRef<HTMLDivElement>(null)
+  const [tab, setTab] = useState<ProductTab>('general')
 
   const [form, setForm] = useState({
     name:           initial.name           || '',
@@ -547,205 +542,180 @@ function ProductModal({ initial, isEdit, onSave, onClose }: {
   const toggle = (key: 'is_active' | 'is_featured' | 'track_stock') =>
     setForm(p => ({ ...p, [key]: !p[key] }))
 
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === backdropRef.current && window.getSelection()?.toString() === '') onClose()
-  }
-
   const TOGGLES = [
-    { key: 'is_active'   as const, on: 'Active',        off: 'Inactive',           sub: 'Visible in shop' },
-    { key: 'is_featured' as const, on: 'Featured',      off: 'Not Featured',       sub: 'Shown in hero' },
-    { key: 'track_stock' as const, on: 'Tracking Stock',off: 'Stock Tracking Off',
+    { key: 'is_active'    as const, on: 'Active',          off: 'Inactive',           sub: 'Visible in shop' },
+    { key: 'is_featured'  as const, on: 'Featured',        off: 'Not Featured',       sub: 'Shown in hero' },
+    { key: 'track_stock'  as const, on: 'Tracking Stock',  off: 'Stock Tracking Off',
       sub: form.track_stock ? 'Stock counts enforced' : 'Always shown as available' },
   ]
 
   const TABS = [
-    { id: 'general',  label: '🎨 General' },
-    { id: 'variants', label: `📦 Variants${variantConfig.variants.length ? ` (${variantConfig.variants.length})` : ''}` },
-    { id: 'custom',   label: `✏️ Custom Fields${customFields.length ? ` (${customFields.length})` : ''}` },
-    { id: 'settings', label: '⚙ Settings' },
-  ] as const
+    { id: 'general'  as const, label: '🎨 General' },
+    { id: 'variants' as const, label: `📦 Variants${variantConfig.variants.length ? ` (${variantConfig.variants.length})` : ''}` },
+    { id: 'custom'   as const, label: `✏️ Custom Fields${customFields.length ? ` (${customFields.length})` : ''}` },
+    { id: 'settings' as const, label: '⚙ Settings' },
+  ]
 
   const pmCfg = PAYMENT_METHOD_CONFIG[form.payment_method]
 
   return (
-    <div ref={backdropRef} className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
-      style={{ background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(4px)' }} onClick={handleBackdropClick}>
-      <div className="bg-[#13001f] border border-white/10 rounded-3xl w-full max-w-2xl shadow-2xl shadow-purple-900/30 flex flex-col my-auto" style={{ maxHeight: '90vh' }}>
+    <Modal size="md" onClose={onClose}>
+      <ModalHeader
+        title={isEdit ? `Edit — ${initial.name}` : 'Add Product'}
+        subtitle={isEdit ? 'Update product details' : 'Create a new shop product'}
+        onClose={onClose}
+      />
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-white/8 shrink-0">
-          <div>
-            <h3 className="text-white font-black text-base uppercase tracking-wide" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-              {isEdit ? `Edit — ${initial.name}` : 'Add Product'}
-            </h3>
-            <p className="text-white/30 text-[10px] tracking-widest mt-0.5">
-              {isEdit ? 'Update product details' : 'Create a new shop product'}
-            </p>
-          </div>
-          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors text-xl cursor-pointer">✕</button>
-        </div>
+      <ModalTabs tabs={TABS} active={tab} onChange={setTab} />
 
-        {/* Tabs */}
-        <div className="flex gap-1 px-6 pt-3 pb-1 flex-wrap shrink-0">
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id as typeof tab)}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-black tracking-widest uppercase transition-all duration-150 cursor-pointer
-                ${tab === t.id ? 'bg-purple-600/25 text-purple-300 border border-purple-500/30' : 'text-white/30 hover:text-white/60'}`}>
-              {t.label}
-            </button>
-          ))}
-        </div>
+      <ModalBody>
 
-        {/* Body */}
-        <div className="overflow-y-auto flex-1 px-6 py-3" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-
-          {/* ── GENERAL TAB ── */}
-          {tab === 'general' && (
-            <div className="space-y-5">
-              {/* Banner */}
-              <div>
-                <label className={labelCls}>Primary / Banner Image</label>
-                <div className="flex items-start gap-4">
-                  <div className="w-40 h-40 rounded-2xl border-2 border-dashed border-white/10 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:border-purple-500/40 transition-colors bg-white/3"
-                    onClick={() => bannerRef.current?.click()}>
-                    {bannerPreview ? (
-                      <img src={bannerPreview} className="w-full h-full object-cover" alt="preview" />
-                    ) : (
-                      <div className="flex flex-col items-center gap-2 text-white/20 p-4">
-                        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M13.5 12h.008v.008H13.5V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-                        </svg>
-                        <span className="text-[9px] text-center">Click to upload</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 space-y-2">
-                    <input ref={bannerRef} type="file" accept="image/*" onChange={handleBannerFile} className="hidden" />
-                    <button type="button" onClick={() => bannerRef.current?.click()}
-                      className="bg-white/5 border border-white/10 hover:border-purple-500/40 text-white/60 hover:text-white text-[10px] font-bold px-3 py-2 rounded-lg tracking-wider uppercase transition-all cursor-pointer w-full">
-                      {bannerFile ? 'Change Image' : 'Choose Image'}
-                    </button>
-                    {bannerFile && <p className="text-white/30 text-[10px] truncate">{bannerFile.name}</p>}
-                  </div>
-                </div>
-              </div>
-
-              {/* Gallery */}
-              <div>
-                <label className={labelCls}>Gallery Images <span className="normal-case text-white/20 ml-1">({existingImages.length + stagedImages.length})</span></label>
-                <GalleryEditor existing={existingImages} staged={stagedImages}
-                  onRemoveExisting={handleRemoveExisting} onAddStaged={handleAddStaged} onRemoveStaged={handleRemoveStaged} />
-              </div>
-
-              {/* Basic info */}
-              <div className="space-y-3">
-                <div>
-                  <label className={labelCls}>Product Name *</label>
-                  <input placeholder="e.g. NBL Esport Official Jersey 2026" value={form.name}
-                    onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Price (DZD) *</label>
-                  <input type="number" min="0" step="0.01" placeholder="e.g. 4500" value={form.price}
-                    onChange={e => setForm(p => ({ ...p, price: e.target.value }))} className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Category</label>
-                  <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} className={selectCls}>
-                    {Object.entries(CATEGORY_LABELS).map(([v, l]) => (
-                      <option key={v} value={v} className="bg-[#1a0030]">{l}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelCls}>Display Order</label>
-                  <input type="number" min="0" value={form.display_order}
-                    onChange={e => setForm(p => ({ ...p, display_order: parseInt(e.target.value) || 0 }))} className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Description</label>
-                  <textarea placeholder="Describe the product — material, fit, design details…" value={form.description}
-                    onChange={e => setForm(p => ({ ...p, description: e.target.value }))} className={inputCls + ' h-20 resize-none'} />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── VARIANTS TAB ── */}
-          {tab === 'variants' && (
-            <div className="py-1">
-              <p className="text-white/25 text-xs tracking-widest mb-4">
-                Create variant attributes (e.g. Size, Color) then add individual values for each.
-                {form.track_stock ? ' Stock is tracked per variant.' : ''}
-              </p>
-              <VariantBuilder config={variantConfig} onChange={setVariantConfig} trackStock={form.track_stock} />
-            </div>
-          )}
-
-          {/* ── CUSTOM FIELDS TAB ── */}
-          {tab === 'custom' && (
-            <div className="py-1">
-              <CustomFieldEditor fields={customFields} onChange={setCustomFields} />
-            </div>
-          )}
-
-          {/* ── SETTINGS TAB ── */}
-          {tab === 'settings' && (
-            <div className="space-y-5 py-1">
-
-              {/* Payment method — prominent section */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <p className="text-white/70 text-xs font-bold tracking-widest uppercase">Payment Method</p>
-                  {/* Current selection pill */}
-                  <span
-                    className="text-[9px] font-black tracking-widest uppercase px-2 py-0.5 rounded-full"
-                    style={{ background: pmCfg.bg, color: pmCfg.color, border: `1px solid ${pmCfg.border}` }}
-                  >
-                    {pmCfg.icon} {pmCfg.short}
-                  </span>
-                </div>
-                <PaymentMethodSelector
-                  value={form.payment_method}
-                  onChange={pm => setForm(p => ({ ...p, payment_method: pm }))}
-                />
-              </div>
-
-              <div className="border-t border-white/8" />
-
-              {/* Visibility & stock toggles */}
-              <div>
-                <p className="text-white/70 text-xs font-bold tracking-widest uppercase mb-3">Visibility & Stock</p>
-                <div className="space-y-3">
-                  {TOGGLES.map(({ key, on, off, sub }) => (
-                    <div key={key} className="flex items-center gap-3 bg-white/3 border border-white/8 rounded-xl p-3">
-                      <button type="button" onClick={() => toggle(key)}
-                        className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 ${(form as any)[key] ? 'bg-purple-600' : 'bg-white/10'}`}>
-                        <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200" style={{ left: (form as any)[key] ? '16px' : '2px' }} />
-                      </button>
-                      <div className="flex-1">
-                        <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">{(form as any)[key] ? on : off}</p>
-                        <p className="text-white/20 text-[10px] mt-0.5">{sub}</p>
-                      </div>
+        {/* ── GENERAL TAB ── */}
+        {tab === 'general' && (
+          <div className="space-y-5">
+            {/* Banner */}
+            <div>
+              <label className={labelCls}>Primary / Banner Image</label>
+              <div className="flex items-start gap-4">
+                <div
+                  className="w-40 h-40 rounded-2xl border-2 border-dashed border-white/10 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:border-purple-500/40 transition-colors bg-white/3"
+                  onClick={() => bannerRef.current?.click()}
+                >
+                  {bannerPreview ? (
+                    <img src={bannerPreview} className="w-full h-full object-cover" alt="preview" />
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-white/20 p-4">
+                      <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M13.5 12h.008v.008H13.5V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                      </svg>
+                      <span className="text-[9px] text-center">Click to upload</span>
                     </div>
-                  ))}
+                  )}
+                </div>
+                <div className="flex-1 space-y-2">
+                  <input ref={bannerRef} type="file" accept="image/*" onChange={handleBannerFile} className="hidden" />
+                  <button type="button" onClick={() => bannerRef.current?.click()}
+                    className="bg-white/5 border border-white/10 hover:border-purple-500/40 text-white/60 hover:text-white text-[10px] font-bold px-3 py-2 rounded-lg tracking-wider uppercase transition-all cursor-pointer w-full">
+                    {bannerFile ? 'Change Image' : 'Choose Image'}
+                  </button>
+                  {bannerFile && <p className="text-white/30 text-[10px] truncate">{bannerFile.name}</p>}
                 </div>
               </div>
             </div>
-          )}
-        </div>
 
-        {/* Footer */}
-        <div className="flex gap-3 px-6 py-4 border-t border-white/8 shrink-0">
-          <button onClick={handleSubmit} disabled={saving || !form.name || !form.price}
-            className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black px-6 py-2.5 rounded-xl text-xs tracking-widest uppercase transition-all cursor-pointer"
-            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-            {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Product'}
-          </button>
-          <ActionButton variant="ghost" onClick={onClose}>Cancel</ActionButton>
-        </div>
-      </div>
-    </div>
+            {/* Gallery */}
+            <div>
+              <label className={labelCls}>
+                Gallery Images <span className="normal-case text-white/20 ml-1">({existingImages.length + stagedImages.length})</span>
+              </label>
+              <GalleryEditor existing={existingImages} staged={stagedImages}
+                onRemoveExisting={handleRemoveExisting} onAddStaged={handleAddStaged} onRemoveStaged={handleRemoveStaged} />
+            </div>
+
+            {/* Basic info */}
+            <div className="space-y-3">
+              <div>
+                <label className={labelCls}>Product Name *</label>
+                <input placeholder="e.g. NBL Esport Official Jersey 2026" value={form.name}
+                  onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Price (DZD) *</label>
+                <input type="number" min="0" step="0.01" placeholder="e.g. 4500" value={form.price}
+                  onChange={e => setForm(p => ({ ...p, price: e.target.value }))} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Category</label>
+                <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} className={selectCls}>
+                  {Object.entries(CATEGORY_LABELS).map(([v, l]) => (
+                    <option key={v} value={v} className="bg-[#1a0030]">{l}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Display Order</label>
+                <input type="number" min="0" value={form.display_order}
+                  onChange={e => setForm(p => ({ ...p, display_order: parseInt(e.target.value) || 0 }))} className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Description</label>
+                <textarea placeholder="Describe the product — material, fit, design details…" value={form.description}
+                  onChange={e => setForm(p => ({ ...p, description: e.target.value }))} className={inputCls + ' h-20 resize-none'} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── VARIANTS TAB ── */}
+        {tab === 'variants' && (
+          <div>
+            <p className="text-white/25 text-xs tracking-widest mb-4">
+              Create variant attributes (e.g. Size, Color) then add individual values for each.
+              {form.track_stock ? ' Stock is tracked per variant.' : ''}
+            </p>
+            <VariantBuilder config={variantConfig} onChange={setVariantConfig} trackStock={form.track_stock} />
+          </div>
+        )}
+
+        {/* ── CUSTOM FIELDS TAB ── */}
+        {tab === 'custom' && (
+          <CustomFieldEditor fields={customFields} onChange={setCustomFields} />
+        )}
+
+        {/* ── SETTINGS TAB ── */}
+        {tab === 'settings' && (
+          <div className="space-y-5">
+            {/* Payment method */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <p className="text-white/70 text-xs font-bold tracking-widest uppercase">Payment Method</p>
+                <span
+                  className="text-[9px] font-black tracking-widest uppercase px-2 py-0.5 rounded-full"
+                  style={{ background: pmCfg.bg, color: pmCfg.color, border: `1px solid ${pmCfg.border}` }}
+                >
+                  {pmCfg.icon} {pmCfg.short}
+                </span>
+              </div>
+              <PaymentMethodSelector
+                value={form.payment_method}
+                onChange={pm => setForm(p => ({ ...p, payment_method: pm }))}
+              />
+            </div>
+
+            <div className="border-t border-white/8" />
+
+            {/* Visibility & stock toggles */}
+            <div>
+              <p className="text-white/70 text-xs font-bold tracking-widest uppercase mb-3">Visibility & Stock</p>
+              <div className="space-y-3">
+                {TOGGLES.map(({ key, on, off, sub }) => (
+                  <div key={key} className="flex items-center gap-3 bg-white/3 border border-white/8 rounded-xl p-3">
+                    <button type="button" onClick={() => toggle(key)}
+                      className={`w-9 h-5 rounded-full transition-colors duration-200 relative shrink-0 cursor-pointer ${(form as any)[key] ? 'bg-purple-600' : 'bg-white/10'}`}>
+                      <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
+                        style={{ left: (form as any)[key] ? '16px' : '2px' }} />
+                    </button>
+                    <div className="flex-1">
+                      <p className="text-white/50 text-[10px] font-bold tracking-widest uppercase">{(form as any)[key] ? on : off}</p>
+                      <p className="text-white/20 text-[10px] mt-0.5">{sub}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+      </ModalBody>
+
+      <ModalFooter
+        onSave={handleSubmit}
+        onClose={onClose}
+        saving={saving}
+        disabled={!form.name || !form.price}
+        saveLabel={isEdit ? 'Save Changes' : 'Add Product'}
+      />
+    </Modal>
   )
 }
 
@@ -780,9 +750,10 @@ function ProductCard({ product, onEdit, onDelete }: {
   })()
 
   return (
-    <div className={`relative border border-white/8 rounded-2xl overflow-hidden flex flex-col transition-all duration-200 hover:border-purple-500/30 ${!product.is_active ? 'opacity-50' : ''}`}
-      style={{ background: '#0c001a' }}>
-
+    <div
+      className={`relative border border-white/8 rounded-2xl overflow-hidden flex flex-col transition-all duration-200 hover:border-purple-500/30 ${!product.is_active ? 'opacity-50' : ''}`}
+      style={{ background: '#0c001a' }}
+    >
       {/* Banner */}
       <div className="relative h-44 shrink-0 overflow-hidden">
         {product.banner ? (
@@ -848,19 +819,13 @@ function ProductCard({ product, onEdit, onDelete }: {
             </span>
           </div>
 
-          {/* Category + Payment method badges */}
           <div className="flex items-center gap-1.5 flex-wrap mt-1">
             <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-white/8 text-white/40 border border-white/10">
               {CATEGORY_LABELS[product.category] || product.category}
             </span>
-            {/* Payment method badge */}
             <span
               className="text-[9px] font-black tracking-widest uppercase px-2 py-0.5 rounded-full"
-              style={{
-                background:  pmCfg.bg,
-                color:       pmCfg.color,
-                border:      `1px solid ${pmCfg.border}`,
-              }}
+              style={{ background: pmCfg.bg, color: pmCfg.color, border: `1px solid ${pmCfg.border}` }}
             >
               {pmCfg.icon} {pmCfg.short}
             </span>

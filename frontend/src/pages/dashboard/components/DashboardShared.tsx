@@ -1,5 +1,7 @@
 // Shared components used across dashboard sections
 
+import { useRef, useEffect } from 'react'
+
 export function getCsrfToken(): string {
   const value = `; ${document.cookie}`
   const parts = value.split(`; csrftoken=`)
@@ -190,7 +192,6 @@ export function Pagination({
   totalPages: number
   onPage: (page: number) => void
 }) {
-  // Always render the container so layout doesn't shift when < 2 pages
   const pages: (number | '…')[] = []
   if (totalPages > 1) {
     if (totalPages <= 7) {
@@ -248,6 +249,216 @@ export function Pagination({
           </button>
         </>
       )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── Modal System ─────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+
+type ModalSize = 'sm' | 'md' | 'lg' | 'xl'
+
+const MODAL_MAX_HEIGHTS: Record<ModalSize, string> = {
+  sm: 'min(72vh, 480px)',
+  md: 'min(85vh, 640px)',
+  lg: 'min(88vh, 700px)',
+  xl: 'min(90vh, 820px)',
+}
+
+const MODAL_MAX_WIDTHS: Record<ModalSize, string> = {
+  sm: '28rem',
+  md: '32rem',
+  lg: '42rem',
+  xl: '52rem',
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+/**
+ * Shared modal shell used across all dashboard sections.
+ *
+ * Usage:
+ *   <Modal size="md" onClose={...}>
+ *     <ModalHeader title="…" onClose={...} />
+ *     <ModalTabs … />
+ *     <ModalBody> … </ModalBody>
+ *     <ModalFooter onSave={…} onClose={…} saveLabel="…" />
+ *   </Modal>
+ */
+export function Modal({
+  children,
+  onClose,
+  size = 'md',
+}: {
+  children: React.ReactNode
+  onClose: () => void
+  size?: ModalSize
+}) {
+  const backdropRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === backdropRef.current && window.getSelection()?.toString() === '') {
+      onClose()
+    }
+  }
+
+  return (
+    <div
+      ref={backdropRef}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
+      style={{ background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(4px)' }}
+      onClick={handleBackdropClick}
+    >
+      <div
+        className="bg-[#13001f] border border-white/10 rounded-3xl w-full shadow-2xl
+                   shadow-purple-900/30 flex flex-col my-auto"
+        style={{
+          maxWidth:  MODAL_MAX_WIDTHS[size],
+          maxHeight: MODAL_MAX_HEIGHTS[size],
+        }}
+      >
+        <style>{`
+          .modal-body::-webkit-scrollbar { display: none; }
+          .modal-body { scrollbar-width: none; -ms-overflow-style: none; }
+        `}</style>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+// ── ModalHeader ───────────────────────────────────────────────────────────────
+export function ModalHeader({
+  title,
+  subtitle,
+  onClose,
+  children,
+}: {
+  title: string
+  subtitle?: string
+  onClose: () => void
+  children?: React.ReactNode
+}) {
+  return (
+    <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-white/8 shrink-0">
+      <div className="flex items-center gap-3 min-w-0">
+        {children}
+        <div className="min-w-0">
+          <h3
+            className="text-white font-black text-base uppercase tracking-wide truncate"
+            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+          >
+            {title}
+          </h3>
+          {subtitle && (
+            <p className="text-white/30 text-[10px] tracking-widest mt-0.5">{subtitle}</p>
+          )}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onClose}
+        className="text-white/30 hover:text-white transition-colors text-xl cursor-pointer shrink-0 ml-3"
+        aria-label="Close"
+      >
+        ✕
+      </button>
+    </div>
+  )
+}
+
+// ── ModalTabs ─────────────────────────────────────────────────────────────────
+export function ModalTabs<T extends string>({
+  tabs,
+  active,
+  onChange,
+}: {
+  tabs: readonly { id: T; label: string }[]
+  active: T
+  onChange: (id: T) => void
+}) {
+  return (
+    <div className="flex gap-1 px-6 pt-3 pb-1 flex-wrap shrink-0">
+      {tabs.map(t => (
+        <button
+          key={t.id}
+          type="button"
+          onClick={() => onChange(t.id)}
+          className={`px-3 py-1.5 rounded-lg text-[10px] font-black tracking-widest uppercase
+                      transition-all duration-150 cursor-pointer
+            ${active === t.id
+              ? 'bg-purple-600/25 text-purple-300 border border-purple-500/30'
+              : 'text-white/30 hover:text-white/60'
+            }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ── ModalBody ─────────────────────────────────────────────────────────────────
+export function ModalBody({
+  children,
+  className = '',
+}: {
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={`modal-body overflow-y-auto flex-1 px-6 py-4 ${className}`}>
+      {children}
+    </div>
+  )
+}
+
+// ── ModalFooter ───────────────────────────────────────────────────────────────
+export function ModalFooter({
+  onSave,
+  onClose,
+  saving = false,
+  disabled = false,
+  saveLabel,
+  closeLabel = 'Cancel',
+}: {
+  onSave: () => void
+  onClose: () => void
+  saving?: boolean
+  disabled?: boolean
+  saveLabel: string
+  closeLabel?: string
+}) {
+  return (
+    <div className="flex gap-3 px-6 py-4 border-t border-white/8 shrink-0">
+      <button
+        type="button"
+        onClick={onSave}
+        disabled={saving || disabled}
+        className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed
+                   text-white font-black px-6 py-2.5 rounded-xl text-xs tracking-widest uppercase
+                   transition-all duration-200 cursor-pointer"
+        style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+      >
+        {saving ? 'Saving…' : saveLabel}
+      </button>
+      <button
+        type="button"
+        onClick={onClose}
+        className="bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white
+                   text-xs font-bold px-4 py-2 rounded-lg tracking-wider uppercase
+                   transition-all duration-200 cursor-pointer"
+      >
+        {closeLabel}
+      </button>
     </div>
   )
 }
