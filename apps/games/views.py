@@ -35,7 +35,7 @@ def create_game(request):
     """Staff only — create a game. Accepts multipart (file upload) or JSON."""
     try:
         if request.content_type and 'multipart' in request.content_type:
-            data = request.POST
+            data        = request.POST
             banner_file = request.FILES.get('banner')
             logo_file   = request.FILES.get('logo')
 
@@ -46,21 +46,18 @@ def create_game(request):
                 ranks = [r.strip() for r in ranks_raw.split(',') if r.strip()]
 
             game = Game(
-                title=data['title'],
-                slug=data['slug'],
-                publisher=data.get('publisher', ''),
-                genre=data.get('genre', ''),
-                # Only store the URL fallback when no file is uploaded
-                banner_url=data.get('banner_url', '') if not banner_file else '',
-                logo_url=data.get('logo_url', '')     if not logo_file   else '',
-                overlay_color=data.get('overlay_color', ''),
-                ranks=ranks,
-                is_active=data.get('is_active', 'true').lower() != 'false',
-                registration_open=data.get('registration_open', 'false').lower() == 'true',
-                display_order=int(data.get('display_order', 0)),
+                title             = data['title'],
+                slug              = data['slug'],
+                publisher         = data.get('publisher', ''),
+                genre             = data.get('genre', ''),
+                banner_url        = data.get('banner_url', '') if not banner_file else '',
+                logo_url          = data.get('logo_url', '')   if not logo_file   else '',
+                overlay_color     = data.get('overlay_color', ''),
+                ranks             = ranks,
+                is_active         = data.get('is_active', 'true').lower() != 'false',
+                registration_open = data.get('registration_open', 'false').lower() == 'true',
+                display_order     = int(data.get('display_order', 0)),
             )
-            # Assign files BEFORE the first save so Django's storage backend
-            # writes them and populates game.banner.name / game.logo.name.
             if banner_file:
                 game.banner = banner_file
             if logo_file:
@@ -70,17 +67,17 @@ def create_game(request):
         else:
             data = json.loads(request.body)
             game = Game.objects.create(
-                title=data['title'],
-                slug=data['slug'],
-                publisher=data.get('publisher', ''),
-                genre=data.get('genre', ''),
-                banner_url=data.get('banner_url', ''),
-                logo_url=data.get('logo_url', ''),
-                overlay_color=data.get('overlay_color', ''),
-                ranks=data.get('ranks', []),
-                is_active=data.get('is_active', True),
-                registration_open=data.get('registration_open', False),
-                display_order=data.get('display_order', 0),
+                title             = data['title'],
+                slug              = data['slug'],
+                publisher         = data.get('publisher', ''),
+                genre             = data.get('genre', ''),
+                banner_url        = data.get('banner_url', ''),
+                logo_url          = data.get('logo_url', ''),
+                overlay_color     = data.get('overlay_color', ''),
+                ranks             = data.get('ranks', []),
+                is_active         = data.get('is_active', True),
+                registration_open = data.get('registration_open', False),
+                display_order     = data.get('display_order', 0),
             )
 
         return JsonResponse(game.to_dict(), status=201)
@@ -94,7 +91,10 @@ def create_game(request):
 @login_required
 @require_http_methods(['PUT', 'PATCH'])
 def update_game(request, pk):
-    """Staff only — update a game."""
+    """
+    Staff only — update a game.
+    django-cleanup automatically deletes old files from CDN when fields change.
+    """
     try:
         game = Game.objects.get(pk=pk)
 
@@ -108,6 +108,7 @@ def update_game(request, pk):
             banner_file = files.get('banner')
             logo_file   = files.get('logo')
 
+            # Update scalar fields
             for field in ['title', 'slug', 'publisher', 'genre', 'overlay_color']:
                 if field in data:
                     setattr(game, field, data[field])
@@ -125,25 +126,25 @@ def update_game(request, pk):
                 except json.JSONDecodeError:
                     game.ranks = [r.strip() for r in ranks_raw.split(',') if r.strip()]
 
-            # Handle banner
+            # ── Banner ────────────────────────────────────────────────────────
+            # django-cleanup detects the field change on save() and deletes old file
             if banner_file:
-                # New file uploaded — store it and clear any stale URL
                 game.banner     = banner_file
                 game.banner_url = ''
             elif 'banner_url' in data:
-                # URL provided (and no file) — store the URL, clear the file field
+                game.banner     = None  # Setting to None triggers cleanup of old file
                 game.banner_url = data['banner_url']
-                game.banner     = None
 
-            # Handle logo
+            # ── Logo ──────────────────────────────────────────────────────────
             if logo_file:
                 game.logo     = logo_file
                 game.logo_url = ''
             elif 'logo_url' in data:
+                game.logo     = None  # Setting to None triggers cleanup of old file
                 game.logo_url = data['logo_url']
-                game.logo     = None
 
         else:
+            # JSON payload
             data = json.loads(request.body)
             for field in ['title', 'slug', 'publisher', 'genre', 'banner_url',
                           'logo_url', 'overlay_color', 'ranks', 'is_active',
@@ -151,7 +152,7 @@ def update_game(request, pk):
                 if field in data:
                     setattr(game, field, data[field])
 
-        game.save()
+        game.save()  # django-cleanup's pre_save signal fires here
         return JsonResponse(game.to_dict())
 
     except Game.DoesNotExist:
@@ -163,7 +164,10 @@ def update_game(request, pk):
 @login_required
 @require_http_methods(['DELETE'])
 def delete_game(request, pk):
-    """Staff only — delete a game."""
+    """
+    Staff only — delete a game.
+    django-cleanup automatically removes files from CDN via post_delete signal.
+    """
     try:
         Game.objects.get(pk=pk).delete()
         return JsonResponse({'success': True})
