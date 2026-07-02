@@ -8,7 +8,7 @@ from .models import NewsPost
 @require_http_methods(['GET'])
 def list_news(request):
     """Public — published posts only."""
-    qs = NewsPost.objects.filter(is_published=True)
+    qs = NewsPost.objects.filter(is_published=True).order_by('-published_at', '-id')
     tag = request.GET.get('tag')
     if tag:
         qs = qs.filter(tag=tag)
@@ -19,7 +19,7 @@ def list_news(request):
 @require_http_methods(['GET'])
 def list_news_all(request):
     """Staff — all posts including drafts."""
-    qs = NewsPost.objects.all()
+    qs = NewsPost.objects.all().order_by('-published_at', '-id')
     return JsonResponse({'news': [n.to_dict() for n in qs]})
 
 

@@ -11,6 +11,7 @@ import ShopPage        from './pages/shop/ShopPage'
 import ProductPage     from './pages/shop/ProductPage'
 import PaymentSuccess  from './pages/shop/PaymentSuccess'
 import PaymentFailed   from './pages/shop/PaymentFailed'
+import NewsPage        from './pages/NewsPage'          
 
 // ── Auth context ──────────────────────────────────────────────────────────────
 interface AuthUser {
@@ -63,15 +64,22 @@ export default function App() {
   return (
     <AuthContext.Provider value={{ user, loading, setUser }}>
       <Routes>
-        <Route path="/"                    element={<Landing />} />
-        <Route path="/login"               element={<Login />} />
-        <Route path="/roster/:gameSlug"    element={<RosterPage />} />
-        <Route path="/player/:id"          element={<PlayerPage />} />
-        <Route path="/news/:id"            element={<NewsArticlePage />} />
+        <Route path="/"                     element={<Landing />} />
+        <Route path="/login"                element={<Login />} />
+        <Route path="/roster/:gameSlug"     element={<RosterPage />} />
+        <Route path="/player/:id"           element={<PlayerPage />} />
+
+        {/* ── News ── more specific routes first, wildcard last ── */}
+        <Route path="/news"                 element={<NewsPage />} />
+        <Route path="/news/:id"             element={<NewsArticlePage />} />  {/* ← was NewsDetail */}
+
+        {/* ── Shop ── */}
         <Route path="/shop"                 element={<ShopPage />} />
         <Route path="/shop/payment/success" element={<PaymentSuccess />} />
         <Route path="/shop/payment/failed"  element={<PaymentFailed />} />
         <Route path="/shop/:id"             element={<ProductPage />} />
+
+        {/* ── Dashboard (protected) ── */}
         <Route
           path="/dashboard/*"
           element={
@@ -80,6 +88,8 @@ export default function App() {
             </RequireAuth>
           }
         />
+
+        {/* ── Wildcard must be last ── */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AuthContext.Provider>

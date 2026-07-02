@@ -414,16 +414,16 @@ function LiveNewsSection() {
   const navigate = useNavigate();
   const [newsList, setNewsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
- 
+
   useEffect(() => {
     (newsApi.list() as Promise<any>)
       .then(r => setNewsList(r.news || []))
       .catch(() => setNewsList([]))
       .finally(() => setLoading(false));
   }, []);
- 
-  const displayed = newsList.slice(0, 3);
- 
+
+  const displayed = newsList.slice(0, 3); // Keep only 3 on landing
+
   return (
     <section id="news" className="py-24">
       <div className="max-w-7xl mx-auto px-6">
@@ -433,26 +433,43 @@ function LiveNewsSection() {
             News & <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-300">Updates</span>
           </h2>
         </div>
+
         {loading ? (
           <div className="flex justify-center py-12">
             <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : displayed.length === 0 ? (
-          <p className="text-center text-white/30 text-lg tracking-wider uppercase py-12">No news yet. Check back soon.</p>
+          <p className="text-center text-white/30 text-lg tracking-wider uppercase py-12">
+            No news yet. Check back soon.
+          </p>
         ) : (
-          <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
-            {displayed.map((n: any) => (
-              <NewsCard
-                key={n.id}
-                tag={n.tag}
-                title={n.title}
-                description={n.description}
-                date={n.published_at}
-                thumbnail={n.thumbnail || ""}
-                onReadMore={() => navigate(`/news/${n.id}`)}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
+              {displayed.map((n: any) => (
+                <NewsCard
+                  key={n.id}
+                  tag={n.tag}
+                  title={n.title}
+                  description={n.description}
+                  date={n.published_at}
+                  thumbnail={n.thumbnail || ""}
+                  onReadMore={() => navigate(`/news/${n.id}`)}
+                />
+              ))}
+            </div>
+
+            {/* Only show button if there are more than 3 posts */}
+            {newsList.length > 3 && (
+              <div className="mt-12 text-center">
+                <button
+                  onClick={() => navigate("/news")}
+                  className="inline-flex items-center gap-2 bg-white/5 hover:bg-purple-500/15 border border-white/10 hover:border-purple-500/40 text-white font-bold px-8 py-3 rounded-full text-sm tracking-widest uppercase transition-all duration-200 cursor-pointer"
+                >
+                  View All News ({newsList.length}) →
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </section>
