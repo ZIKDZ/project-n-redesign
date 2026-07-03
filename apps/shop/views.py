@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from datetime import date
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
@@ -8,6 +9,8 @@ from django.contrib.auth.decorators import login_required
 from .models import Product, ProductImage, Order, Coupon, WILAYA_CHOICES
 
 logger = logging.getLogger(__name__)
+
+ALGERIA_PHONE_RE = re.compile(r'^0[567]\d{8}$')
 
 
 def _product_dict(product):
@@ -79,6 +82,13 @@ def submit_order(request):
         discount_amount = float(data.get('discount_amount', 0) or 0)
         total_amount    = float(data.get('total_amount', 0) or 0)
 
+        phone = re.sub(r'\D', '', str(data.get('phone', '') or ''))
+        if not ALGERIA_PHONE_RE.match(phone):
+            return JsonResponse(
+                {'error': 'Enter a valid Algerian mobile number starting with 05, 06, or 07 (10 digits total).'},
+                status=400,
+            )
+
         order = Order.objects.create(
             product=product,
             product_name=product_name,
@@ -87,7 +97,7 @@ def submit_order(request):
             custom_field_values=custom_field_values,
             full_name=data['full_name'],
             email=data.get('email', ''),
-            phone=data['phone'],
+            phone=phone,
             wilaya=data.get('wilaya', ''),
             baladiya=data.get('baladiya', ''),
             address=data.get('address', ''),

@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { asset } from "../../utils/asset";
 import Footer from "../../components/footer";
+import algeriaData from "../../data/algeria.json";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -58,77 +59,9 @@ interface CouponResult {
   finalPrice: number
 }
 
-const WILAYA_CHOICES: [string, string][] = [
-  ["01", "Adrar"],
-  ["02", "Chlef"],
-  ["03", "Laghouat"],
-  ["04", "Oum El Bouaghi"],
-  ["05", "Batna"],
-  ["06", "Béjaïa"],
-  ["07", "Biskra"],
-  ["08", "Béchar"],
-  ["09", "Blida"],
-  ["10", "Bouira"],
-  ["11", "Tamanrasset"],
-  ["12", "Tébessa"],
-  ["13", "Tlemcen"],
-  ["14", "Tiaret"],
-  ["15", "Tizi Ouzou"],
-  ["16", "Alger"],
-  ["17", "Djelfa"],
-  ["18", "Jijel"],
-  ["19", "Sétif"],
-  ["20", "Saïda"],
-  ["21", "Skikda"],
-  ["22", "Sidi Bel Abbès"],
-  ["23", "Annaba"],
-  ["24", "Guelma"],
-  ["25", "Constantine"],
-  ["26", "Médéa"],
-  ["27", "Mostaganem"],
-  ["28", "M'Sila"],
-  ["29", "Mascara"],
-  ["30", "Ouargla"],
-  ["31", "Oran"],
-  ["32", "El Bayadh"],
-  ["33", "Illizi"],
-  ["34", "Bordj Bou Arréridj"],
-  ["35", "Boumerdès"],
-  ["36", "El Tarf"],
-  ["37", "Tindouf"],
-  ["38", "Tissemsilt"],
-  ["39", "El Oued"],
-  ["40", "Khenchela"],
-  ["41", "Souk Ahras"],
-  ["42", "Tipaza"],
-  ["43", "Mila"],
-  ["44", "Aïn Defla"],
-  ["45", "Naâma"],
-  ["46", "Aïn Témouchent"],
-  ["47", "Ghardaïa"],
-  ["48", "Relizane"],
-  ["49", "Timimoun"],
-  ["50", "Bordj Badji Mokhtar"],
-  ["51", "Ouled Djellal"],
-  ["52", "Béni Abbès"],
-  ["53", "In Salah"],
-  ["54", "In Guezzam"],
-  ["55", "Touggourt"],
-  ["56", "Djanet"],
-  ["57", "El M'Ghair"],
-  ["58", "El Meniaa"],
-  ["59", "Aflou"],
-  ["60", "Barika"],
-  ["61", "El Kantara"],
-  ["62", "Bir El Ater"],
-  ["63", "El Abiodh Sidi Cheikh"],
-  ["64", "Ksar Chellala"],
-  ["65", "Ain Ouessara"],
-  ["66", "M'Sila"],
-  ["67", "Ksar El Boukhari"],
-  ["68", "Bou Saâda"],
-  ["69", "El Abiodh Sidi Cheikh"],
-]
+const WILAYA_CHOICES: [string, string][] = algeriaData.wilayas as [string, string][]
+const BALADIYAS_BY_WILAYA: Record<string, string[]> = algeriaData.baladiyas
+const ALGERIA_PHONE_RE = /^0[567]\d{8}$/
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -487,7 +420,7 @@ function OrderForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.full_name || !form.phone) return
+    if (!form.full_name || !ALGERIA_PHONE_RE.test(form.phone)) return
     if (!customFieldsValid) return
 
     if (unselectedAttributes.length > 0) {
@@ -587,11 +520,20 @@ function OrderForm({
           <input
             type="tel"
             required
-            placeholder="05 XX XX XX XX"
+            inputMode="numeric"
+            placeholder="06 XX XX XX XX"
+            maxLength={10}
             value={form.phone}
-            onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
+            onChange={e =>
+              setForm(p => ({ ...p, phone: e.target.value.replace(/\D/g, "").slice(0, 10) }))
+            }
             className={inputClass}
           />
+          {form.phone.length > 0 && !ALGERIA_PHONE_RE.test(form.phone) && (
+            <p className="text-red-400 text-xs mt-1">
+              Enter a valid phone number.
+            </p>
+          )}
         </div>
         <div className="sm:col-span-2">
           <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-2">
@@ -612,7 +554,7 @@ function OrderForm({
           <select
             required
             value={form.wilaya}
-            onChange={e => setForm(p => ({ ...p, wilaya: e.target.value }))}
+            onChange={e => setForm(p => ({ ...p, wilaya: e.target.value, baladiya: "" }))}
             className={inputClass + " cursor-pointer"}
             style={{ background: "rgba(26,0,48,0.8)" }}
           >
@@ -628,14 +570,23 @@ function OrderForm({
           <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-2">
             Baladiya *
           </label>
-          <input
-            type="text"
+          <select
             required
-            placeholder="Enter your baladiya"
+            disabled={!form.wilaya}
             value={form.baladiya}
             onChange={e => setForm(p => ({ ...p, baladiya: e.target.value }))}
-            className={inputClass}
-          />
+            className={inputClass + " cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"}
+            style={{ background: "rgba(26,0,48,0.8)" }}
+          >
+            <option value="">
+              {form.wilaya ? "Select baladiya…" : "Select a wilaya first"}
+            </option>
+            {(BALADIYAS_BY_WILAYA[form.wilaya] || []).map(name => (
+              <option key={name} value={name} style={{ background: "#1a0030" }}>
+                {name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -775,7 +726,7 @@ function OrderForm({
           !customFieldsValid ||
           unselectedAttributes.length > 0 ||
           !form.full_name ||
-          !form.phone ||
+          !ALGERIA_PHONE_RE.test(form.phone) ||
           !form.wilaya ||
           !form.baladiya ||
           !form.address

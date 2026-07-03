@@ -1,4 +1,11 @@
 from django.db import models
+from django.core.validators import RegexValidator
+from .algeria_data import WILAYA_CHOICES
+
+algeria_phone_validator = RegexValidator(
+    regex=r'^0[567]\d{8}$',
+    message="Enter a valid Algerian mobile number, e.g. 0659108203 (must start with 05, 06, or 07 and contain 10 digits total).",
+)
 
 CATEGORY_CHOICES = [
     ('jersey',    'Jersey'),
@@ -20,78 +27,6 @@ PAYMENT_METHOD_CHOICES = [
     ('cod',    'Cash on Delivery'),
     ('online', 'CIB / eDahabia (Chargily)'),
     ('both',   'Both — customer chooses'),
-]
-
-WILAYA_CHOICES = [
-    ('01', 'Adrar'),
-    ('02', 'Chlef'),
-    ('03', 'Laghouat'),
-    ('04', 'Oum El Bouaghi'),
-    ('05', 'Batna'),
-    ('06', 'Béjaïa'),
-    ('07', 'Biskra'),
-    ('08', 'Béchar'),
-    ('09', 'Blida'),
-    ('10', 'Bouira'),
-    ('11', 'Tamanrasset'),
-    ('12', 'Tébessa'),
-    ('13', 'Tlemcen'),
-    ('14', 'Tiaret'),
-    ('15', 'Tizi Ouzou'),
-    ('16', 'Alger'),
-    ('17', 'Djelfa'),
-    ('18', 'Jijel'),
-    ('19', 'Sétif'),
-    ('20', 'Saïda'),
-    ('21', 'Skikda'),
-    ('22', 'Sidi Bel Abbès'),
-    ('23', 'Annaba'),
-    ('24', 'Guelma'),
-    ('25', 'Constantine'),
-    ('26', 'Médéa'),
-    ('27', 'Mostaganem'),
-    ('28', "M'Sila"),
-    ('29', 'Mascara'),
-    ('30', 'Ouargla'),
-    ('31', 'Oran'),
-    ('32', 'El Bayadh'),
-    ('33', 'Illizi'),
-    ('34', 'Bordj Bou Arréridj'),
-    ('35', 'Boumerdès'),
-    ('36', 'El Tarf'),
-    ('37', 'Tindouf'),
-    ('38', 'Tissemsilt'),
-    ('39', 'El Oued'),
-    ('40', 'Khenchela'),
-    ('41', 'Souk Ahras'),
-    ('42', 'Tipaza'),
-    ('43', 'Mila'),
-    ('44', 'Aïn Defla'),
-    ('45', 'Naâma'),
-    ('46', 'Aïn Témouchent'),
-    ('47', 'Ghardaïa'),
-    ('48', 'Relizane'),
-    ('49', 'Timimoun'),
-    ('50', 'Bordj Badji Mokhtar'),
-    ('51', 'Ouled Djellal'),
-    ('52', 'Béni Abbès'),
-    ('53', 'In Salah'),
-    ('54', 'In Guezzam'),
-    ('55', 'Touggourt'),
-    ('56', 'Djanet'),
-    ('57', "El M'Ghair"),
-    ('58', 'El Meniaa'),
-    ('59', 'Aflou'),
-    ('60', 'Barika'),
-    ('61', 'El Kantara'),
-    ('62', 'Bir El Ater'),
-    ('63', 'El Abiodh Sidi Cheikh'),
-    ('64', 'Ksar Chellala'),
-    ('65', 'Ain Ouessara'),
-    ('66', "M'Sila"),
-    ('67', 'Ksar El Boukhari'),
-    ('68', 'Bou Saâda'),
-    ('69', 'El Abiodh Sidi Cheikh'),
 ]
 
 
@@ -274,7 +209,7 @@ class Order(models.Model):
 
     full_name = models.CharField(max_length=150)
     email     = models.EmailField(blank=True)
-    phone     = models.CharField(max_length=30)
+    phone     = models.CharField(max_length=10, validators=[algeria_phone_validator])
     wilaya    = models.CharField(max_length=3, choices=WILAYA_CHOICES, blank=True)
     baladiya  = models.CharField(max_length=100, blank=True)
     address   = models.TextField(blank=True)
