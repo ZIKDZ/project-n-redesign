@@ -136,6 +136,8 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "https://nblesport.up.railway.app",
     "https://affection-oblivion-glandular.ngrok-free.dev/",
+    "https://nblesport.com",         
+    "https://www.nblesport.com",     
 ]
 
 # ── Chargily Pay ──────────────────────────────────────────────────────────────

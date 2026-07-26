@@ -6,4 +6,4 @@ Disallow: /shop
 Disallow: /admin/
 Disallow: /api/
 
-Sitemap: https://nblesport.up.railway.app/sitemap.xml
+Sitemap: https://nblesport.com/sitemap.xml
