@@ -3,9 +3,11 @@ from django.urls import path, include, re_path
 from django.views.generic import TemplateView
 from django.conf import settings
 from django.conf.urls.static import static
+from .sitemap import sitemap_xml
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('sitemap.xml', sitemap_xml, name='sitemap'),
 
     # API endpoints
     path('api/auth/', include('apps.joins.auth_urls')),
@@ -19,10 +21,8 @@ urlpatterns = [
     path('api/shop/', include('apps.shop.urls')),
 ]
 
-# Serve media properly 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
-# Catch-all LAST and exclude media
 urlpatterns += [
-    re_path(r'^(?!media/|static/|api/).*$', TemplateView.as_view(template_name='index.html')),
+    re_path(r'^(?!media/|static/|api/|sitemap\.xml).*$', TemplateView.as_view(template_name='index.html')),
 ]

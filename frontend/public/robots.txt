@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard/
+Disallow: /login
+Disallow: /shop
+Disallow: /admin/
+Disallow: /api/
+
+Sitemap: https://nblesport.up.railway.app/sitemap.xml
