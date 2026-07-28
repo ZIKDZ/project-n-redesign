@@ -207,6 +207,24 @@ export const tournaments = {
     request(`/api/tournaments/${id}/placements/${placementId}/update/`, { method: 'PATCH', body: JSON.stringify(data) }),
   deletePlacement: (id: number, placementId: number) =>
     request(`/api/tournaments/${id}/placements/${placementId}/delete/`, { method: 'DELETE' }),
+
+  // Registration (public, Discord-authenticated)
+  registerSolo: (slug: string) =>
+    request(`/api/tournaments/${slug}/register/`, { method: 'POST' }),
+  createTeam: (slug: string, data: { name: string; tag?: string }) =>
+    request(`/api/tournaments/${slug}/teams/create/`, { method: 'POST', body: JSON.stringify(data) }),
+  joinTeam: (slug: string, inviteCode: string) =>
+    request(`/api/tournaments/${slug}/teams/join/`, { method: 'POST', body: JSON.stringify({ invite_code: inviteCode }) }),
+  myParticipation: (slug: string) =>
+    request(`/api/tournaments/${slug}/me/`),
+
+  // Staff — Participants
+  listParticipants: (id: number) =>
+    request(`/api/tournaments/${id}/participants/`),
+  updateParticipant: (id: number, participantId: number, data: { status?: string; seed?: number | null }) =>
+    request(`/api/tournaments/${id}/participants/${participantId}/update/`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteParticipant: (id: number, participantId: number) =>
+    request(`/api/tournaments/${id}/participants/${participantId}/delete/`, { method: 'DELETE' }),
 }
  
 // ── Discord auth (tournament players) ─────────────────────────────────────────

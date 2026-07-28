@@ -35,6 +35,28 @@ interface TournamentDetail {
   participant_count: number;
 }
 
+interface ParticipantInfo {
+  id: number;
+  status: string;
+  seed: number | null;
+}
+
+interface TeamInfo {
+  id: number;
+  name: string;
+  tag: string;
+  logo: string;
+  captain: { id: number; discord_username: string; discord_avatar: string } | null;
+  invite_code: string;
+  member_count: number;
+}
+
+type Participation =
+  | { registered: false }
+  | { registered: true; kind: "solo"; participant: ParticipantInfo }
+  | { registered: true; kind: "team"; team: TeamInfo; is_captain: boolean };
+
+
 const GAME_COLORS: Record<string, string> = {
   rocket_league: "#60b8ff",
   valorant: "#ff7080",
@@ -94,6 +116,236 @@ function CountdownStrip({ deadline, color }: { deadline: string | null; color: s
   );
 }
 
+function RegistrationPanel({
+  t,
+  player,
+  participation,
+  participationLoading,
+  onSignIn,
+  onRegistered,
+}: {
+  t: TournamentDetail;
+  player: { discord_username: string; discord_avatar: string } | null;
+  participation: Participation | null;
+  participationLoading: boolean;
+  onSignIn: () => void;
+  onRegistered: (p: Participation) => void;
+}) {
+  const [mode, setMode] = useState<"idle" | "create" | "join">("idle");
+  const [teamName, setTeamName] = useState("");
+  const [teamTag, setTeamTag] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const inputClass =
+    "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm " +
+    "placeholder-white/25 focus:outline-none focus:border-purple-500/60 transition-all duration-200";
+
+  const handleSoloRegister = async () => {
+    setSubmitting(true);
+    setError("");
+    try {
+      const participant = await tournamentsApi.registerSolo(t.slug) as ParticipantInfo;
+      onRegistered({ registered: true, kind: "solo", participant });
+    } catch (e: any) {
+      setError(e.message || "Failed to register.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCreateTeam = async () => {
+    if (!teamName.trim()) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const team = await tournamentsApi.createTeam(t.slug, {
+        name: teamName.trim(),
+        tag: teamTag.trim(),
+      }) as TeamInfo;
+      onRegistered({ registered: true, kind: "team", team, is_captain: true });
+      setMode("idle");
+    } catch (e: any) {
+      setError(e.message || "Failed to create team.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleJoinTeam = async () => {
+    if (!inviteCode.trim()) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const team = await tournamentsApi.joinTeam(t.slug, inviteCode.trim()) as TeamInfo;
+      onRegistered({ registered: true, kind: "team", team, is_captain: false });
+      setMode("idle");
+    } catch (e: any) {
+      setError(e.message || "Failed to join team.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!t.registration_open) {
+    return (
+      <button
+        disabled
+        className="w-full bg-white/5 border border-white/10 text-white/30 font-black py-3.5 rounded-xl text-sm tracking-widest uppercase cursor-not-allowed"
+        style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+      >
+        {t.status === "completed" ? "Tournament Ended" : "Registration Closed"}
+      </button>
+    );
+  }
+
+  if (!player) {
+    return (
+      <button
+        onClick={onSignIn}
+        className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black py-3.5 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-0.5 cursor-pointer"
+        style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+      >
+        <DiscordIcon />
+        Sign in with Discord
+      </button>
+    );
+  }
+
+  if (participationLoading) {
+    return (
+      <div className="flex justify-center py-4">
+        <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (participation?.registered) {
+    if (participation.kind === "solo") {
+      return (
+        <div
+          className="rounded-2xl border p-4 text-center"
+          style={{ background: "rgba(52,211,153,0.06)", borderColor: "rgba(52,211,153,0.25)" }}
+        >
+          <p className="text-green-400 font-black text-sm tracking-widest uppercase">You're registered!</p>
+          <p className="text-white/30 text-xs mt-1">We'll notify you when the bracket is ready.</p>
+        </div>
+      );
+    }
+    const team = participation.team;
+    return (
+      <div
+        className="rounded-2xl border p-4 space-y-3"
+        style={{ background: "rgba(52,211,153,0.06)", borderColor: "rgba(52,211,153,0.25)" }}
+      >
+        <div>
+          <p className="text-green-400 font-black text-sm tracking-widest uppercase">On team {team.name}</p>
+          <p className="text-white/30 text-xs mt-1">
+            {team.member_count} member{team.member_count !== 1 ? "s" : ""}
+            {t.team_size ? ` / ${t.team_size}` : ""}
+          </p>
+        </div>
+        {participation.is_captain && (
+          <div className="bg-black/20 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+            <span className="text-white/40 text-[10px] tracking-widest uppercase">Invite Code</span>
+            <span className="font-mono text-purple-300 font-bold tracking-widest text-sm">{team.invite_code}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (t.format === "solo") {
+    return (
+      <div className="space-y-2">
+        <button
+          onClick={handleSoloRegister}
+          disabled={submitting}
+          className="w-full bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-black py-3.5 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/30 hover:-translate-y-0.5 cursor-pointer"
+          style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+        >
+          {submitting ? "Registering…" : "Register Now"}
+        </button>
+        {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+      </div>
+    );
+  }
+
+  if (mode === "idle") {
+    return (
+      <div className="space-y-2">
+        <button
+          onClick={() => setMode("create")}
+          className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-3 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 cursor-pointer"
+          style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+        >
+          Create a Team
+        </button>
+        <button
+          onClick={() => setMode("join")}
+          className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white font-black py-3 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 cursor-pointer"
+          style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+        >
+          Join with Invite Code
+        </button>
+      </div>
+    );
+  }
+
+  if (mode === "create") {
+    return (
+      <div className="space-y-3">
+        <input placeholder="Team name" value={teamName} onChange={e => setTeamName(e.target.value)} className={inputClass} />
+        <input placeholder="Tag (optional, e.g. NBL)" value={teamTag} onChange={e => setTeamTag(e.target.value)} maxLength={10} className={inputClass} />
+        {error && <p className="text-red-400 text-xs">{error}</p>}
+        <div className="flex gap-2">
+          <button
+            onClick={handleCreateTeam}
+            disabled={submitting || !teamName.trim()}
+            className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-black py-2.5 rounded-xl text-xs tracking-widest uppercase transition-all cursor-pointer"
+          >
+            {submitting ? "Creating…" : "Create"}
+          </button>
+          <button
+            onClick={() => { setMode("idle"); setError(""); }}
+            className="px-4 bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 font-bold py-2.5 rounded-xl text-xs tracking-widest uppercase transition-all cursor-pointer"
+          >
+            Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <input
+        placeholder="Invite code"
+        value={inviteCode}
+        onChange={e => setInviteCode(e.target.value.toUpperCase())}
+        className={inputClass + " font-mono tracking-widest"}
+      />
+      {error && <p className="text-red-400 text-xs">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          onClick={handleJoinTeam}
+          disabled={submitting || !inviteCode.trim()}
+          className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-black py-2.5 rounded-xl text-xs tracking-widest uppercase transition-all cursor-pointer"
+        >
+          {submitting ? "Joining…" : "Join Team"}
+        </button>
+        <button
+          onClick={() => { setMode("idle"); setError(""); }}
+          className="px-4 bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 font-bold py-2.5 rounded-xl text-xs tracking-widest uppercase transition-all cursor-pointer"
+        >
+          Back
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function TournamentDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
@@ -103,6 +355,8 @@ export default function TournamentDetailPage() {
   const [scrolled, setScrolled] = useState(false);
   const [tab, setTab] = useState<"overview" | "rules" | "bracket">("overview");
   const [player, setPlayer] = useState<{ discord_username: string; discord_avatar: string } | null>(null);
+  const [participation, setParticipation] = useState<Participation | null>(null);
+  const [participationLoading, setParticipationLoading] = useState(true);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 60);
@@ -124,6 +378,14 @@ export default function TournamentDetailPage() {
       .then(r => { if (r.authenticated) setPlayer(r.player); })
       .catch(() => {});
   }, []);
+    useEffect(() => {
+    if (!slug) return;
+    setParticipationLoading(true);
+    (tournamentsApi.myParticipation(slug) as Promise<any>)
+      .then(setParticipation)
+      .catch(() => setParticipation({ registered: false }))
+      .finally(() => setParticipationLoading(false));
+  }, [slug, player]);
 
   if (loading) {
     return (
@@ -395,33 +657,14 @@ export default function TournamentDetailPage() {
                 )}
               </div>
 
-              {!t.registration_open ? (
-                <button
-                  disabled
-                  className="w-full bg-white/5 border border-white/10 text-white/30 font-black py-3.5 rounded-xl text-sm tracking-widest uppercase cursor-not-allowed"
-                  style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-                >
-                  {t.status === "completed" ? "Tournament Ended" : "Registration Closed"}
-                </button>
-              ) : !player ? (
-                <button
-                  onClick={handleRegister}
-                  className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black py-3.5 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/30 hover:-translate-y-0.5 cursor-pointer"
-                  style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-                >
-                  <DiscordIcon />
-                  Sign in with Discord
-                </button>
-              ) : (
-                <button
-                  disabled
-                  title="Registration flow is coming in the next update"
-                  className="w-full bg-purple-600/40 text-white/70 font-black py-3.5 rounded-xl text-sm tracking-widest uppercase cursor-not-allowed"
-                  style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-                >
-                  Registration Opening Soon
-                </button>
-              )}
+              <RegistrationPanel
+                t={t}
+                player={player}
+                participation={participation}
+                participationLoading={participationLoading}
+                onSignIn={handleRegister}
+                onRegistered={setParticipation}
+              />
 
               <p className="text-white/20 text-[10px] mt-3 text-center leading-relaxed">
                 We only use your Discord identity to contact you about this tournament.

@@ -124,8 +124,117 @@ function PlacementsEditor({ placements, onChange }: { placements: Placement[]; o
   )
 }
 
+// ── ParticipantsPanel ─────────────────────────────────────────────────────────
+const PARTICIPANT_STATUS_CONFIG: Record<string, { label: string; color: 'gray' | 'green' | 'yellow' | 'red' | 'purple' }> = {
+  registered:   { label: 'Registered',   color: 'purple' },
+  checked_in:   { label: 'Checked In',   color: 'green' },
+  disqualified: { label: 'Disqualified', color: 'red' },
+  withdrawn:    { label: 'Withdrawn',    color: 'gray' },
+}
+
+function ParticipantsPanel({
+  tournamentId,
+  participants,
+  loading,
+  onChange,
+}: {
+  tournamentId: number
+  participants: any[]
+  loading: boolean
+  onChange: (p: any[]) => void
+}) {
+  const [savingId, setSavingId] = useState<number | null>(null)
+
+  const updateOne = async (id: number, data: { status?: string; seed?: number | null }) => {
+    setSavingId(id)
+    try {
+      const updated = await tournamentsApi.updateParticipant(tournamentId, id, data)
+      onChange(participants.map(p => p.id === id ? updated : p))
+    } catch (e) { console.error(e) }
+    finally { setSavingId(null) }
+  }
+
+  const removeOne = async (id: number, name: string) => {
+    if (!confirm(`Remove "${name}" from this tournament?`)) return
+    setSavingId(id)
+    try {
+      await tournamentsApi.deleteParticipant(tournamentId, id)
+      onChange(participants.filter(p => p.id !== id))
+    } catch (e) { console.error(e) }
+    finally { setSavingId(null) }
+  }
+
+  const inputClass = 'bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none focus:border-purple-500/60 w-16 text-center'
+  const selectClass = 'bg-[#1a0030] border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none focus:border-purple-500/60 cursor-pointer'
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-8">
+        <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (participants.length === 0) {
+    return (
+      <div className="border border-dashed border-white/10 rounded-xl p-8 text-center">
+        <p className="text-white/20 text-xs tracking-widest uppercase">No participants registered yet</p>
+      </div>
+    )
+  }
+
+  const sorted = [...participants].sort((a, b) => (a.seed ?? 999) - (b.seed ?? 999))
+
+  return (
+    <div className="space-y-2">
+      <p className="text-white/25 text-[10px] tracking-widest mb-2">
+        Set seeds before generating the bracket. Lower seed numbers face weaker opponents later.
+      </p>
+      {sorted.map(p => (
+        <div key={p.id} className="bg-white/3 border border-white/8 rounded-xl px-3 py-2.5 flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-xs font-bold truncate">{p.display_name}</p>
+            <p className="text-white/25 text-[10px]">
+              {p.kind === 'team' ? `Team · ${p.team?.member_count ?? 0} members` : 'Solo'}
+              {' · '}Registered {new Date(p.registered_at).toLocaleDateString()}
+            </p>
+          </div>
+          <input
+            type="number"
+            min="1"
+            placeholder="Seed"
+            value={p.seed ?? ''}
+            onChange={e => {
+              const val = e.target.value ? parseInt(e.target.value) : null
+              onChange(participants.map(x => x.id === p.id ? { ...x, seed: val } : x))
+            }}
+            onBlur={e => updateOne(p.id, { seed: e.target.value ? parseInt(e.target.value) : null })}
+            className={inputClass}
+          />
+          <select
+            value={p.status}
+            onChange={e => updateOne(p.id, { status: e.target.value })}
+            className={selectClass}
+          >
+            {Object.entries(PARTICIPANT_STATUS_CONFIG).map(([v, c]) => (
+              <option key={v} value={v} className="bg-[#1a0030]">{c.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => removeOne(p.id, p.display_name)}
+            disabled={savingId === p.id}
+            className="text-red-400/60 hover:text-red-400 text-[10px] font-bold tracking-widest uppercase transition-colors cursor-pointer disabled:opacity-40"
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── TournamentModal ───────────────────────────────────────────────────────────
-type TTab = 'general' | 'prizes' | 'timing'
+type TTab = 'general' | 'prizes' | 'timing' | 'participants'
 
 function TournamentModal({
   initial,
@@ -165,6 +274,18 @@ function TournamentModal({
   const bannerRef = useRef<HTMLInputElement>(null)
   const [saving, setSaving] = useState(false)
 
+  const [participants, setParticipants] = useState<any[]>([])
+  const [participantsLoading, setParticipantsLoading] = useState(false)
+
+  useEffect(() => {
+    if (!isEdit || !initial.id) return
+    setParticipantsLoading(true)
+    ;(tournamentsApi.listParticipants(initial.id) as Promise<any>)
+      .then(r => setParticipants(r.participants || []))
+      .catch(() => {})
+      .finally(() => setParticipantsLoading(false))
+  }, [isEdit, initial.id])
+
   const inputClass = 'bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500/60 w-full placeholder-white/20'
   const selectClass = 'bg-[#1a0030] border border-white/10 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500/60 w-full cursor-pointer'
   const labelClass = 'block text-white/40 text-[10px] font-bold tracking-widest uppercase mb-1'
@@ -189,6 +310,7 @@ function TournamentModal({
     { id: 'general' as const, label: '🏆 General' },
     { id: 'prizes'  as const, label: `🎁 Prizes${placements.length ? ` (${placements.length})` : ''}` },
     { id: 'timing'  as const, label: '⏱ Timing' },
+    ...(isEdit ? [{ id: 'participants' as const, label: `👥 Participants${participants.length ? ` (${participants.length})` : ''}` }] : []),
   ]
 
   return (
@@ -334,6 +456,16 @@ function TournamentModal({
                 className={inputClass} style={{ colorScheme: 'dark' }} />
             </div>
           </div>
+        )}
+
+        {/* ── PARTICIPANTS ── */}
+        {tab === 'participants' && isEdit && initial.id && (
+          <ParticipantsPanel
+            tournamentId={initial.id}
+            participants={participants}
+            loading={participantsLoading}
+            onChange={setParticipants}
+          />
         )}
       </ModalBody>
 

@@ -4,8 +4,10 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.utils.text import slugify
 from django.views.decorators.http import require_http_methods
+from django.db import transaction
 
-from .models import Tournament, Placement
+from .models import Tournament, Placement, Participant, TournamentTeam, TournamentTeamMember
+from .discord_auth_views import get_current_player
 
 # Draft tournaments are staff-only — everything else is visible publicly
 # (closed/in_progress/completed so people can still see brackets & results
@@ -236,4 +238,198 @@ def delete_placement(request, pk, placement_pk):
         Placement.objects.get(pk=placement_pk, tournament_id=pk).delete()
         return JsonResponse({'success': True})
     except Placement.DoesNotExist:
+        return JsonResponse({'error': 'Not found'}, status=404)
+
+
+# ── Public — Registration (Discord-authenticated players) ──────────────────
+
+@require_http_methods(['POST'])
+def register_solo(request, slug):
+    try:
+        tournament = Tournament.objects.get(slug=slug, status__in=PUBLIC_STATUSES)
+    except Tournament.DoesNotExist:
+        return JsonResponse({'error': 'Tournament not found'}, status=404)
+
+    if tournament.format != 'solo':
+        return JsonResponse({'error': 'This tournament requires a team.'}, status=400)
+
+    if not tournament.registration_is_open():
+        return JsonResponse({'error': 'Registration is not open.'}, status=400)
+
+    player = get_current_player(request)
+    if not player:
+        return JsonResponse({'error': 'Sign in with Discord first.'}, status=401)
+
+    if Participant.objects.filter(tournament=tournament, player=player).exists():
+        return JsonResponse({'error': 'You are already registered.'}, status=400)
+
+    if tournament.max_participants and tournament.participants.count() >= tournament.max_participants:
+        return JsonResponse({'error': 'Registration is full.'}, status=400)
+
+    participant = Participant.objects.create(tournament=tournament, player=player)
+    return JsonResponse(participant.to_dict(), status=201)
+
+
+@require_http_methods(['POST'])
+def create_team(request, slug):
+    try:
+        tournament = Tournament.objects.get(slug=slug, status__in=PUBLIC_STATUSES)
+    except Tournament.DoesNotExist:
+        return JsonResponse({'error': 'Tournament not found'}, status=404)
+
+    if tournament.format != 'team':
+        return JsonResponse({'error': 'This tournament is solo-entry only.'}, status=400)
+
+    if not tournament.registration_is_open():
+        return JsonResponse({'error': 'Registration is not open.'}, status=400)
+
+    player = get_current_player(request)
+    if not player:
+        return JsonResponse({'error': 'Sign in with Discord first.'}, status=401)
+
+    if TournamentTeamMember.objects.filter(team__tournament=tournament, player=player).exists():
+        return JsonResponse({'error': 'You are already part of a team in this tournament.'}, status=400)
+
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        data = {}
+
+    name = (data.get('name') or '').strip()
+    if not name:
+        return JsonResponse({'error': 'Team name is required.'}, status=400)
+
+    if tournament.max_participants and tournament.participants.count() >= tournament.max_participants:
+        return JsonResponse({'error': 'Registration is full.'}, status=400)
+
+    with transaction.atomic():
+        team = TournamentTeam.objects.create(
+            tournament=tournament,
+            name=name,
+            tag=(data.get('tag') or '').strip()[:10],
+            captain=player,
+        )
+        TournamentTeamMember.objects.create(team=team, player=player)
+        Participant.objects.create(tournament=tournament, team=team)
+
+    return JsonResponse(team.to_dict(), status=201)
+
+
+@require_http_methods(['POST'])
+def join_team(request, slug):
+    try:
+        tournament = Tournament.objects.get(slug=slug, status__in=PUBLIC_STATUSES)
+    except Tournament.DoesNotExist:
+        return JsonResponse({'error': 'Tournament not found'}, status=404)
+
+    if not tournament.registration_is_open():
+        return JsonResponse({'error': 'Registration is not open.'}, status=400)
+
+    player = get_current_player(request)
+    if not player:
+        return JsonResponse({'error': 'Sign in with Discord first.'}, status=401)
+
+    try:
+        data = json.loads(request.body or '{}')
+    except json.JSONDecodeError:
+        data = {}
+
+    invite_code = (data.get('invite_code') or '').strip().upper()
+    if not invite_code:
+        return JsonResponse({'error': 'Invite code is required.'}, status=400)
+
+    try:
+        team = TournamentTeam.objects.get(tournament=tournament, invite_code=invite_code)
+    except TournamentTeam.DoesNotExist:
+        return JsonResponse({'error': 'Invalid invite code.'}, status=404)
+
+    if TournamentTeamMember.objects.filter(team__tournament=tournament, player=player).exists():
+        return JsonResponse({'error': 'You are already part of a team in this tournament.'}, status=400)
+
+    if tournament.team_size and team.members.count() >= tournament.team_size:
+        return JsonResponse({'error': 'This team is full.'}, status=400)
+
+    TournamentTeamMember.objects.create(team=team, player=player)
+    return JsonResponse(team.to_dict(), status=201)
+
+
+@require_http_methods(['GET'])
+def get_my_participation(request, slug):
+    try:
+        tournament = Tournament.objects.get(slug=slug, status__in=PUBLIC_STATUSES)
+    except Tournament.DoesNotExist:
+        return JsonResponse({'error': 'Not found'}, status=404)
+
+    player = get_current_player(request)
+    if not player:
+        return JsonResponse({'registered': False})
+
+    if tournament.format == 'solo':
+        participant = Participant.objects.filter(tournament=tournament, player=player).first()
+        if not participant:
+            return JsonResponse({'registered': False})
+        return JsonResponse({'registered': True, 'kind': 'solo', 'participant': participant.to_dict()})
+
+    membership = (
+        TournamentTeamMember.objects
+        .filter(team__tournament=tournament, player=player)
+        .select_related('team')
+        .first()
+    )
+    if not membership:
+        return JsonResponse({'registered': False})
+    return JsonResponse({
+        'registered': True,
+        'kind': 'team',
+        'team': membership.team.to_dict(),
+        'is_captain': membership.team.captain_id == player.id,
+    })
+
+
+# ── Staff — Participants (seeding / disqualify / withdraw) ─────────────────
+
+@login_required
+@require_http_methods(['GET'])
+def list_participants(request, pk):
+    try:
+        tournament = Tournament.objects.get(pk=pk)
+    except Tournament.DoesNotExist:
+        return JsonResponse({'error': 'Not found'}, status=404)
+
+    participants = (
+        tournament.participants
+        .select_related('player', 'team', 'team__captain')
+        .prefetch_related('team__members__player')
+    )
+    return JsonResponse({'participants': [p.to_dict() for p in participants]})
+
+
+@login_required
+@require_http_methods(['PATCH'])
+def update_participant(request, pk, participant_pk):
+    try:
+        participant = Participant.objects.get(pk=participant_pk, tournament_id=pk)
+    except Participant.DoesNotExist:
+        return JsonResponse({'error': 'Not found'}, status=404)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    if 'status' in data:
+        participant.status = data['status']
+    if 'seed' in data:
+        participant.seed = data['seed'] or None
+    participant.save()
+    return JsonResponse(participant.to_dict())
+
+
+@login_required
+@require_http_methods(['DELETE'])
+def delete_participant(request, pk, participant_pk):
+    try:
+        Participant.objects.get(pk=participant_pk, tournament_id=pk).delete()
+        return JsonResponse({'success': True})
+    except Participant.DoesNotExist:
         return JsonResponse({'error': 'Not found'}, status=404)
