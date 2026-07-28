@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { tournaments as tournamentsApi, discordAuth } from "../utils/api";
-import { asset } from "../utils/asset";
 import Footer from "../components/footer";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -42,11 +41,13 @@ const GAME_COLORS: Record<string, string> = {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string; dot?: boolean }> = {
-  open:         { label: "Registration Open", color: "#34d399", bg: "rgba(52,211,153,0.15)", border: "rgba(52,211,153,0.3)", dot: true },
-  closed:       { label: "Registration Closed", color: "#fbbf24", bg: "rgba(251,191,36,0.15)", border: "rgba(251,191,36,0.3)" },
-  in_progress:  { label: "Live", color: "#f87171", bg: "rgba(248,113,113,0.15)", border: "rgba(248,113,113,0.3)", dot: true },
-  completed:    { label: "Completed", color: "#a855f7", bg: "rgba(168,85,247,0.15)", border: "rgba(168,85,247,0.3)" },
+  open:        { label: "Registration Open",   color: "#34d399", bg: "rgba(52,211,153,0.15)",  border: "rgba(52,211,153,0.3)",  dot: true },
+  closed:      { label: "Registration Closed", color: "#fbbf24", bg: "rgba(251,191,36,0.15)",  border: "rgba(251,191,36,0.3)"              },
+  in_progress: { label: "Live",                color: "#f87171", bg: "rgba(248,113,113,0.15)", border: "rgba(248,113,113,0.3)", dot: true },
+  completed:   { label: "Completed",           color: "#a855f7", bg: "rgba(168,85,247,0.15)",  border: "rgba(168,85,247,0.3)"              },
 };
+
+// ── Small shared components ────────────────────────────────────────────────────
 
 function DiscordIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
@@ -57,11 +58,16 @@ function DiscordIcon({ className = "w-4 h-4" }: { className?: string }) {
 }
 
 function TextBlock({ text }: { text: string }) {
-  const paragraphs = text.split(/\n\n+/).flatMap(b => b.split(/\n/)).filter(Boolean);
+  const paragraphs = text
+    .split(/\n\n+/)
+    .flatMap(b => b.split(/\n/))
+    .filter(Boolean);
   return (
     <div className="space-y-3">
       {paragraphs.map((p, i) => (
-        <p key={i} className="text-white/65 leading-[1.8] text-sm">{p}</p>
+        <p key={i} className="text-white/65 leading-[1.8] text-sm">
+          {p}
+        </p>
       ))}
     </div>
   );
@@ -69,6 +75,7 @@ function TextBlock({ text }: { text: string }) {
 
 function CountdownStrip({ deadline, color }: { deadline: string | null; color: string }) {
   const [now, setNow] = useState(Date.now());
+
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000 * 30);
     return () => clearInterval(t);
@@ -78,7 +85,7 @@ function CountdownStrip({ deadline, color }: { deadline: string | null; color: s
   const diffMs = new Date(deadline).getTime() - now;
   if (diffMs <= 0) return null;
 
-  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const days  = Math.floor(diffMs / (1000 * 60 * 60 * 24));
   const hours = Math.floor((diffMs / (1000 * 60 * 60)) % 24);
 
   return (
@@ -89,10 +96,15 @@ function CountdownStrip({ deadline, color }: { deadline: string | null; color: s
       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
-      {days > 0 ? `${days}d ${hours}h left to register` : `${hours}h left to register`}
+      {days > 0
+        ? `${days}d ${hours}h left to register`
+        : `${hours}h left to register`}
     </div>
   );
 }
+
+// ── Registration Panel ─────────────────────────────────────────────────────────
+// Now much simpler: complex team management lives on /tournaments/:slug/team
 
 function RegistrationPanel({
   t,
@@ -101,6 +113,7 @@ function RegistrationPanel({
   regLoading,
   onSignIn,
   onChanged,
+  onManageTeam,
 }: {
   t: TournamentDetail;
   player: { discord_username: string; discord_avatar: string } | null;
@@ -108,14 +121,14 @@ function RegistrationPanel({
   regLoading: boolean;
   onSignIn: () => void;
   onChanged: () => void;
+  onManageTeam: () => void;
 }) {
-  const [mode, setMode] = useState<"idle" | "create" | "join">("idle");
-  const [teamName, setTeamName] = useState("");
-  const [teamTag, setTeamTag] = useState("");
+  const [mode, setMode]           = useState<"idle" | "create" | "join">("idle");
+  const [teamName, setTeamName]   = useState("");
+  const [teamTag, setTeamTag]     = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [error, setError]         = useState("");
 
   const inputClass =
     "w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white text-sm " +
@@ -138,6 +151,7 @@ function RegistrationPanel({
     }
   };
 
+  // ── Registration closed / tournament ended ─────────────────────────────────
   if (!t.registration_open) {
     return (
       <button
@@ -150,6 +164,7 @@ function RegistrationPanel({
     );
   }
 
+  // ── Not signed in ──────────────────────────────────────────────────────────
   if (!player) {
     return (
       <button
@@ -163,6 +178,7 @@ function RegistrationPanel({
     );
   }
 
+  // ── Loading registration status ────────────────────────────────────────────
   if (regLoading) {
     return (
       <div className="flex justify-center py-3">
@@ -171,7 +187,7 @@ function RegistrationPanel({
     );
   }
 
-  // ── Already registered solo ──
+  // ── Already registered (solo) ──────────────────────────────────────────────
   if (myReg?.kind === "solo") {
     return (
       <div className="space-y-3">
@@ -179,9 +195,14 @@ function RegistrationPanel({
           className="rounded-2xl border p-4 text-center"
           style={{ background: "rgba(52,211,153,0.06)", borderColor: "rgba(52,211,153,0.25)" }}
         >
-          <p className="text-green-400 font-black text-sm tracking-widest uppercase">You're registered!</p>
-          <p className="text-white/30 text-xs mt-1">We'll notify you when the bracket is ready.</p>
+          <p className="text-green-400 font-black text-sm tracking-widest uppercase">
+            You're registered!
+          </p>
+          <p className="text-white/30 text-xs mt-1">
+            We'll notify you when the bracket is ready.
+          </p>
         </div>
+
         <button
           onClick={() => run(() => tournamentsApi.withdrawSolo(t.slug))}
           disabled={submitting}
@@ -189,97 +210,47 @@ function RegistrationPanel({
         >
           {submitting ? "Withdrawing…" : "Withdraw"}
         </button>
+
         {error && <p className="text-red-400 text-xs text-center">{error}</p>}
       </div>
     );
   }
 
-  // ── Already on a team ──
+  // ── Already on a team → show summary + "Manage Your Team" button ───────────
   if (myReg?.kind === "team") {
     const team = myReg.team;
-    const isCaptain = myReg.is_captain;
+
     return (
       <div className="space-y-3">
+        {/* Compact team summary */}
         <div
-          className="rounded-2xl border p-4 space-y-3"
+          className="rounded-2xl border p-4 space-y-1"
           style={{ background: "rgba(52,211,153,0.06)", borderColor: "rgba(52,211,153,0.25)" }}
         >
-          <div>
-            <p className="text-green-400 font-black text-sm tracking-widest uppercase">On team {team.name}</p>
-            <p className="text-white/30 text-xs mt-1">
-              {team.member_count} member{team.member_count !== 1 ? "s" : ""}
-              {t.team_size ? ` / ${t.team_size}` : ""}
-            </p>
-          </div>
-
-          <div className="space-y-1.5">
-            {team.members.map((m: any) => (
-              <div key={m.id} className="flex items-center justify-between bg-black/20 rounded-lg px-3 py-1.5">
-                <span className="text-white/70 text-xs font-semibold flex items-center gap-1.5">
-                  {m.is_captain && <span className="text-yellow-400">👑</span>}
-                  {m.player.discord_username}
-                </span>
-                {isCaptain && !m.is_captain && (
-                  <button
-                    onClick={() => run(() => tournamentsApi.kickMember(t.slug, m.player.id))}
-                    className="text-red-400/50 hover:text-red-400 text-[10px] font-bold uppercase tracking-wider cursor-pointer"
-                  >
-                    Kick
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {isCaptain && (
-            <div className="bg-black/20 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
-              <span className="text-white/40 text-[10px] tracking-widest uppercase">Invite Code</span>
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-purple-300 font-bold tracking-widest text-sm">{team.invite_code}</span>
-                <button
-                  onClick={() => {
-                    navigator.clipboard?.writeText(team.invite_code);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 1500);
-                  }}
-                  className="text-white/30 hover:text-white transition-colors cursor-pointer"
-                  title="Copy"
-                >
-                  {copied ? "✓" : (
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
+          <p className="text-green-400 font-black text-sm tracking-widest uppercase">
+            On team {team.name}
+          </p>
+          <p className="text-white/30 text-xs">
+            {team.member_count} member{team.member_count !== 1 ? "s" : ""}
+            {t.team_size ? ` / ${t.team_size}` : ""}
+          </p>
         </div>
 
-        {isCaptain ? (
-          <button
-            onClick={() => run(() => tournamentsApi.regenerateInviteCode(t.slug))}
-            disabled={submitting}
-            className="w-full text-white/30 hover:text-white/60 text-[10px] font-bold tracking-widest uppercase transition-colors cursor-pointer disabled:opacity-40"
-          >
-            Regenerate Invite Code
-          </button>
-        ) : (
-          <button
-            onClick={() => run(() => tournamentsApi.leaveTeam(t.slug))}
-            disabled={submitting}
-            className="w-full text-red-400/60 hover:text-red-400 text-xs font-bold tracking-widest uppercase transition-colors cursor-pointer disabled:opacity-40"
-          >
-            {submitting ? "Leaving…" : "Leave Team"}
-          </button>
-        )}
+        {/* Navigate to the dedicated team management page */}
+        <button
+          onClick={onManageTeam}
+          className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-3.5 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/30 hover:-translate-y-0.5 cursor-pointer"
+          style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+        >
+          Manage Your Team
+        </button>
+
         {error && <p className="text-red-400 text-xs text-center">{error}</p>}
       </div>
     );
   }
 
-  // ── Not registered yet — solo ──
+  // ── Not registered yet — solo ──────────────────────────────────────────────
   if (t.format === "solo") {
     return (
       <div className="space-y-2">
@@ -296,7 +267,7 @@ function RegistrationPanel({
     );
   }
 
-  // ── Not registered yet — team, pick create or join ──
+  // ── Not registered yet — team: choose create or join ──────────────────────
   if (mode === "idle") {
     return (
       <div className="space-y-2">
@@ -318,15 +289,34 @@ function RegistrationPanel({
     );
   }
 
+  // ── Create team form ───────────────────────────────────────────────────────
   if (mode === "create") {
     return (
       <div className="space-y-3">
-        <input placeholder="Team name" value={teamName} onChange={e => setTeamName(e.target.value)} className={inputClass} />
-        <input placeholder="Tag (optional, e.g. NBL)" value={teamTag} onChange={e => setTeamTag(e.target.value)} maxLength={10} className={inputClass} />
+        <input
+          placeholder="Team name"
+          value={teamName}
+          onChange={e => setTeamName(e.target.value)}
+          className={inputClass}
+        />
+        <input
+          placeholder="Tag (optional, e.g. NBL)"
+          value={teamTag}
+          onChange={e => setTeamTag(e.target.value)}
+          maxLength={10}
+          className={inputClass}
+        />
         {error && <p className="text-red-400 text-xs">{error}</p>}
         <div className="flex gap-2">
           <button
-            onClick={() => run(() => tournamentsApi.createTeam(t.slug, { name: teamName.trim(), tag: teamTag.trim() }))}
+            onClick={() =>
+              run(() =>
+                tournamentsApi.createTeam(t.slug, {
+                  name: teamName.trim(),
+                  tag:  teamTag.trim(),
+                })
+              )
+            }
             disabled={submitting || !teamName.trim()}
             className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-black py-2.5 rounded-xl text-xs tracking-widest uppercase transition-all cursor-pointer"
           >
@@ -343,6 +333,7 @@ function RegistrationPanel({
     );
   }
 
+  // ── Join team form ─────────────────────────────────────────────────────────
   return (
     <div className="space-y-3">
       <input
@@ -371,24 +362,28 @@ function RegistrationPanel({
   );
 }
 
-export default function TournamentDetailPage() {
-  const { slug } = useParams<{ slug: string }>();
-  const navigate = useNavigate();
+// ── Page ───────────────────────────────────────────────────────────────────────
 
-  const [t, setT] = useState<TournamentDetail | null>(null);
+export default function TournamentDetailPage() {
+  const { slug }   = useParams<{ slug: string }>();
+  const navigate   = useNavigate();
+
+  const [t, setT]             = useState<TournamentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [scrolled, setScrolled] = useState(false);
-  const [tab, setTab] = useState<"overview" | "rules" | "bracket">("overview");
-  const [player, setPlayer] = useState<{ discord_username: string; discord_avatar: string } | null>(null);
-  const [myReg, setMyReg] = useState<any>(null);
+  const [tab, setTab]         = useState<"overview" | "rules" | "bracket">("overview");
+  const [player, setPlayer]   = useState<{ discord_username: string; discord_avatar: string } | null>(null);
+  const [myReg, setMyReg]     = useState<any>(null);
   const [regLoading, setRegLoading] = useState(true);
 
+  // Scroll shadow on navbar
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 60);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Load tournament
   useEffect(() => {
     if (!slug) return;
     setLoading(true);
@@ -398,12 +393,14 @@ export default function TournamentDetailPage() {
       .finally(() => setLoading(false));
   }, [slug]);
 
+  // Load current player
   useEffect(() => {
     (discordAuth.me() as Promise<any>)
       .then(r => { if (r.authenticated) setPlayer(r.player); })
       .catch(() => {});
   }, []);
 
+  // Load / refresh my registration
   const refreshMyRegistration = () => {
     if (!slug) return;
     setRegLoading(true);
@@ -412,9 +409,9 @@ export default function TournamentDetailPage() {
       .catch(() => setMyReg(null))
       .finally(() => setRegLoading(false));
   };
-
   useEffect(refreshMyRegistration, [slug, player]);
 
+  // ── Guards ─────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0d0014] flex items-center justify-center">
@@ -424,29 +421,37 @@ export default function TournamentDetailPage() {
   }
   if (!t) return null;
 
-  const color = GAME_COLORS[t.game || ""] || "#a855f7";
-  const sc = STATUS_CONFIG[t.status] || STATUS_CONFIG.closed;
+  // ── Derived values ─────────────────────────────────────────────────────────
+  const color           = GAME_COLORS[t.game || ""] || "#a855f7";
+  const sc              = STATUS_CONFIG[t.status] || STATUS_CONFIG.closed;
   const sortedPlacements = [...t.placements].sort((a, b) => a.display_order - b.display_order);
 
   const fmtDate = (d: string | null) => {
     if (!d) return null;
-    try { return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }); }
-    catch { return d; }
+    try {
+      return new Date(d).toLocaleDateString("en-GB", {
+        day: "numeric", month: "short", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      });
+    } catch { return d; }
   };
 
-  const handleRegister = () => {
-    window.location.href = discordAuth.loginUrl(`/tournaments/${t.slug}`);
-  };
+  const handleSignIn   = () => { window.location.href = discordAuth.loginUrl(`/tournaments/${t.slug}`); };
+  const handleManageTeam = () => navigate(`/tournaments/${t.slug}/team`);
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#0d0014] text-white overflow-x-hidden" style={{ fontFamily: "'Barlow', sans-serif" }}>
+    <div
+      className="min-h-screen bg-[#0d0014] text-white overflow-x-hidden"
+      style={{ fontFamily: "'Barlow', sans-serif" }}
+    >
       {/* ── Navbar ── */}
       <nav
         className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
         style={{
-          background: scrolled ? "rgba(13,0,20,0.95)" : "transparent",
+          background:    scrolled ? "rgba(13,0,20,0.95)" : "transparent",
           backdropFilter: scrolled ? "blur(14px)" : "none",
-          boxShadow: scrolled ? "0 1px 0 rgba(255,255,255,0.06)" : "none",
+          boxShadow:     scrolled ? "0 1px 0 rgba(255,255,255,0.06)" : "none",
         }}
       >
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-4">
@@ -454,13 +459,21 @@ export default function TournamentDetailPage() {
             onClick={() => navigate("/tournaments")}
             className="flex items-center gap-2 text-white/40 hover:text-white transition-colors text-xs font-bold tracking-wider uppercase group cursor-pointer"
           >
-            <svg className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <svg
+              className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+            >
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
             Tournaments
           </button>
+
           <div className="h-4 w-px bg-white/15" />
-          <span className="text-white/40 text-xs font-black tracking-widest uppercase hidden sm:block" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+
+          <span
+            className="text-white/40 text-xs font-black tracking-widest uppercase hidden sm:block"
+            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+          >
             NBL<span style={{ color }}>ESPORT</span>
           </span>
 
@@ -478,7 +491,7 @@ export default function TournamentDetailPage() {
               </div>
             ) : (
               <button
-                onClick={handleRegister}
+                onClick={handleSignIn}
                 className="flex items-center gap-2 bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 font-bold px-4 py-2 rounded-full text-xs tracking-wider uppercase transition-all duration-200 cursor-pointer"
               >
                 <DiscordIcon />
@@ -492,11 +505,21 @@ export default function TournamentDetailPage() {
       {/* ── Hero ── */}
       <div className="relative" style={{ minHeight: "380px" }}>
         {t.banner ? (
-          <img src={t.banner} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ opacity: 0.3 }} />
+          <img
+            src={t.banner} alt=""
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ opacity: 0.3 }}
+          />
         ) : (
-          <div className="absolute inset-0" style={{ background: `radial-gradient(ellipse at 60% 30%, ${color}22 0%, transparent 65%)` }} />
+          <div
+            className="absolute inset-0"
+            style={{ background: `radial-gradient(ellipse at 60% 30%, ${color}22 0%, transparent 65%)` }}
+          />
         )}
-        <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(13,0,20,0.5) 0%, rgba(13,0,20,0.2) 40%, rgba(13,0,20,1) 100%)" }} />
+        <div
+          className="absolute inset-0"
+          style={{ background: "linear-gradient(to bottom, rgba(13,0,20,0.5) 0%, rgba(13,0,20,0.2) 40%, rgba(13,0,20,1) 100%)" }}
+        />
         <div
           className="absolute inset-0 opacity-[0.04]"
           style={{
@@ -506,12 +529,18 @@ export default function TournamentDetailPage() {
         />
 
         <div className="relative z-10 max-w-6xl mx-auto px-6 pt-32 pb-12">
+          {/* Status / game / format badges */}
           <div className="flex items-center gap-3 mb-5 flex-wrap">
             <span
               className="inline-flex items-center gap-1.5 text-xs font-black tracking-widest uppercase px-3 py-1.5 rounded-full"
               style={{ background: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}
             >
-              {sc.dot && <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: sc.color }} />}
+              {sc.dot && (
+                <span
+                  className="w-1.5 h-1.5 rounded-full animate-pulse"
+                  style={{ background: sc.color }}
+                />
+              )}
               {sc.label}
             </span>
             <span
@@ -521,7 +550,9 @@ export default function TournamentDetailPage() {
               {t.game_title || "Multi-Game"}
             </span>
             <span className="text-xs font-bold tracking-widest uppercase px-3 py-1.5 rounded-full bg-white/5 text-white/50 border border-white/10">
-              {t.format === "team" ? `Team${t.team_size ? ` · ${t.team_size}v${t.team_size}` : ""}` : "Solo"}
+              {t.format === "team"
+                ? `Team${t.team_size ? ` · ${t.team_size}v${t.team_size}` : ""}`
+                : "Solo"}
             </span>
           </div>
 
@@ -533,7 +564,9 @@ export default function TournamentDetailPage() {
           </h1>
 
           {t.description && (
-            <p className="text-white/55 text-lg max-w-2xl leading-relaxed mb-6">{t.description}</p>
+            <p className="text-white/55 text-lg max-w-2xl leading-relaxed mb-6">
+              {t.description}
+            </p>
           )}
 
           <div className="flex flex-wrap items-center gap-4">
@@ -550,11 +583,13 @@ export default function TournamentDetailPage() {
       {/* ── Tabs ── */}
       <div className="max-w-6xl mx-auto px-6">
         <div className="flex items-center gap-1 border-b border-white/8 mb-10">
-          {([
-            ["overview", "Overview"],
-            ["rules", "Rules & Requirements"],
-            ["bracket", "Bracket"],
-          ] as const).map(([id, label]) => (
+          {(
+            [
+              ["overview", "Overview"],
+              ["rules",    "Rules & Requirements"],
+              ["bracket",  "Bracket"],
+            ] as const
+          ).map(([id, label]) => (
             <button
               key={id}
               onClick={() => setTab(id)}
@@ -563,28 +598,40 @@ export default function TournamentDetailPage() {
             >
               {label}
               {tab === id && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5" style={{ background: color }} />
+                <span
+                  className="absolute bottom-0 left-0 right-0 h-0.5"
+                  style={{ background: color }}
+                />
               )}
             </button>
           ))}
         </div>
 
+        {/* ── Two-column layout ── */}
         <div className="grid md:grid-cols-3 gap-10 pb-24">
-          {/* ── Main column ── */}
+
+          {/* Main column */}
           <div className="md:col-span-2">
             {tab === "overview" && (
               <div className="space-y-10">
-                {/* Prize table */}
                 {sortedPlacements.length > 0 && (
                   <div>
-                    <h3 className="text-white font-black text-lg uppercase tracking-wide mb-4" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    <h3
+                      className="text-white font-black text-lg uppercase tracking-wide mb-4"
+                      style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+                    >
                       Prizes
                     </h3>
                     <div className="space-y-2">
                       {sortedPlacements.map(p => (
-                        <div key={p.id} className="flex items-center justify-between bg-white/5 border border-white/8 rounded-xl px-5 py-3.5">
+                        <div
+                          key={p.id}
+                          className="flex items-center justify-between bg-white/5 border border-white/8 rounded-xl px-5 py-3.5"
+                        >
                           <span className="text-white font-bold text-sm">{p.placement}</span>
-                          <span className="text-yellow-400/90 text-sm font-semibold">{p.reward_text || "—"}</span>
+                          <span className="text-yellow-400/90 text-sm font-semibold">
+                            {p.reward_text || "—"}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -593,7 +640,10 @@ export default function TournamentDetailPage() {
 
                 {t.description && (
                   <div>
-                    <h3 className="text-white font-black text-lg uppercase tracking-wide mb-4" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                    <h3
+                      className="text-white font-black text-lg uppercase tracking-wide mb-4"
+                      style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+                    >
                       About
                     </h3>
                     <TextBlock text={t.description} />
@@ -605,34 +655,55 @@ export default function TournamentDetailPage() {
             {tab === "rules" && (
               <div className="space-y-10">
                 <div>
-                  <h3 className="text-white font-black text-lg uppercase tracking-wide mb-4" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  <h3
+                    className="text-white font-black text-lg uppercase tracking-wide mb-4"
+                    style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+                  >
                     Rules
                   </h3>
-                  {t.rules ? <TextBlock text={t.rules} /> : <p className="text-white/25 text-sm">No rules published yet.</p>}
+                  {t.rules
+                    ? <TextBlock text={t.rules} />
+                    : <p className="text-white/25 text-sm">No rules published yet.</p>
+                  }
                 </div>
                 <div>
-                  <h3 className="text-white font-black text-lg uppercase tracking-wide mb-4" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  <h3
+                    className="text-white font-black text-lg uppercase tracking-wide mb-4"
+                    style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+                  >
                     Entry Requirements
                   </h3>
-                  {t.requirements ? <TextBlock text={t.requirements} /> : <p className="text-white/25 text-sm">No specific requirements — everyone's welcome.</p>}
+                  {t.requirements
+                    ? <TextBlock text={t.requirements} />
+                    : <p className="text-white/25 text-sm">No specific requirements — everyone's welcome.</p>
+                  }
                 </div>
               </div>
             )}
 
             {tab === "bracket" && (
               <div>
-                <h3 className="text-white font-black text-lg uppercase tracking-wide mb-4" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                <h3
+                  className="text-white font-black text-lg uppercase tracking-wide mb-4"
+                  style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+                >
                   Bracket
                 </h3>
                 {t.status === "draft" || t.status === "open" ? (
-                  <div className="rounded-2xl border border-dashed border-white/10 p-10 text-center" style={{ background: "rgba(255,255,255,0.02)" }}>
+                  <div
+                    className="rounded-2xl border border-dashed border-white/10 p-10 text-center"
+                    style={{ background: "rgba(255,255,255,0.02)" }}
+                  >
                     <div className="text-4xl mb-4 opacity-20">🗓</div>
                     <p className="text-white/35 text-sm max-w-sm mx-auto">
-                      The bracket will be generated once registration closes and seeding is finalized.
+                      The bracket will be generated once registration closes and seeding is finalised.
                     </p>
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-white/10 p-10 text-center" style={{ background: "rgba(255,255,255,0.02)" }}>
+                  <div
+                    className="rounded-2xl border border-white/10 p-10 text-center"
+                    style={{ background: "rgba(255,255,255,0.02)" }}
+                  >
                     <div className="text-4xl mb-4 opacity-20">🏗️</div>
                     <p className="text-white/35 text-sm max-w-sm mx-auto">
                       Bracket viewer is coming in the next update — check back soon to follow the matches live.
@@ -643,17 +714,26 @@ export default function TournamentDetailPage() {
             )}
           </div>
 
-          {/* ── Sidebar: registration ── */}
+          {/* ── Sidebar ── */}
           <div>
-            <div className="sticky top-28 rounded-3xl border border-white/10 p-6" style={{ background: "rgba(255,255,255,0.03)" }}>
-              <h3 className="text-white font-black text-base uppercase mb-4" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            <div
+              className="sticky top-28 rounded-3xl border border-white/10 p-6"
+              style={{ background: "rgba(255,255,255,0.03)" }}
+            >
+              <h3
+                className="text-white font-black text-base uppercase mb-4"
+                style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+              >
                 Registration
               </h3>
 
+              {/* Meta info */}
               <div className="space-y-3 mb-6 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-white/35">Format</span>
-                  <span className="text-white/70 font-semibold">{t.format === "team" ? "Team" : "Solo"}</span>
+                  <span className="text-white/70 font-semibold">
+                    {t.format === "team" ? "Team" : "Solo"}
+                  </span>
                 </div>
                 {t.format === "team" && t.team_size && (
                   <div className="flex items-center justify-between">
@@ -680,7 +760,9 @@ export default function TournamentDetailPage() {
                 {t.max_participants && (
                   <div className="flex items-center justify-between">
                     <span className="text-white/35">Slots</span>
-                    <span className="text-white/70 font-semibold">{t.participant_count}/{t.max_participants}</span>
+                    <span className="text-white/70 font-semibold">
+                      {t.participant_count}/{t.max_participants}
+                    </span>
                   </div>
                 )}
               </div>
@@ -690,8 +772,9 @@ export default function TournamentDetailPage() {
                 player={player}
                 myReg={myReg}
                 regLoading={regLoading}
-                onSignIn={handleRegister}
+                onSignIn={handleSignIn}
                 onChanged={refreshMyRegistration}
+                onManageTeam={handleManageTeam}
               />
 
               <p className="text-white/20 text-[10px] mt-3 text-center leading-relaxed">

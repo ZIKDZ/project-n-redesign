@@ -233,6 +233,11 @@ export const tournaments = {
     request(`/api/tournaments/${slug}/teams/regenerate-code/`, { method: 'POST' }),
   kickMember: (slug: string, playerId: number) =>
     request(`/api/tournaments/${slug}/teams/kick/`, { method: 'POST', body: JSON.stringify({ player_id: playerId }) }),
+
+  transferCaptain: (slug: string, playerId: number) =>
+  request(`/api/tournaments/${slug}/teams/transfer-captain/`, { method: 'POST', body: JSON.stringify({ player_id: playerId }) }),
+  disbandTeam: (slug: string) =>
+    request(`/api/tournaments/${slug}/teams/disband/`, { method: 'POST' }),
 }
  
 // ── Discord auth (tournament players) ─────────────────────────────────────────

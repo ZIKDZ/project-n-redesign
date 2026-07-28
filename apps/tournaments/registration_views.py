@@ -282,3 +282,57 @@ def kick_member(request, slug):
         return JsonResponse({'error': 'That player is not on your team.'}, status=404)
 
     return JsonResponse(membership.team.to_dict())
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def transfer_captain(request, slug):
+    tournament = _get_tournament(slug)
+    if not tournament:
+        return JsonResponse({'error': 'Tournament not found'}, status=404)
+
+    player = get_current_player(request)
+    if not player:
+        return JsonResponse({'error': 'Sign in with Discord first.'}, status=401)
+
+    membership = _active_team_membership(player, tournament)
+    if not membership or membership.team.captain_id != player.id:
+        return JsonResponse({'error': 'Only the team captain can do that.'}, status=403)
+
+    try:
+        data = json.loads(request.body)
+        target_id = int(data['player_id'])
+    except (KeyError, ValueError, json.JSONDecodeError):
+        return JsonResponse({'error': 'player_id is required.'}, status=400)
+
+    if target_id == player.id:
+        return JsonResponse({'error': 'You are already captain.'}, status=400)
+
+    if not TournamentTeamMember.objects.filter(team=membership.team, player_id=target_id).exists():
+        return JsonResponse({'error': 'That player is not on your team.'}, status=404)
+
+    membership.team.captain_id = target_id
+    membership.team.save()
+    return JsonResponse(membership.team.to_dict())
+
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def disband_team(request, slug):
+    tournament = _get_tournament(slug)
+    if not tournament:
+        return JsonResponse({'error': 'Tournament not found'}, status=404)
+
+    player = get_current_player(request)
+    if not player:
+        return JsonResponse({'error': 'Sign in with Discord first.'}, status=401)
+
+    membership = _active_team_membership(player, tournament)
+    if not membership or membership.team.captain_id != player.id:
+        return JsonResponse({'error': 'Only the team captain can do that.'}, status=403)
+
+    team = membership.team
+    # Participant.team uses SET_NULL, so it won't clean itself up — delete it
+    # explicitly or you get an orphaned registered-but-teamless Participant row.
+    Participant.objects.filter(tournament=tournament, team=team).delete()
+    team.delete()  # cascades TournamentTeamMember rows
+    return JsonResponse({'success': True})

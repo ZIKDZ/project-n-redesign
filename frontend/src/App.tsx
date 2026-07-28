@@ -14,6 +14,7 @@ import PaymentFailed   from './pages/shop/PaymentFailed'
 import NewsPage        from './pages/NewsPage'      
 import TournamentsPage       from './pages/TournamentsPage'
 import TournamentDetailPage  from './pages/TournamentDetailPage'    
+import TournamentTeamPage from './pages/TournamentTeamPage'
 
 // ── Auth context ──────────────────────────────────────────────────────────────
 interface AuthUser {
@@ -84,6 +85,7 @@ export default function App() {
         {/* ── Tournaments ── */}
         <Route path="/tournaments"           element={<TournamentsPage />} />
         <Route path="/tournaments/:slug"     element={<TournamentDetailPage />} />
+        <Route path="/tournaments/:slug/team" element={<TournamentTeamPage />} />
 
         {/* ── Dashboard (protected) ── */}
         <Route

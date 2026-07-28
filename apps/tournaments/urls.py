@@ -56,6 +56,8 @@ urlpatterns = [
         name='tournament-team-regenerate-code',
     ),
     path('<slug:slug>/teams/kick/', registration_views.kick_member, name='tournament-team-kick'),
+    path('<slug:slug>/teams/transfer-captain/', registration_views.transfer_captain, name='tournament-team-transfer-captain'),
+    path('<slug:slug>/teams/disband/', registration_views.disband_team, name='tournament-team-disband'),
 
     # Public — slug catch-all LAST, so it only catches what's left over
     path('', views.list_tournaments, name='list-tournaments'),
