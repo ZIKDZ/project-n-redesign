@@ -168,7 +168,7 @@ export const shop = {
     request(`/api/shop/orders/${id}/delete/`, { method: 'DELETE' }),
 }
 
-// ── Tournaments ──────────────────────────────────────────────────────────────────────
+// ── Tournaments ───────────────────────────────────────────────────────────────
 export const tournaments = {
   // Public
   list: (params?: { game?: string; status?: string }) => {
@@ -182,7 +182,7 @@ export const tournaments = {
   listAll: () =>
     request('/api/tournaments/all/'),
   getStaff: (id: number) =>
-    request(`/api/tournaments/staff/${id}/`),
+    request(`/api/tournaments/${id}/`),
   create: (data: object) =>
     request('/api/tournaments/create/', { method: 'POST', body: JSON.stringify(data) }),
   createMultipart: (fd: FormData) =>
@@ -204,7 +204,7 @@ export const tournaments = {
   createPlacement: (id: number, data: object) =>
     request(`/api/tournaments/${id}/placements/create/`, { method: 'POST', body: JSON.stringify(data) }),
   updatePlacement: (id: number, placementId: number, data: object) =>
-    request(`/api/tournaments/${id}/placements/${placementId}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    request(`/api/tournaments/${id}/placements/${placementId}/update/`, { method: 'PATCH', body: JSON.stringify(data) }),
   deletePlacement: (id: number, placementId: number) =>
     request(`/api/tournaments/${id}/placements/${placementId}/delete/`, { method: 'DELETE' }),
 }
