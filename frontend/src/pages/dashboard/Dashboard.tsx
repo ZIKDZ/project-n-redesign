@@ -14,9 +14,10 @@ import TeamsSection     from './components/sections/TeamsSection'
 import GamesSection     from './components/sections/GamesSection'
 import SpotlightSection from './components/sections/SpotlightSection'
 import ShopSection from './components/sections/shop/ShopSection'
+import TournamentsSection from './components/sections/TournamentsSection'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Section = 'overview' | 'joins' | 'matches' | 'news' | 'players' | 'teams' | 'games' | 'spotlight' | 'shop'
+type Section = 'overview' | 'joins' | 'matches' | 'news' | 'players' | 'teams' | 'games' | 'spotlight' | 'shop' | 'tournaments'
 
 const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode }[] = [
   {
@@ -115,6 +116,17 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ReactNode }[] = [
     </svg>
   ),
 },
+{
+  id: 'tournaments',
+  label: 'Tournaments',
+  icon: (
+    // Trophy
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497M4.5 6.75V4.5A2.25 2.25 0 016.75 2.25h10.5A2.25 2.25 0 0119.5 4.5v2.25m-15 0h15m-15 0a2.25 2.25 0 002.25 2.25h10.5a2.25 2.25 0 002.25-2.25m-15 0v.75a5.25 5.25 0 005.25 5.25h.75m9-6v.75a5.25 5.25 0 01-5.25 5.25h-.75" />
+    </svg>
+  ),
+},
+
 ]
 
 const SECTIONS: Record<Section, React.ReactNode> = {
@@ -127,6 +139,7 @@ const SECTIONS: Record<Section, React.ReactNode> = {
   games:     <GamesSection />,
   spotlight: <SpotlightSection />,
   shop:      <ShopSection />,
+  tournaments: <TournamentsSection />,
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────

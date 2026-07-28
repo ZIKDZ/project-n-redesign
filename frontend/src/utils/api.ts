@@ -167,3 +167,54 @@ export const shop = {
   deleteOrder: (id: number) =>
     request(`/api/shop/orders/${id}/delete/`, { method: 'DELETE' }),
 }
+
+// ── Tournaments ──────────────────────────────────────────────────────────────────────
+export const tournaments = {
+  // Public
+  list: (params?: { game?: string; status?: string }) => {
+    const qs = new URLSearchParams(params as Record<string, string>).toString()
+    return request(`/api/tournaments/${qs ? `?${qs}` : ''}`)
+  },
+  get: (slug: string) =>
+    request(`/api/tournaments/${slug}/`),
+ 
+  // Staff
+  listAll: () =>
+    request('/api/tournaments/all/'),
+  getStaff: (id: number) =>
+    request(`/api/tournaments/staff/${id}/`),
+  create: (data: object) =>
+    request('/api/tournaments/create/', { method: 'POST', body: JSON.stringify(data) }),
+  createMultipart: (fd: FormData) =>
+    fetch('/api/tournaments/create/', {
+      method: 'POST', credentials: 'include',
+      headers: { 'X-CSRFToken': getCookie('csrftoken') }, body: fd,
+    }).then(r => r.json()),
+  update: (id: number, data: object) =>
+    request(`/api/tournaments/${id}/update/`, { method: 'PATCH', body: JSON.stringify(data) }),
+  updateMultipart: (id: number, fd: FormData) =>
+    fetch(`/api/tournaments/${id}/update/`, {
+      method: 'PATCH', credentials: 'include',
+      headers: { 'X-CSRFToken': getCookie('csrftoken') }, body: fd,
+    }).then(r => r.json()),
+  delete: (id: number) =>
+    request(`/api/tournaments/${id}/delete/`, { method: 'DELETE' }),
+ 
+  // Placements
+  createPlacement: (id: number, data: object) =>
+    request(`/api/tournaments/${id}/placements/create/`, { method: 'POST', body: JSON.stringify(data) }),
+  updatePlacement: (id: number, placementId: number, data: object) =>
+    request(`/api/tournaments/${id}/placements/${placementId}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deletePlacement: (id: number, placementId: number) =>
+    request(`/api/tournaments/${id}/placements/${placementId}/delete/`, { method: 'DELETE' }),
+}
+ 
+// ── Discord auth (tournament players) ─────────────────────────────────────────
+export const discordAuth = {
+  me: () =>
+    request<{ authenticated: boolean; player?: { id: number; discord_id: string; discord_username: string; discord_avatar: string } }>('/api/auth/discord/me/'),
+  loginUrl: (next?: string) =>
+    `/api/auth/discord/login/${next ? `?next=${encodeURIComponent(next)}` : ''}`,
+  logout: () =>
+    request('/api/auth/discord/logout/', { method: 'POST' }),
+}
