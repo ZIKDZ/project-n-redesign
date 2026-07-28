@@ -1,10 +1,14 @@
 from django.urls import path
 from . import views
+from . import registration_views
 
 urlpatterns = [
     # ── IMPORTANT: literal/int paths must come before <slug:slug>/ ──
     # Django matches top-to-bottom, and <slug:slug> matches almost any
-    # single path segment (including "all", "create", "5", etc).
+    # single path segment (including "all", "create", "5", etc). If
+    # <slug:slug> is listed first it silently swallows every staff route
+    # below it. Multi-segment slug routes (e.g. <slug:slug>/register/)
+    # don't collide either way since they're a different pattern shape.
 
     # Staff — Tournaments
     path('all/', views.list_tournaments_all, name='list-tournaments-all'),
@@ -29,7 +33,7 @@ urlpatterns = [
     # Staff — Participants
     path('<int:pk>/participants/', views.list_participants, name='list-participants'),
     path(
-        '<int:pk>/participants/<int:participant_pk>/update/',
+        '<int:pk>/participants/<int:participant_pk>/',
         views.update_participant,
         name='update-participant',
     ),
@@ -40,10 +44,18 @@ urlpatterns = [
     ),
 
     # Public — Registration (Discord-authenticated players)
-    path('<slug:slug>/register/', views.register_solo, name='tournament-register-solo'),
-    path('<slug:slug>/teams/create/', views.create_team, name='tournament-team-create'),
-    path('<slug:slug>/teams/join/', views.join_team, name='tournament-team-join'),
-    path('<slug:slug>/me/', views.get_my_participation, name='tournament-me'),
+    path('<slug:slug>/my-registration/', registration_views.my_registration, name='tournament-my-registration'),
+    path('<slug:slug>/register/', registration_views.register_solo, name='tournament-register-solo'),
+    path('<slug:slug>/withdraw/', registration_views.withdraw_solo, name='tournament-withdraw-solo'),
+    path('<slug:slug>/teams/create/', registration_views.create_team, name='tournament-team-create'),
+    path('<slug:slug>/teams/join/', registration_views.join_team, name='tournament-team-join'),
+    path('<slug:slug>/teams/leave/', registration_views.leave_team, name='tournament-team-leave'),
+    path(
+        '<slug:slug>/teams/regenerate-code/',
+        registration_views.regenerate_invite_code,
+        name='tournament-team-regenerate-code',
+    ),
+    path('<slug:slug>/teams/kick/', registration_views.kick_member, name='tournament-team-kick'),
 
     # Public — slug catch-all LAST, so it only catches what's left over
     path('', views.list_tournaments, name='list-tournaments'),

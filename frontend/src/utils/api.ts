@@ -208,23 +208,31 @@ export const tournaments = {
   deletePlacement: (id: number, placementId: number) =>
     request(`/api/tournaments/${id}/placements/${placementId}/delete/`, { method: 'DELETE' }),
 
-  // Registration (public, Discord-authenticated)
-  registerSolo: (slug: string) =>
-    request(`/api/tournaments/${slug}/register/`, { method: 'POST' }),
-  createTeam: (slug: string, data: { name: string; tag?: string }) =>
-    request(`/api/tournaments/${slug}/teams/create/`, { method: 'POST', body: JSON.stringify(data) }),
-  joinTeam: (slug: string, inviteCode: string) =>
-    request(`/api/tournaments/${slug}/teams/join/`, { method: 'POST', body: JSON.stringify({ invite_code: inviteCode }) }),
-  myParticipation: (slug: string) =>
-    request(`/api/tournaments/${slug}/me/`),
-
   // Staff — Participants
   listParticipants: (id: number) =>
     request(`/api/tournaments/${id}/participants/`),
   updateParticipant: (id: number, participantId: number, data: { status?: string; seed?: number | null }) =>
-    request(`/api/tournaments/${id}/participants/${participantId}/update/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    request(`/api/tournaments/${id}/participants/${participantId}/`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteParticipant: (id: number, participantId: number) =>
     request(`/api/tournaments/${id}/participants/${participantId}/delete/`, { method: 'DELETE' }),
+
+  // Public — Registration (Discord-authenticated players)
+  myRegistration: (slug: string) =>
+    request(`/api/tournaments/${slug}/my-registration/`),
+  registerSolo: (slug: string) =>
+    request(`/api/tournaments/${slug}/register/`, { method: 'POST' }),
+  withdrawSolo: (slug: string) =>
+    request(`/api/tournaments/${slug}/withdraw/`, { method: 'POST' }),
+  createTeam: (slug: string, data: { name: string; tag?: string; logo_url?: string }) =>
+    request(`/api/tournaments/${slug}/teams/create/`, { method: 'POST', body: JSON.stringify(data) }),
+  joinTeam: (slug: string, inviteCode: string) =>
+    request(`/api/tournaments/${slug}/teams/join/`, { method: 'POST', body: JSON.stringify({ invite_code: inviteCode }) }),
+  leaveTeam: (slug: string) =>
+    request(`/api/tournaments/${slug}/teams/leave/`, { method: 'POST' }),
+  regenerateInviteCode: (slug: string) =>
+    request(`/api/tournaments/${slug}/teams/regenerate-code/`, { method: 'POST' }),
+  kickMember: (slug: string, playerId: number) =>
+    request(`/api/tournaments/${slug}/teams/kick/`, { method: 'POST', body: JSON.stringify({ player_id: playerId }) }),
 }
  
 // ── Discord auth (tournament players) ─────────────────────────────────────────

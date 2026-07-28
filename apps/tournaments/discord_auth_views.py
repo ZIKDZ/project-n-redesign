@@ -1,4 +1,5 @@
 from django.http import JsonResponse, HttpResponseRedirect
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from . import discord_service
@@ -59,6 +60,7 @@ def discord_me(request):
     return JsonResponse({'authenticated': True, 'player': player.to_dict()})
 
 
+@csrf_exempt
 @require_http_methods(['POST'])
 def discord_logout(request):
     request.session.pop(SESSION_KEY, None)
