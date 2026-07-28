@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     'apps.games',
     'apps.spotlight',
     'apps.shop',
+    'apps.tournaments',
 
 
 
@@ -152,3 +153,14 @@ CHARGILY_URL    = (
 
 # Base URL of the site — used to build Chargily callback URLs
 SITE_URL = config('SITE_URL', default='http://localhost:8000')
+
+# ── Discord OAuth (Tournaments) ────────────────────────────────────────────────
+# Set these up at https://discord.com/developers/applications
+# OAuth2 → General → add DISCORD_REDIRECT_URI as a redirect
+# OAuth2 → scopes used: "identify" only
+DISCORD_CLIENT_ID     = config('DISCORD_CLIENT_ID', default='')
+DISCORD_CLIENT_SECRET = config('DISCORD_CLIENT_SECRET', default='')
+DISCORD_REDIRECT_URI  = config(
+    'DISCORD_REDIRECT_URI',
+    default=f"{SITE_URL.rstrip('/')}/api/auth/discord/callback/",
+)

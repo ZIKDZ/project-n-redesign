@@ -11,6 +11,7 @@ urlpatterns = [
 
     # API endpoints
     path('api/auth/', include('apps.joins.auth_urls')),
+    path('api/auth/discord/', include('apps.tournaments.discord_auth_urls')),
     path('api/joins/', include('apps.joins.urls')),
     path('api/matches/', include('apps.matches.urls')),
     path('api/news/', include('apps.news.urls')),
@@ -19,6 +20,7 @@ urlpatterns = [
     path('api/games/', include('apps.games.urls')),
     path('api/spotlight/', include('apps.spotlight.urls')),
     path('api/shop/', include('apps.shop.urls')),
+    path('api/tournaments/', include('apps.tournaments.urls')),
 ]
 
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
