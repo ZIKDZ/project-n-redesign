@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { tournaments as tournamentsApi, discordAuth } from "../utils/api";
 import Footer from "../components/footer";
+
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Placement {
@@ -132,6 +133,18 @@ function BracketView({ slug, color }: { slug: string; color: string }) {
   const [matches, setMatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Pan & Zoom state
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const matchRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [scale, setScale] = useState(1);
+  const [lines, setLines] = useState<string[]>([]);
+
+  const isDragging = useRef(false);
+  const lastMouse = useRef({ x: 0, y: 0 });
+
   useEffect(() => {
     setLoading(true);
     (tournamentsApi.bracket(slug) as Promise<any>)
@@ -139,6 +152,148 @@ function BracketView({ slug, color }: { slug: string; color: string }) {
       .catch(() => setMatches([]))
       .finally(() => setLoading(false));
   }, [slug]);
+
+  // ── Process Matches ──────────────────────────────────────────────────────
+  const { rounds, roundNumbers, totalRounds } = useMemo(() => {
+    const r: Record<number, any[]> = {};
+    matches.forEach(m => {
+      (r[m.round_number] ||= []).push(m);
+    });
+    Object.values(r).forEach(list =>
+      list.sort((a, b) => a.position - b.position)
+    );
+    const nums = Object.keys(r).map(Number).sort((a, b) => a - b);
+    return { rounds: r, roundNumbers: nums, totalRounds: nums.length };
+  }, [matches]);
+
+  // ── Shared slot computation ──────────────────────────────────────────────
+  // Single source of truth for "which slot index holds a real match" —
+  // used by BOTH the line-drawing effect and the column rendering below,
+  // so they can never disagree.
+  const roundSlots = useMemo(() => {
+    return roundNumbers.map((r, rIndex) => {
+      const expectedSlots = Math.max(
+        rounds[r].length,
+        Math.pow(2, totalRounds - rIndex - 1)
+      );
+
+      const slots: (any | null)[] = Array.from(
+        { length: expectedSlots },
+        () => null
+      );
+      const hasZero = rounds[r].some(m => m.position === 0);
+      const offset = hasZero ? 0 : 1;
+
+      rounds[r].forEach(m => {
+        if (typeof m.position === "number") {
+          const idx = m.position - offset;
+          if (idx >= 0 && idx < expectedSlots && !slots[idx]) {
+            slots[idx] = m;
+            return;
+          }
+        }
+        const emptyIdx = slots.findIndex(s => s === null);
+        if (emptyIdx !== -1) slots[emptyIdx] = m;
+      });
+
+      return slots;
+    });
+  }, [rounds, roundNumbers, totalRounds]);
+
+  // ── Zoom Handler (Native Event to Prevent Scrolling) ─────────────────────
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const zoomSpeed = 0.0015;
+      const delta = -e.deltaY * zoomSpeed;
+      setScale(prev => Math.min(Math.max(0.3, prev + delta), 2.5));
+    };
+
+    wrapper.addEventListener("wheel", handleWheel, { passive: false });
+    return () => wrapper.removeEventListener("wheel", handleWheel);
+  }, [matches]);
+
+
+  // ── Line Drawing Logic ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (matches.length === 0) return;
+
+    const drawLines = () => {
+      if (!containerRef.current) return;
+      const newLines: string[] = [];
+
+      for (let rIndex = 0; rIndex < totalRounds - 1; rIndex++) {
+        const slots = roundSlots[rIndex];
+        const nextSlots = roundSlots[rIndex + 1];
+        if (!slots || !nextSlots) continue;
+
+        slots.forEach((match, i) => {
+          // 🚫 Never draw from a placeholder slot
+          if (!match) return;
+
+          const nextMatch = nextSlots[Math.floor(i / 2)];
+          // 🚫 Never draw into a placeholder slot either
+          if (!nextMatch) return;
+
+          const el = matchRefs.current[`${rIndex}-${i}`];
+          const nextEl = matchRefs.current[`${rIndex + 1}-${Math.floor(i / 2)}`];
+          if (!el || !nextEl) return;
+
+          // offsetLeft/offsetTop are relative to containerRef because no
+          // intermediate ancestor (round column, match card) has
+          // `position: relative` — so SVG and cards share one coordinate space.
+          const x1 = el.offsetLeft + el.offsetWidth;
+          const y1 = el.offsetTop + el.offsetHeight / 2;
+          const x2 = nextEl.offsetLeft;
+          const y2 = nextEl.offsetTop + nextEl.offsetHeight / 2;
+          const midX = x1 + (x2 - x1) / 2;
+
+          // Step path: Right -> Up/Down -> Right
+          newLines.push(
+            `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`
+          );
+        });
+      }
+      setLines(newLines);
+    };
+
+    drawLines();
+
+    // Use ResizeObserver so lines automatically correct if layout shifts
+    const obs = new ResizeObserver(drawLines);
+    if (containerRef.current) obs.observe(containerRef.current);
+    return () => obs.disconnect();
+  }, [matches, roundSlots, totalRounds]);
+
+  // ── Pan Handlers ─────────────────────────────────────────────────────────
+  const onMouseDown = (e: React.MouseEvent) => {
+    isDragging.current = true;
+    lastMouse.current = { x: e.clientX, y: e.clientY };
+    if (wrapperRef.current) wrapperRef.current.style.cursor = "grabbing";
+  };
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging.current) return;
+    const dx = e.clientX - lastMouse.current.x;
+    const dy = e.clientY - lastMouse.current.y;
+    lastMouse.current = { x: e.clientX, y: e.clientY };
+    setPan(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+  };
+  const onMouseUpOrLeave = () => {
+    isDragging.current = false;
+    if (wrapperRef.current) wrapperRef.current.style.cursor = "grab";
+  };
+
+  const roundLabel = (r: number) => {
+    if (r === totalRounds)     return "Final";
+    if (r === totalRounds - 1) return "Semifinals";
+    if (r === totalRounds - 2) return "Quarterfinals";
+    return `Round ${r}`;
+  };
+
+  const name = (p: any) => (p ? p.display_name : "TBD");
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
@@ -165,85 +320,112 @@ function BracketView({ slug, color }: { slug: string; color: string }) {
     );
   }
 
-  // ── Round grouping ───────────────────────────────────────────────────────
-  const rounds: Record<number, any[]> = {};
-  matches.forEach(m => {
-    (rounds[m.round_number] ||= []).push(m);
-  });
-  Object.values(rounds).forEach(list =>
-    list.sort((a, b) => a.position - b.position)
-  );
-  const roundNumbers = Object.keys(rounds)
-    .map(Number)
-    .sort((a, b) => a - b);
-  const totalRounds = roundNumbers.length;
-
-  const roundLabel = (r: number) => {
-    if (r === totalRounds)     return "Final";
-    if (r === totalRounds - 1) return "Semifinals";
-    if (r === totalRounds - 2) return "Quarterfinals";
-    return `Round ${r}`;
-  };
-
-  const name = (p: any) => (p ? p.display_name : "TBD");
-
-  // ── Bracket columns ──────────────────────────────────────────────────────
+  // ── Render Interactive Bracket ───────────────────────────────────────────
   return (
-    <div className="flex gap-8 overflow-x-auto pb-4">
-      {roundNumbers.map(r => (
-        <div
-          key={r}
-          className="flex flex-col gap-6 shrink-0"
-          style={{ minWidth: 220 }}
+    <div
+      ref={wrapperRef}
+      className="overflow-hidden rounded-2xl border border-white/10 relative bg-white/5"
+      style={{ height: "650px", cursor: "grab", touchAction: "none" }}
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUpOrLeave}
+      onMouseLeave={onMouseUpOrLeave}
+    >
+      <div
+        ref={containerRef}
+        className="flex gap-12 w-max relative p-12 origin-top-left"
+        style={{
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+        }}
+      >
+        {/* SVG Overlay for Connection Lines */}
+        <svg
+          className="absolute inset-0 pointer-events-none z-0"
+          style={{ width: "100%", height: "100%", overflow: "visible" }}
         >
-          {/* Round label */}
-          <p className="text-white/35 text-xs font-black tracking-widest uppercase text-center">
-            {roundLabel(r)}
-          </p>
+          {lines.map((path, i) => (
+            <path
+              key={i}
+              d={path}
+              fill="none"
+              stroke={color}
+              strokeWidth="2"
+              strokeOpacity="0.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          ))}
+        </svg>
 
-          {/* Matches */}
-          <div className="flex flex-col justify-around flex-1 gap-6">
-            {rounds[r].map((m: any) => (
-              <div
-                key={m.id}
-                className="rounded-xl border overflow-hidden"
-                style={{
-                  borderColor: "rgba(255,255,255,0.1)",
-                  background:  "rgba(255,255,255,0.03)",
-                }}
-              >
-                {(["participant_a", "participant_b"] as const).map(key => {
-                  const p        = m[key];
-                  const isWinner =
-                    m.winner_id && p && m.winner_id === p.id;
+        {/* Bracket Columns */}
+        {roundNumbers.map((r, rIndex) => {
+          const slots = roundSlots[rIndex];
+
+          return (
+            // NOTE: no `relative` here — it would make this column the
+            // offsetParent for the match cards and break line coordinates.
+            // z-10 still works because flex items accept z-index even
+            // with position: static.
+            <div
+              key={r}
+              className="flex flex-col gap-6 shrink-0 z-10"
+              style={{ minWidth: 220 }}
+            >
+              <p className="text-white/35 text-xs font-black tracking-widest uppercase text-center mb-2">
+                {roundLabel(r)}
+              </p>
+
+              <div className="flex flex-col justify-around flex-1 gap-6">
+                {slots.map((m, idx) => {
+                  const isPlaceholder = !m;
+                  const matchData = m || { id: `empty-${rIndex}-${idx}` };
 
                   return (
                     <div
-                      key={key}
-                      className="px-4 py-2.5 text-sm flex items-center justify-between gap-2 border-b last:border-0"
+                      key={matchData.id}
+                      ref={(el) => { matchRefs.current[`${rIndex}-${idx}`] = el; }}
+                      className={`rounded-xl border overflow-hidden ${
+                        isPlaceholder ? "opacity-0 pointer-events-none" : ""
+                      }`}
                       style={{
-                        borderColor: "rgba(255,255,255,0.06)",
-                        color:       isWinner ? color : "rgba(255,255,255,0.55)",
-                        fontWeight:  isWinner ? 700 : 500,
-                        background:  isWinner ? `${color}12` : "transparent",
+                        borderColor: "rgba(255,255,255,0.1)",
+                        background: "rgba(255,255,255,0.03)",
                       }}
                     >
-                      <span className="truncate">{name(p)}</span>
-                      {isWinner && <span style={{ color }}>✓</span>}
+                      {(["participant_a", "participant_b"] as const).map(key => {
+                        const p = matchData[key];
+                        const isWinner = matchData.winner_id && p && matchData.winner_id === p.id;
+
+                        return (
+                          <div
+                            key={key}
+                            className="px-4 py-2.5 text-sm flex items-center justify-between gap-2 border-b last:border-0"
+                            style={{
+                              borderColor: "rgba(255,255,255,0.06)",
+                              color: isWinner ? color : "rgba(255,255,255,0.55)",
+                              fontWeight: isWinner ? 700 : 500,
+                              background: isWinner ? `${color}12` : "transparent",
+                            }}
+                          >
+                            <span className="truncate">{isPlaceholder ? "\u00A0" : name(p)}</span>
+                            {isWinner && <span style={{ color }}>✓</span>}
+                          </div>
+                        );
+                      })}
+
+                      {matchData.status === "bye" && (
+                        <p className="text-[10px] text-white/20 text-center py-1 tracking-widest uppercase">
+                          Bye
+                        </p>
+                      )}
                     </div>
                   );
                 })}
-
-                {m.status === "bye" && (
-                  <p className="text-[10px] text-white/20 text-center py-1 tracking-widest uppercase">
-                    Bye
-                  </p>
-                )}
               </div>
-            ))}
-          </div>
-        </div>
-      ))}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
