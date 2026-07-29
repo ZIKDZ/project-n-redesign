@@ -16,7 +16,6 @@ def _seed_order(size):
 
 
 def generate_bracket(tournament):
-    """(Re)builds the full match tree for a tournament from its active participants."""
     participants = list(
         tournament.participants
         .exclude(status__in=['withdrawn', 'disqualified'])
@@ -31,39 +30,37 @@ def generate_bracket(tournament):
         size *= 2
 
     order = _seed_order(size)
-    slots = [None] * size
-    for i, seed_pos in enumerate(order):
-        if seed_pos <= n:
-            slots[i] = participants[seed_pos - 1]
+    slots = [participants[s - 1] if s <= n else None for s in order]
 
-    # Wipe any previous bracket for this tournament before rebuilding.
     tournament.matches.all().delete()
 
-    num_rounds = size.bit_length() - 1
-
-    round1 = []
+    # Each entry is what feeds one slot of the next round:
+    # a Match (winner advances) or a Participant (bye, walks straight in).
+    entries = []
     for pos in range(size // 2):
-        m = Match.objects.create(
-            tournament=tournament, round_number=1, position=pos + 1,
-            participant_a=slots[2 * pos], participant_b=slots[2 * pos + 1],
-        )
-        round1.append(m)
+        a, b = slots[2 * pos], slots[2 * pos + 1]
+        if a and b:
+            entries.append(Match.objects.create(
+                tournament=tournament, round_number=1, position=pos + 1,
+                participant_a=a, participant_b=b, status='ready',
+            ))
+        else:
+            entries.append(a or b)          # no match created
 
-    prev_round = round1
-    for r in range(2, num_rounds + 1):
-        this_round = []
-        for pos in range(len(prev_round) // 2):
-            this_round.append(Match.objects.create(tournament=tournament, round_number=r, position=pos + 1))
-        for i, pm in enumerate(prev_round):
-            nm = this_round[i // 2]
-            pm.next_match = nm
-            pm.next_match_slot = 'a' if i % 2 == 0 else 'b'
-            pm.save(update_fields=['next_match', 'next_match_slot'])
-        prev_round = this_round
-
-    # Auto-resolve first-round byes (and anything they cascade into).
-    for m in round1:
-        resolve_bye(m)
+    for r in range(2, size.bit_length()):
+        nxt = []
+        for pos in range(len(entries) // 2):
+            m = Match.objects.create(tournament=tournament, round_number=r, position=pos + 1)
+            for slot, e in (('a', entries[2 * pos]), ('b', entries[2 * pos + 1])):
+                if isinstance(e, Match):
+                    e.next_match, e.next_match_slot = m, slot
+                    e.save(update_fields=['next_match', 'next_match_slot'])
+                else:
+                    setattr(m, 'participant_' + slot, e)
+            m.status = 'ready' if (m.participant_a_id and m.participant_b_id) else 'pending'
+            m.save(update_fields=['participant_a', 'participant_b', 'status'])
+            nxt.append(m)
+        entries = nxt
 
     if tournament.status == 'closed':
         tournament.status = 'in_progress'
@@ -73,30 +70,32 @@ def generate_bracket(tournament):
 def resolve_bye(match):
     has_a = match.participant_a_id is not None
     has_b = match.participant_b_id is not None
-    if has_a and not has_b:
-        set_winner(match, match.participant_a)
-    elif has_b and not has_a:
-        set_winner(match, match.participant_b)
-    elif not has_a and not has_b:
-        match.status = 'pending'
-        match.save(update_fields=['status'])
-    else:
+
+    if has_a and has_b:
         match.status = 'ready'
+        match.save(update_fields=['status'])
+    elif (has_a and not has_b
+          and not Match.objects.filter(next_match=match, next_match_slot='b').exists()):
+        # Slot B is empty AND no feeder match will ever fill it → true bye
+        set_winner(match, match.participant_a)
+    elif (has_b and not has_a
+          and not Match.objects.filter(next_match=match, next_match_slot='a').exists()):
+        set_winner(match, match.participant_b)
+    else:
+        # Either both empty, or an empty slot is waiting on a feeder → just wait
+        match.status = 'pending'
         match.save(update_fields=['status'])
 
 
 def set_winner(match, winner):
     match.winner = winner
-    match.status = 'bye' if (not match.participant_a_id or not match.participant_b_id) else 'completed'
+    match.status = 'completed'
     match.save(update_fields=['winner', 'status'])
     if match.next_match_id:
         nm = match.next_match
-        if match.next_match_slot == 'a':
-            nm.participant_a = winner
-        else:
-            nm.participant_b = winner
-        nm.save(update_fields=['participant_a', 'participant_b'])
-        resolve_bye(nm)
+        setattr(nm, 'participant_' + match.next_match_slot, winner)
+        nm.status = 'ready' if (nm.participant_a_id and nm.participant_b_id) else 'pending'
+        nm.save(update_fields=['participant_a', 'participant_b', 'status'])
 
 
 def clear_winner(match):

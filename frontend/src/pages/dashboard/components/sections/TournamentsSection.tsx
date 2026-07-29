@@ -713,7 +713,7 @@ function TournamentModal({
   const hideSaveFooter = tab === 'bracket'
 
   return (
-    <Modal size="md" onClose={onClose}>
+    <Modal size="xl" onClose={onClose}>
       <ModalHeader
         title={isEdit ? `Edit — ${initial.name}` : 'Create Tournament'}
         subtitle={
