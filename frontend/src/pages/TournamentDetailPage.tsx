@@ -36,11 +36,14 @@ interface TournamentDetail {
 
 const GAME_COLORS: Record<string, string> = {
   rocket_league: "#60b8ff",
-  valorant: "#ff7080",
-  fortnite: "#ffd700",
+  valorant:      "#ff7080",
+  fortnite:      "#ffd700",
 };
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string; dot?: boolean }> = {
+const STATUS_CONFIG: Record<
+  string,
+  { label: string; color: string; bg: string; border: string; dot?: boolean }
+> = {
   open:        { label: "Registration Open",   color: "#34d399", bg: "rgba(52,211,153,0.15)",  border: "rgba(52,211,153,0.3)",  dot: true },
   closed:      { label: "Registration Closed", color: "#fbbf24", bg: "rgba(251,191,36,0.15)",  border: "rgba(251,191,36,0.3)"              },
   in_progress: { label: "Live",                color: "#f87171", bg: "rgba(248,113,113,0.15)", border: "rgba(248,113,113,0.3)", dot: true },
@@ -73,7 +76,13 @@ function TextBlock({ text }: { text: string }) {
   );
 }
 
-function CountdownStrip({ deadline, color }: { deadline: string | null; color: string }) {
+function CountdownStrip({
+  deadline,
+  color,
+}: {
+  deadline: string | null;
+  color: string;
+}) {
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -91,10 +100,24 @@ function CountdownStrip({ deadline, color }: { deadline: string | null; color: s
   return (
     <div
       className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold tracking-wide"
-      style={{ background: `${color}15`, color, border: `1px solid ${color}30` }}
+      style={{
+        background: `${color}15`,
+        color,
+        border: `1px solid ${color}30`,
+      }}
     >
-      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <svg
+        className="w-3.5 h-3.5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
       </svg>
       {days > 0
         ? `${days}d ${hours}h left to register`
@@ -103,8 +126,129 @@ function CountdownStrip({ deadline, color }: { deadline: string | null; color: s
   );
 }
 
+// ── BracketView ────────────────────────────────────────────────────────────────
+
+function BracketView({ slug, color }: { slug: string; color: string }) {
+  const [matches, setMatches] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    (tournamentsApi.bracket(slug) as Promise<any>)
+      .then(r => setMatches(r.matches || []))
+      .catch(() => setMatches([]))
+      .finally(() => setLoading(false));
+  }, [slug]);
+
+  // ── Loading ──────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="flex justify-center py-16">
+        <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // ── Empty ────────────────────────────────────────────────────────────────
+  if (matches.length === 0) {
+    return (
+      <div
+        className="rounded-2xl border border-dashed border-white/10 p-10 text-center"
+        style={{ background: "rgba(255,255,255,0.02)" }}
+      >
+        <div className="text-4xl mb-4 opacity-20">🗓</div>
+        <p className="text-white/35 text-sm max-w-sm mx-auto">
+          The bracket hasn't been generated yet. Check back once registration
+          closes.
+        </p>
+      </div>
+    );
+  }
+
+  // ── Round grouping ───────────────────────────────────────────────────────
+  const rounds: Record<number, any[]> = {};
+  matches.forEach(m => {
+    (rounds[m.round_number] ||= []).push(m);
+  });
+  Object.values(rounds).forEach(list =>
+    list.sort((a, b) => a.position - b.position)
+  );
+  const roundNumbers = Object.keys(rounds)
+    .map(Number)
+    .sort((a, b) => a - b);
+  const totalRounds = roundNumbers.length;
+
+  const roundLabel = (r: number) => {
+    if (r === totalRounds)     return "Final";
+    if (r === totalRounds - 1) return "Semifinals";
+    if (r === totalRounds - 2) return "Quarterfinals";
+    return `Round ${r}`;
+  };
+
+  const name = (p: any) => (p ? p.display_name : "TBD");
+
+  // ── Bracket columns ──────────────────────────────────────────────────────
+  return (
+    <div className="flex gap-8 overflow-x-auto pb-4">
+      {roundNumbers.map(r => (
+        <div
+          key={r}
+          className="flex flex-col gap-6 shrink-0"
+          style={{ minWidth: 220 }}
+        >
+          {/* Round label */}
+          <p className="text-white/35 text-xs font-black tracking-widest uppercase text-center">
+            {roundLabel(r)}
+          </p>
+
+          {/* Matches */}
+          <div className="flex flex-col justify-around flex-1 gap-6">
+            {rounds[r].map((m: any) => (
+              <div
+                key={m.id}
+                className="rounded-xl border overflow-hidden"
+                style={{
+                  borderColor: "rgba(255,255,255,0.1)",
+                  background:  "rgba(255,255,255,0.03)",
+                }}
+              >
+                {(["participant_a", "participant_b"] as const).map(key => {
+                  const p        = m[key];
+                  const isWinner =
+                    m.winner_id && p && m.winner_id === p.id;
+
+                  return (
+                    <div
+                      key={key}
+                      className="px-4 py-2.5 text-sm flex items-center justify-between gap-2 border-b last:border-0"
+                      style={{
+                        borderColor: "rgba(255,255,255,0.06)",
+                        color:       isWinner ? color : "rgba(255,255,255,0.55)",
+                        fontWeight:  isWinner ? 700 : 500,
+                        background:  isWinner ? `${color}12` : "transparent",
+                      }}
+                    >
+                      <span className="truncate">{name(p)}</span>
+                      {isWinner && <span style={{ color }}>✓</span>}
+                    </div>
+                  );
+                })}
+
+                {m.status === "bye" && (
+                  <p className="text-[10px] text-white/20 text-center py-1 tracking-widest uppercase">
+                    Bye
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Registration Panel ─────────────────────────────────────────────────────────
-// Now much simpler: complex team management lives on /tournaments/:slug/team
 
 function RegistrationPanel({
   t,
@@ -123,12 +267,12 @@ function RegistrationPanel({
   onChanged: () => void;
   onManageTeam: () => void;
 }) {
-  const [mode, setMode]           = useState<"idle" | "create" | "join">("idle");
-  const [teamName, setTeamName]   = useState("");
-  const [teamTag, setTeamTag]     = useState("");
+  const [mode, setMode]             = useState<"idle" | "create" | "join">("idle");
+  const [teamName, setTeamName]     = useState("");
+  const [teamTag, setTeamTag]       = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError]         = useState("");
+  const [error, setError]           = useState("");
 
   const inputClass =
     "w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white text-sm " +
@@ -151,7 +295,7 @@ function RegistrationPanel({
     }
   };
 
-  // ── Registration closed / tournament ended ─────────────────────────────────
+  // ── Registration closed / tournament ended ─────────────────────────────
   if (!t.registration_open) {
     return (
       <button
@@ -164,7 +308,7 @@ function RegistrationPanel({
     );
   }
 
-  // ── Not signed in ──────────────────────────────────────────────────────────
+  // ── Not signed in ────────────────────────────────────────────────────────
   if (!player) {
     return (
       <button
@@ -178,7 +322,7 @@ function RegistrationPanel({
     );
   }
 
-  // ── Loading registration status ────────────────────────────────────────────
+  // ── Loading registration status ──────────────────────────────────────────
   if (regLoading) {
     return (
       <div className="flex justify-center py-3">
@@ -187,13 +331,16 @@ function RegistrationPanel({
     );
   }
 
-  // ── Already registered (solo) ──────────────────────────────────────────────
+  // ── Already registered (solo) ────────────────────────────────────────────
   if (myReg?.kind === "solo") {
     return (
       <div className="space-y-3">
         <div
           className="rounded-2xl border p-4 text-center"
-          style={{ background: "rgba(52,211,153,0.06)", borderColor: "rgba(52,211,153,0.25)" }}
+          style={{
+            background:   "rgba(52,211,153,0.06)",
+            borderColor:  "rgba(52,211,153,0.25)",
+          }}
         >
           <p className="text-green-400 font-black text-sm tracking-widest uppercase">
             You're registered!
@@ -211,21 +358,24 @@ function RegistrationPanel({
           {submitting ? "Withdrawing…" : "Withdraw"}
         </button>
 
-        {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+        {error && (
+          <p className="text-red-400 text-xs text-center">{error}</p>
+        )}
       </div>
     );
   }
 
-  // ── Already on a team → show summary + "Manage Your Team" button ───────────
+  // ── Already on a team ────────────────────────────────────────────────────
   if (myReg?.kind === "team") {
     const team = myReg.team;
-
     return (
       <div className="space-y-3">
-        {/* Compact team summary */}
         <div
           className="rounded-2xl border p-4 space-y-1"
-          style={{ background: "rgba(52,211,153,0.06)", borderColor: "rgba(52,211,153,0.25)" }}
+          style={{
+            background:  "rgba(52,211,153,0.06)",
+            borderColor: "rgba(52,211,153,0.25)",
+          }}
         >
           <p className="text-green-400 font-black text-sm tracking-widest uppercase">
             On team {team.name}
@@ -236,7 +386,6 @@ function RegistrationPanel({
           </p>
         </div>
 
-        {/* Navigate to the dedicated team management page */}
         <button
           onClick={onManageTeam}
           className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-3.5 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/30 hover:-translate-y-0.5 cursor-pointer"
@@ -245,12 +394,14 @@ function RegistrationPanel({
           Manage Your Team
         </button>
 
-        {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+        {error && (
+          <p className="text-red-400 text-xs text-center">{error}</p>
+        )}
       </div>
     );
   }
 
-  // ── Not registered yet — solo ──────────────────────────────────────────────
+  // ── Not registered yet — solo ────────────────────────────────────────────
   if (t.format === "solo") {
     return (
       <div className="space-y-2">
@@ -262,12 +413,14 @@ function RegistrationPanel({
         >
           {submitting ? "Registering…" : "Register Now"}
         </button>
-        {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+        {error && (
+          <p className="text-red-400 text-xs text-center">{error}</p>
+        )}
       </div>
     );
   }
 
-  // ── Not registered yet — team: choose create or join ──────────────────────
+  // ── Not registered yet — team: choose create or join ────────────────────
   if (mode === "idle") {
     return (
       <div className="space-y-2">
@@ -289,7 +442,7 @@ function RegistrationPanel({
     );
   }
 
-  // ── Create team form ───────────────────────────────────────────────────────
+  // ── Create team form ─────────────────────────────────────────────────────
   if (mode === "create") {
     return (
       <div className="space-y-3">
@@ -333,7 +486,7 @@ function RegistrationPanel({
     );
   }
 
-  // ── Join team form ─────────────────────────────────────────────────────────
+  // ── Join team form ───────────────────────────────────────────────────────
   return (
     <div className="space-y-3">
       <input
@@ -345,7 +498,9 @@ function RegistrationPanel({
       {error && <p className="text-red-400 text-xs">{error}</p>}
       <div className="flex gap-2">
         <button
-          onClick={() => run(() => tournamentsApi.joinTeam(t.slug, inviteCode.trim()))}
+          onClick={() =>
+            run(() => tournamentsApi.joinTeam(t.slug, inviteCode.trim()))
+          }
           disabled={submitting || !inviteCode.trim()}
           className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-black py-2.5 rounded-xl text-xs tracking-widest uppercase transition-all cursor-pointer"
         >
@@ -365,15 +520,18 @@ function RegistrationPanel({
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function TournamentDetailPage() {
-  const { slug }   = useParams<{ slug: string }>();
-  const navigate   = useNavigate();
+  const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
 
-  const [t, setT]             = useState<TournamentDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [t, setT]               = useState<TournamentDetail | null>(null);
+  const [loading, setLoading]   = useState(true);
   const [scrolled, setScrolled] = useState(false);
-  const [tab, setTab]         = useState<"overview" | "rules" | "bracket">("overview");
-  const [player, setPlayer]   = useState<{ discord_username: string; discord_avatar: string } | null>(null);
-  const [myReg, setMyReg]     = useState<any>(null);
+  const [tab, setTab]           = useState<"overview" | "rules" | "bracket">("overview");
+  const [player, setPlayer]     = useState<{
+    discord_username: string;
+    discord_avatar: string;
+  } | null>(null);
+  const [myReg, setMyReg]           = useState<any>(null);
   const [regLoading, setRegLoading] = useState(true);
 
   // Scroll shadow on navbar
@@ -422,21 +580,30 @@ export default function TournamentDetailPage() {
   if (!t) return null;
 
   // ── Derived values ─────────────────────────────────────────────────────────
-  const color           = GAME_COLORS[t.game || ""] || "#a855f7";
-  const sc              = STATUS_CONFIG[t.status] || STATUS_CONFIG.closed;
-  const sortedPlacements = [...t.placements].sort((a, b) => a.display_order - b.display_order);
+  const color            = GAME_COLORS[t.game || ""] || "#a855f7";
+  const sc               = STATUS_CONFIG[t.status]   || STATUS_CONFIG.closed;
+  const sortedPlacements = [...t.placements].sort(
+    (a, b) => a.display_order - b.display_order
+  );
 
   const fmtDate = (d: string | null) => {
     if (!d) return null;
     try {
       return new Date(d).toLocaleDateString("en-GB", {
-        day: "numeric", month: "short", year: "numeric",
-        hour: "2-digit", minute: "2-digit",
+        day:    "numeric",
+        month:  "short",
+        year:   "numeric",
+        hour:   "2-digit",
+        minute: "2-digit",
       });
-    } catch { return d; }
+    } catch {
+      return d;
+    }
   };
 
-  const handleSignIn   = () => { window.location.href = discordAuth.loginUrl(`/tournaments/${t.slug}`); };
+  const handleSignIn    = () => {
+    window.location.href = discordAuth.loginUrl(`/tournaments/${t.slug}`);
+  };
   const handleManageTeam = () => navigate(`/tournaments/${t.slug}/team`);
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -449,9 +616,9 @@ export default function TournamentDetailPage() {
       <nav
         className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
         style={{
-          background:    scrolled ? "rgba(13,0,20,0.95)" : "transparent",
-          backdropFilter: scrolled ? "blur(14px)" : "none",
-          boxShadow:     scrolled ? "0 1px 0 rgba(255,255,255,0.06)" : "none",
+          background:     scrolled ? "rgba(13,0,20,0.95)" : "transparent",
+          backdropFilter: scrolled ? "blur(14px)"          : "none",
+          boxShadow:      scrolled ? "0 1px 0 rgba(255,255,255,0.06)" : "none",
         }}
       >
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-4">
@@ -461,9 +628,16 @@ export default function TournamentDetailPage() {
           >
             <svg
               className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
-              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2.5}
             >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M15 19l-7-7 7-7"
+              />
             </svg>
             Tournaments
           </button>
@@ -481,13 +655,19 @@ export default function TournamentDetailPage() {
             {player ? (
               <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full pl-1 pr-3 py-1">
                 {player.discord_avatar ? (
-                  <img src={player.discord_avatar} className="w-6 h-6 rounded-full" alt="" />
+                  <img
+                    src={player.discord_avatar}
+                    className="w-6 h-6 rounded-full"
+                    alt=""
+                  />
                 ) : (
                   <div className="w-6 h-6 rounded-full bg-indigo-500/30 flex items-center justify-center">
                     <DiscordIcon className="w-3 h-3 text-indigo-300" />
                   </div>
                 )}
-                <span className="text-white/70 text-xs font-semibold">{player.discord_username}</span>
+                <span className="text-white/70 text-xs font-semibold">
+                  {player.discord_username}
+                </span>
               </div>
             ) : (
               <button
@@ -506,25 +686,31 @@ export default function TournamentDetailPage() {
       <div className="relative" style={{ minHeight: "380px" }}>
         {t.banner ? (
           <img
-            src={t.banner} alt=""
+            src={t.banner}
+            alt=""
             className="absolute inset-0 w-full h-full object-cover"
             style={{ opacity: 0.3 }}
           />
         ) : (
           <div
             className="absolute inset-0"
-            style={{ background: `radial-gradient(ellipse at 60% 30%, ${color}22 0%, transparent 65%)` }}
+            style={{
+              background: `radial-gradient(ellipse at 60% 30%, ${color}22 0%, transparent 65%)`,
+            }}
           />
         )}
         <div
           className="absolute inset-0"
-          style={{ background: "linear-gradient(to bottom, rgba(13,0,20,0.5) 0%, rgba(13,0,20,0.2) 40%, rgba(13,0,20,1) 100%)" }}
+          style={{
+            background:
+              "linear-gradient(to bottom, rgba(13,0,20,0.5) 0%, rgba(13,0,20,0.2) 40%, rgba(13,0,20,1) 100%)",
+          }}
         />
         <div
           className="absolute inset-0 opacity-[0.04]"
           style={{
             backgroundImage: `linear-gradient(${color} 1px, transparent 1px), linear-gradient(90deg, ${color} 1px, transparent 1px)`,
-            backgroundSize: "50px 50px",
+            backgroundSize:  "50px 50px",
           }}
         />
 
@@ -533,7 +719,11 @@ export default function TournamentDetailPage() {
           <div className="flex items-center gap-3 mb-5 flex-wrap">
             <span
               className="inline-flex items-center gap-1.5 text-xs font-black tracking-widest uppercase px-3 py-1.5 rounded-full"
-              style={{ background: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}
+              style={{
+                background: sc.bg,
+                color:      sc.color,
+                border:     `1px solid ${sc.border}`,
+              }}
             >
               {sc.dot && (
                 <span
@@ -545,7 +735,11 @@ export default function TournamentDetailPage() {
             </span>
             <span
               className="text-xs font-bold tracking-widest uppercase px-3 py-1.5 rounded-full"
-              style={{ background: `${color}18`, color, border: `1px solid ${color}35` }}
+              style={{
+                background: `${color}18`,
+                color,
+                border:     `1px solid ${color}35`,
+              }}
             >
               {t.game_title || "Multi-Game"}
             </span>
@@ -612,6 +806,8 @@ export default function TournamentDetailPage() {
 
           {/* Main column */}
           <div className="md:col-span-2">
+
+            {/* ── Overview tab ── */}
             {tab === "overview" && (
               <div className="space-y-10">
                 {sortedPlacements.length > 0 && (
@@ -628,7 +824,9 @@ export default function TournamentDetailPage() {
                           key={p.id}
                           className="flex items-center justify-between bg-white/5 border border-white/8 rounded-xl px-5 py-3.5"
                         >
-                          <span className="text-white font-bold text-sm">{p.placement}</span>
+                          <span className="text-white font-bold text-sm">
+                            {p.placement}
+                          </span>
                           <span className="text-yellow-400/90 text-sm font-semibold">
                             {p.reward_text || "—"}
                           </span>
@@ -652,6 +850,7 @@ export default function TournamentDetailPage() {
               </div>
             )}
 
+            {/* ── Rules tab ── */}
             {tab === "rules" && (
               <div className="space-y-10">
                 <div>
@@ -661,10 +860,13 @@ export default function TournamentDetailPage() {
                   >
                     Rules
                   </h3>
-                  {t.rules
-                    ? <TextBlock text={t.rules} />
-                    : <p className="text-white/25 text-sm">No rules published yet.</p>
-                  }
+                  {t.rules ? (
+                    <TextBlock text={t.rules} />
+                  ) : (
+                    <p className="text-white/25 text-sm">
+                      No rules published yet.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <h3
@@ -673,43 +875,31 @@ export default function TournamentDetailPage() {
                   >
                     Entry Requirements
                   </h3>
-                  {t.requirements
-                    ? <TextBlock text={t.requirements} />
-                    : <p className="text-white/25 text-sm">No specific requirements — everyone's welcome.</p>
-                  }
+                  {t.requirements ? (
+                    <TextBlock text={t.requirements} />
+                  ) : (
+                    <p className="text-white/25 text-sm">
+                      No specific requirements — everyone's welcome.
+                    </p>
+                  )}
                 </div>
               </div>
             )}
 
+            {/* ── Bracket tab ── */}
             {tab === "bracket" && (
               <div>
                 <h3
-                  className="text-white font-black text-lg uppercase tracking-wide mb-4"
+                  className="text-white font-black text-lg uppercase tracking-wide mb-6"
                   style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
                 >
                   Bracket
                 </h3>
-                {t.status === "draft" || t.status === "open" ? (
-                  <div
-                    className="rounded-2xl border border-dashed border-white/10 p-10 text-center"
-                    style={{ background: "rgba(255,255,255,0.02)" }}
-                  >
-                    <div className="text-4xl mb-4 opacity-20">🗓</div>
-                    <p className="text-white/35 text-sm max-w-sm mx-auto">
-                      The bracket will be generated once registration closes and seeding is finalised.
-                    </p>
-                  </div>
-                ) : (
-                  <div
-                    className="rounded-2xl border border-white/10 p-10 text-center"
-                    style={{ background: "rgba(255,255,255,0.02)" }}
-                  >
-                    <div className="text-4xl mb-4 opacity-20">🏗️</div>
-                    <p className="text-white/35 text-sm max-w-sm mx-auto">
-                      Bracket viewer is coming in the next update — check back soon to follow the matches live.
-                    </p>
-                  </div>
-                )}
+                {/*
+                  BracketView handles all internal states (loading / empty /
+                  populated) so no extra guards are needed here.
+                */}
+                <BracketView slug={t.slug} color={color} />
               </div>
             )}
           </div>
@@ -738,23 +928,31 @@ export default function TournamentDetailPage() {
                 {t.format === "team" && t.team_size && (
                   <div className="flex items-center justify-between">
                     <span className="text-white/35">Team size</span>
-                    <span className="text-white/70 font-semibold">{t.team_size} players</span>
+                    <span className="text-white/70 font-semibold">
+                      {t.team_size} players
+                    </span>
                   </div>
                 )}
                 <div className="flex items-center justify-between">
                   <span className="text-white/35">Bracket</span>
-                  <span className="text-white/70 font-semibold">Single Elimination</span>
+                  <span className="text-white/70 font-semibold">
+                    Single Elimination
+                  </span>
                 </div>
                 {t.start_date && (
                   <div className="flex items-center justify-between">
                     <span className="text-white/35">Starts</span>
-                    <span className="text-white/70 font-semibold">{fmtDate(t.start_date)}</span>
+                    <span className="text-white/70 font-semibold">
+                      {fmtDate(t.start_date)}
+                    </span>
                   </div>
                 )}
                 {t.registration_deadline && (
                   <div className="flex items-center justify-between">
                     <span className="text-white/35">Registration closes</span>
-                    <span className="text-white/70 font-semibold">{fmtDate(t.registration_deadline)}</span>
+                    <span className="text-white/70 font-semibold">
+                      {fmtDate(t.registration_deadline)}
+                    </span>
                   </div>
                 )}
                 {t.max_participants && (
@@ -778,7 +976,8 @@ export default function TournamentDetailPage() {
               />
 
               <p className="text-white/20 text-[10px] mt-3 text-center leading-relaxed">
-                We only use your Discord identity to contact you about this tournament.
+                We only use your Discord identity to contact you about this
+                tournament.
               </p>
             </div>
           </div>

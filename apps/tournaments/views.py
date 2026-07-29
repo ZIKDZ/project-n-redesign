@@ -4,6 +4,8 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.utils.text import slugify
 from django.views.decorators.http import require_http_methods
+from .models import Tournament, Placement, Participant, Match
+from .bracket_logic import generate_bracket, set_winner, clear_winner
 
 from .models import Tournament, Placement, Participant
 
@@ -292,3 +294,114 @@ def delete_participant(request, pk, participant_pk):
         return JsonResponse({'success': True})
     except Participant.DoesNotExist:
         return JsonResponse({'error': 'Not found'}, status=404)
+
+# ── Bracket ───────────────────────────────────────────────────────────────
+
+@require_http_methods(['GET'])
+def bracket_public(request, slug):
+    try:
+        tournament = Tournament.objects.get(slug=slug, status__in=PUBLIC_STATUSES)
+    except Tournament.DoesNotExist:
+        return JsonResponse({'error': 'Not found'}, status=404)
+    matches = tournament.matches.select_related(
+        'participant_a__player', 'participant_a__team',
+        'participant_b__player', 'participant_b__team',
+    ).all()
+    return JsonResponse({'matches': [m.to_dict() for m in matches]})
+
+
+@login_required
+@require_http_methods(['GET'])
+def bracket_staff(request, pk):
+    try:
+        tournament = Tournament.objects.get(pk=pk)
+    except Tournament.DoesNotExist:
+        return JsonResponse({'error': 'Not found'}, status=404)
+    matches = tournament.matches.select_related(
+        'participant_a__player', 'participant_a__team',
+        'participant_b__player', 'participant_b__team',
+    ).all()
+    return JsonResponse({'matches': [m.to_dict() for m in matches]})
+
+
+@login_required
+@require_http_methods(['POST'])
+def generate_bracket_view(request, pk):
+    try:
+        tournament = Tournament.objects.get(pk=pk)
+    except Tournament.DoesNotExist:
+        return JsonResponse({'error': 'Not found'}, status=404)
+    try:
+        generate_bracket(tournament)
+    except ValueError as e:
+        return JsonResponse({'error': str(e)}, status=400)
+    return JsonResponse({'matches': [m.to_dict() for m in tournament.matches.all()]})
+
+
+@login_required
+@require_http_methods(['DELETE'])
+def reset_bracket_view(request, pk):
+    try:
+        tournament = Tournament.objects.get(pk=pk)
+    except Tournament.DoesNotExist:
+        return JsonResponse({'error': 'Not found'}, status=404)
+    tournament.matches.all().delete()
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_http_methods(['PATCH'])
+def update_match_view(request, pk, match_pk):
+    try:
+        match = Match.objects.get(pk=match_pk, tournament_id=pk)
+    except Match.DoesNotExist:
+        return JsonResponse({'error': 'Not found'}, status=404)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    try:
+        for slot in ('a', 'b'):
+            key = f'participant_{slot}_id'
+            if key in data:
+                if match.status in ('completed', 'bye'):
+                    return JsonResponse(
+                        {'error': 'Cannot reassign a decided match — undo the result first.'}, status=400
+                    )
+                pid = data[key]
+                if pid is not None and not Participant.objects.filter(pk=pid, tournament_id=pk).exists():
+                    return JsonResponse({'error': 'Invalid participant for this tournament.'}, status=400)
+                setattr(match, f'participant_{slot}_id', pid or None)
+
+        if any(f'participant_{s}_id' in data for s in ('a', 'b')):
+            match.status = 'ready' if (match.participant_a_id and match.participant_b_id) else 'pending'
+            match.save(update_fields=['participant_a', 'participant_b', 'status'])
+
+        if 'score_a' in data or 'score_b' in data:
+            if 'score_a' in data:
+                match.score_a = data['score_a']
+            if 'score_b' in data:
+                match.score_b = data['score_b']
+            match.save(update_fields=['score_a', 'score_b'])
+
+        if 'scheduled_time' in data:
+            match.scheduled_time = data['scheduled_time'] or None
+            match.save(update_fields=['scheduled_time'])
+
+        if 'winner_id' in data:
+            winner_id = data['winner_id']
+            if winner_id is None:
+                clear_winner(match)
+            else:
+                if winner_id not in (match.participant_a_id, match.participant_b_id):
+                    return JsonResponse({'error': 'Winner must be one of the two participants.'}, status=400)
+                if not (match.participant_a_id and match.participant_b_id):
+                    return JsonResponse({'error': 'Both slots must be filled first.'}, status=400)
+                winner = Participant.objects.get(pk=winner_id)
+                set_winner(match, winner)
+
+        return JsonResponse(match.to_dict())
+    except ValueError as e:
+        return JsonResponse({'error': str(e)}, status=400)

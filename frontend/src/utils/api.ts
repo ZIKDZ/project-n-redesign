@@ -238,6 +238,20 @@ export const tournaments = {
   request(`/api/tournaments/${slug}/teams/transfer-captain/`, { method: 'POST', body: JSON.stringify({ player_id: playerId }) }),
   disbandTeam: (slug: string) =>
     request(`/api/tournaments/${slug}/teams/disband/`, { method: 'POST' }),
+
+  // Bracket — public
+  bracket: (slug: string) =>
+    request(`/api/tournaments/${slug}/bracket/`),
+
+  // Bracket — staff
+  listBracketStaff: (id: number) =>
+    request(`/api/tournaments/${id}/bracket/staff/`),
+  generateBracket: (id: number) =>
+    request(`/api/tournaments/${id}/bracket/generate/`, { method: 'POST' }),
+  resetBracket: (id: number) =>
+    request(`/api/tournaments/${id}/bracket/reset/`, { method: 'DELETE' }),
+  updateMatch: (id: number, matchId: number, data: object) =>
+    request(`/api/tournaments/${id}/bracket/matches/${matchId}/`, { method: 'PATCH', body: JSON.stringify(data) }),
 }
  
 // ── Discord auth (tournament players) ─────────────────────────────────────────

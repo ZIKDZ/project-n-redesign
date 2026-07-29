@@ -3,12 +3,6 @@ from . import views
 from . import registration_views
 
 urlpatterns = [
-    # ── IMPORTANT: literal/int paths must come before <slug:slug>/ ──
-    # Django matches top-to-bottom, and <slug:slug> matches almost any
-    # single path segment (including "all", "create", "5", etc). If
-    # <slug:slug> is listed first it silently swallows every staff route
-    # below it. Multi-segment slug routes (e.g. <slug:slug>/register/)
-    # don't collide either way since they're a different pattern shape.
 
     # Staff — Tournaments
     path('all/', views.list_tournaments_all, name='list-tournaments-all'),
@@ -43,6 +37,16 @@ urlpatterns = [
         name='delete-participant',
     ),
 
+    # Staff — Bracket
+    path('<int:pk>/bracket/staff/', views.bracket_staff, name='bracket-staff'),
+    path('<int:pk>/bracket/generate/', views.generate_bracket_view, name='bracket-generate'),
+    path('<int:pk>/bracket/reset/', views.reset_bracket_view, name='bracket-reset'),
+    path(
+        '<int:pk>/bracket/matches/<int:match_pk>/',
+        views.update_match_view,
+        name='bracket-update-match',
+    ),
+
     # Public — Registration (Discord-authenticated players)
     path('<slug:slug>/my-registration/', registration_views.my_registration, name='tournament-my-registration'),
     path('<slug:slug>/register/', registration_views.register_solo, name='tournament-register-solo'),
@@ -58,6 +62,9 @@ urlpatterns = [
     path('<slug:slug>/teams/kick/', registration_views.kick_member, name='tournament-team-kick'),
     path('<slug:slug>/teams/transfer-captain/', registration_views.transfer_captain, name='tournament-team-transfer-captain'),
     path('<slug:slug>/teams/disband/', registration_views.disband_team, name='tournament-team-disband'),
+
+    # Public — Bracket (read-only, visible to anyone)
+    path('<slug:slug>/bracket/', views.bracket_public, name='tournament-bracket-public'),
 
     # Public — slug catch-all LAST, so it only catches what's left over
     path('', views.list_tournaments, name='list-tournaments'),
