@@ -1,6 +1,7 @@
 import json
 
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q
 from django.http import JsonResponse
 from django.utils.text import slugify
 from django.views.decorators.http import require_http_methods
@@ -374,8 +375,22 @@ def update_match_view(request, pk, match_pk):
                         {'error': 'Cannot reassign a decided match — undo the result first.'}, status=400
                     )
                 pid = data[key]
-                if pid is not None and not Participant.objects.filter(pk=pid, tournament_id=pk).exists():
-                    return JsonResponse({'error': 'Invalid participant for this tournament.'}, status=400)
+                if pid is not None:
+                    if not Participant.objects.filter(pk=pid, tournament_id=pk).exists():
+                        return JsonResponse({'error': 'Invalid participant for this tournament.'}, status=400)
+                    # Bug B fix: a participant can only occupy one open slot at a
+                    # time across the whole bracket. Without this, drag-and-drop
+                    # can place the same participant into two different matches
+                    # simultaneously (client-side alone can't be trusted here).
+                    already_placed = Match.objects.filter(
+                        tournament_id=pk,
+                    ).filter(
+                        Q(participant_a_id=pid) | Q(participant_b_id=pid)
+                    ).exclude(pk=match.pk).exists()
+                    if already_placed:
+                        return JsonResponse(
+                            {'error': 'That participant is already placed in another match.'}, status=400
+                        )
                 setattr(match, f'participant_{slot}_id', pid or None)
 
         if any(f'participant_{s}_id' in data for s in ('a', 'b')):
@@ -400,8 +415,12 @@ def update_match_view(request, pk, match_pk):
             else:
                 if winner_id not in (match.participant_a_id, match.participant_b_id):
                     return JsonResponse({'error': 'Winner must be one of the two participants.'}, status=400)
-                if not (match.participant_a_id and match.participant_b_id):
-                    return JsonResponse({'error': 'Both slots must be filled first.'}, status=400)
+                # Bug A fix: a bye match legitimately has only ONE slot filled —
+                # the other will never be filled, so requiring both here made a
+                # bye's winner permanently un-redeclarable after Undo. The
+                # winner_id is already validated above as one of the match's
+                # actual participant ids, so there's nothing further to gain by
+                # also requiring both slots to be filled.
                 winner = Participant.objects.get(pk=winner_id)
                 set_winner(match, winner)
 

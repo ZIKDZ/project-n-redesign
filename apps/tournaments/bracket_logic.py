@@ -94,33 +94,39 @@ def _generate_single_elim(tournament) -> None:
     tournament.matches.all().delete()
 
     # ── Round 1 ───────────────────────────────────────────────────────────────
-    entries: list[Match | Participant | None] = []
+    # NOTE: every pairing gets a real Match, including byes (participant_b=None).
+    # A bye match auto-resolves below via resolve_bye() so it still advances
+    # its sole participant into round 2 — it just does so visibly, as a match
+    # the UI can render with a "Drop here" slot instead of vanishing.
+    entries: list[Match] = []
     for pos in range(size // 2):
         a, b = slots[2 * pos], slots[2 * pos + 1]
-        if a and b:
-            m = _make_match(
-                tournament, 'winners', 1, pos + 1,
-                participant_a=a, participant_b=b, status='ready',
-            )
-            entries.append(m)
-        else:
-            entries.append(a or b)   # bye — carry the participant forward
+        m = _make_match(
+            tournament, 'winners', 1, pos + 1,
+            participant_a=a, participant_b=b,
+            status='ready' if (a and b) else 'pending',
+        )
+        entries.append(m)
 
     # ── Subsequent rounds ─────────────────────────────────────────────────────
     r = 2
-    while len(entries) > 1:
+    rounds: list[list[Match]] = [entries]
+    while len(rounds[-1]) > 1:
+        prev = rounds[-1]
         nxt: list[Match] = []
-        for pos in range(len(entries) // 2):
+        for pos in range(len(prev) // 2):
             m = _make_match(tournament, 'winners', r, pos + 1)
-            for slot, e in (('a', entries[2 * pos]), ('b', entries[2 * pos + 1])):
-                if isinstance(e, Match):
-                    _link_winner(e, m, slot)
-                elif e is not None:
-                    setattr(m, f'participant_{slot}', e)
-            _set_status(m)
+            _link_winner(prev[2 * pos], m, 'a')
+            _link_winner(prev[2 * pos + 1], m, 'b')
             nxt.append(m)
-        entries = nxt
+        rounds.append(nxt)
         r += 1
+
+    # Resolve byes now that next_match links exist, so the lone participant
+    # is pushed into round 2 (and status reflects that).
+    for m in rounds[0]:
+        if bool(m.participant_a_id) != bool(m.participant_b_id):
+            resolve_bye(m)
 
     _maybe_start(tournament)
 
@@ -157,42 +163,32 @@ def _generate_double_elim(tournament) -> None:
     tournament.matches.all().delete()
 
     # ── WB Round 1 ────────────────────────────────────────────────────────────
-    wb_r1_matches: list[Match | None] = []   # one entry per pair; None = bye pair
-    wb_r1_entries: list[Match | Participant | None] = []
+    # Every pairing — including byes — gets a real Match now, same as single-elim.
+    wb_r1_matches: list[Match] = []
 
     for pos in range(size // 2):
         a, b = slots[2 * pos], slots[2 * pos + 1]
-        if a and b:
-            m = _make_match(
-                tournament, 'winners', 1, pos + 1,
-                participant_a=a, participant_b=b, status='ready',
-            )
-            wb_r1_matches.append(m)
-            wb_r1_entries.append(m)
-        else:
-            wb_r1_matches.append(None)       # bye, no loser possible
-            wb_r1_entries.append(a or b)
+        m = _make_match(
+            tournament, 'winners', 1, pos + 1,
+            participant_a=a, participant_b=b,
+            status='ready' if (a and b) else 'pending',
+        )
+        wb_r1_matches.append(m)
 
     # ── WB Rounds 2 … WB Final ────────────────────────────────────────────────
     # wb_round_matches[i]  = list of Match objects created in WB round i+1
-    # wb_round_matches[0]  = WB R1 (only real matches, not byes)
-    wb_round_matches: list[list[Match]] = [
-        [m for m in wb_r1_matches if m is not None]
-    ]
+    # wb_round_matches[0]  = WB R1 (all real matches now, byes included)
+    wb_round_matches: list[list[Match]] = [wb_r1_matches]
 
-    entries = wb_r1_entries[:]
+    entries: list[Match] = wb_r1_matches[:]
     wb_r = 2
     while len(entries) > 1:
         nxt: list[Match] = []
         round_matches: list[Match] = []
         for pos in range(len(entries) // 2):
             m = _make_match(tournament, 'winners', wb_r, pos + 1)
-            for slot, e in (('a', entries[2 * pos]), ('b', entries[2 * pos + 1])):
-                if isinstance(e, Match):
-                    _link_winner(e, m, slot)
-                elif e is not None:
-                    setattr(m, f'participant_{slot}', e)
-            _set_status(m)
+            _link_winner(entries[2 * pos], m, 'a')
+            _link_winner(entries[2 * pos + 1], m, 'b')
             nxt.append(m)
             round_matches.append(m)
         wb_round_matches.append(round_matches)
@@ -205,8 +201,11 @@ def _generate_double_elim(tournament) -> None:
     lb_entries: list[Match | Participant | None] = []
     lb_r = 1
 
-    # LB-R1 — pair WB-R1 losers against each other
-    real_wb_r1 = [m for m in wb_r1_matches if m is not None]
+    # LB-R1 — pair WB-R1 losers against each other.
+    # A bye match has no loser, but it still occupies a slot; we treat it as
+    # "no loser to drop" by linking it in only if both its participants exist.
+    # To decide who actually drops, we still need real (non-bye) WB-R1 matches.
+    real_wb_r1 = [m for m in wb_r1_matches if (m.participant_a_id and m.participant_b_id)]
     if len(real_wb_r1) >= 2:
         r1_lb: list[Match] = []
         for pos in range(len(real_wb_r1) // 2):
@@ -219,37 +218,30 @@ def _generate_double_elim(tournament) -> None:
         lb_entries = r1_lb          # type: ignore[assignment]
         lb_r += 1
 
-        # If size=4 there's only 1 WB-R1 match each side → just 1 LB-R1 match
         # Handle odd leftover (shouldn't happen with powers of 2, but be safe)
         if len(real_wb_r1) % 2 == 1:
-            # Last WB-R1 loser gets a bye into LB-R2
             lb_entries.append(real_wb_r1[-1])
 
     elif len(real_wb_r1) == 1:
-        # Only 2 participants total → size=2, no LB-R1 needed
         lb_entries = [real_wb_r1[0]]
 
     # Subsequent LB rounds — alternate mix (with fresh WB losers) and
     # consolidation (pure LB survivors) until one entry remains.
-    #
-    # wb_round_matches[0] = WB-R1 losers (already consumed above)
-    # wb_round_matches[1] = WB-R2 losers  ← first "fresh drop" round
     wb_drop_idx = 1   # index into wb_round_matches for the next WB-loser drop
 
     while len(lb_entries) > 1 or wb_drop_idx < len(wb_round_matches):
 
         # ── Mix round: LB survivors meet fresh WB losers ──────────────────────
         if wb_drop_idx < len(wb_round_matches):
-            fresh = wb_round_matches[wb_drop_idx]   # real Match objects
+            fresh = [m for m in wb_round_matches[wb_drop_idx]
+                     if (m.participant_a_id and m.participant_b_id)]  # skip byes: no loser
             wb_drop_idx += 1
 
             if fresh and lb_entries:
                 nxt = []
-                # pair them 1-to-1; counts always match by bracket construction
                 for pos in range(len(fresh)):
                     m = _make_match(tournament, 'losers', lb_r, pos + 1, status='pending')
 
-                    # LB-survivor side → slot A
                     lb_e = lb_entries[pos] if pos < len(lb_entries) else None
                     if isinstance(lb_e, Match):
                         _link_winner(lb_e, m, 'a')
@@ -257,7 +249,6 @@ def _generate_double_elim(tournament) -> None:
                         m.participant_a = lb_e
                         m.save(update_fields=['participant_a'])
 
-                    # Fresh WB loser → slot B
                     _link_loser(fresh[pos], m, 'b')
 
                     _set_status(m)
@@ -287,8 +278,12 @@ def _generate_double_elim(tournament) -> None:
     gf = _make_match(tournament, 'grand_final', 1, 1, status='pending')
     _link_winner(wb_final, gf, 'a')    # WB champion  → slot A
     _link_winner(lb_final, gf, 'b')    # LB champion  → slot B
-    # Note: the WB Final loser also drops into the LB Final
     _link_loser(wb_final, lb_final, 'b')
+
+    # Resolve any bye matches now that all next_match links exist.
+    for m in wb_r1_matches:
+        if bool(m.participant_a_id) != bool(m.participant_b_id):
+            resolve_bye(m)
 
     _maybe_start(tournament)
 
@@ -326,13 +321,17 @@ def set_winner(match: Match, winner: Participant) -> None:
     # Advance winner
     if match.next_match_id:
         nm = match.next_match
-        setattr(nm, f'participant_{match.next_match_slot}', winner)
+        slot = match.next_match_slot
+        setattr(nm, f'participant_{slot}', winner)
+        nm.save(update_fields=[f'participant_{slot}'])
         _set_status(nm)
 
     # Drop loser into LB (only from winners bracket; LB losers are eliminated)
     if match.bracket == 'winners' and loser and match.loser_next_match_id:
         lm = match.loser_next_match
-        setattr(lm, f'participant_{match.loser_next_match_slot}', loser)
+        loser_slot = match.loser_next_match_slot
+        setattr(lm, f'participant_{loser_slot}', loser)
+        lm.save(update_fields=[f'participant_{loser_slot}'])
         _set_status(lm)
 
 

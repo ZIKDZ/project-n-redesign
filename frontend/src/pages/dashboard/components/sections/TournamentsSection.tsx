@@ -483,8 +483,11 @@ function BracketEditor({
 
   const renderMatchCard = (m: any, allowDrop: boolean) => {
     const locked = m.status === 'completed' || m.status === 'bye'
-    const bothFilled = !!(m.participant_a && m.participant_b)
-
+    const filledCount = (m.participant_a ? 1 : 0) + (m.participant_b ? 1 : 0)
+    const bothFilled = filledCount === 2
+    const isSingleSlot = filledCount === 1  // bye-shaped: one side present, other will never fill
+    const canDeclare = (bothFilled || isSingleSlot) && !locked
+    
     return (
       <div
         key={m.id}
@@ -495,8 +498,11 @@ function BracketEditor({
           const isWinner =
             m.winner_id && participant && m.winner_id === participant.id
           const canDrop = allowDrop && !locked
-          const canDeclare = bothFilled && !locked
-
+          // Only the slot that actually holds a participant is declarable in the
+          // single-slot (bye) case — clicking the empty "Drop here" side should
+          // never trigger a win.
+          const canDeclareThisSlot = canDeclare && !!participant
+        
           return (
             <div
               key={slot}
@@ -509,12 +515,12 @@ function BracketEditor({
                   assignSlot(m.id, slot, dragIdRef.current)
               }}
               onClick={() => {
-                if (canDeclare && participant) declareWinner(m.id, participant.id)
+                if (canDeclareThisSlot && participant) declareWinner(m.id, participant.id)
               }}
               className={[
                 'px-3 py-2 text-xs flex items-center justify-between gap-2',
                 'border-b border-white/5 last:border-0 transition-colors',
-                canDeclare ? 'cursor-pointer hover:bg-purple-500/10' : '',
+                canDeclareThisSlot ? 'cursor-pointer hover:bg-purple-500/10' : '',
                 isWinner
                   ? 'bg-green-500/10 text-green-300 font-bold'
                   : 'text-white/60',
@@ -536,7 +542,7 @@ function BracketEditor({
             </div>
           )
         })}
-
+  
         {m.status === 'completed' && (
           <button
             type="button"
