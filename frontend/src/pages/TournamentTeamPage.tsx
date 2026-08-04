@@ -791,7 +791,7 @@ export default function TournamentTeamPage() {
                               <button
                                 onClick={() => {
                                   tournamentsApi.disbandTeam(t.slug)
-                                    .then(refreshMyRegistration)
+                                    .then(() => navigate(`/tournaments/${t.slug}`))
                                     .catch(e => setError(e.message));
                                 }}
                                 disabled={submitting}
