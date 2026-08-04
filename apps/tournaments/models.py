@@ -14,6 +14,7 @@ TOURNAMENT_FORMAT_CHOICES = [
 # the schema, only the bracket-generation logic.
 BRACKET_TYPE_CHOICES = [
     ('single_elim', 'Single Elimination'),
+    ('double_elim', 'Double Elimination'),
 ]
 
 TOURNAMENT_STATUS_CHOICES = [
@@ -301,6 +302,29 @@ class Match(models.Model):
     round_number = models.PositiveSmallIntegerField()
     position = models.PositiveSmallIntegerField(help_text='Slot index within the round, starting at 1.')
 
+    bracket = models.CharField(
+        max_length=20,
+        choices=[
+            ('winners',     'Winners Bracket'),
+            ('losers',      'Losers Bracket'),
+            ('grand_final', 'Grand Final'),
+        ],
+        default='winners',
+    )
+
+    # Where the LOSER of a winners-bracket match drops into the losers bracket
+    loser_next_match = models.ForeignKey(
+        'self', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='loser_feeder_matches',
+    )
+    loser_next_match_slot = models.CharField(
+        max_length=1,
+        choices=[('a', 'Slot A'), ('b', 'Slot B')],
+        blank=True,
+    )
+    # ─────────────────────────────────────────────────────────────────────────
+
     participant_a = models.ForeignKey(
         Participant, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='matches_as_a',
@@ -320,32 +344,36 @@ class Match(models.Model):
     status = models.CharField(max_length=20, choices=MATCH_STATUS_CHOICES, default='pending')
     scheduled_time = models.DateTimeField(null=True, blank=True)
 
-    # Bracket progression: winner of this match feeds into `next_match`,
-    # occupying either its participant_a or participant_b slot.
     next_match = models.ForeignKey(
         'self', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='feeds_from',
     )
-    next_match_slot = models.CharField(max_length=1, blank=True, choices=[('a', 'Slot A'), ('b', 'Slot B')])
+    next_match_slot = models.CharField(
+        max_length=1, blank=True,
+        choices=[('a', 'Slot A'), ('b', 'Slot B')],
+    )
 
     class Meta:
         ordering = ['round_number', 'position']
 
     def __str__(self):
-        return f'{self.tournament.name} — R{self.round_number} #{self.position}'
+        return f'{self.tournament.name} — [{self.bracket}] R{self.round_number} #{self.position}'
 
     def to_dict(self):
         return {
-            'id': self.id,
-            'round_number': self.round_number,
-            'position': self.position,
-            'participant_a': self.participant_a.to_dict() if self.participant_a else None,
-            'participant_b': self.participant_b.to_dict() if self.participant_b else None,
-            'score_a': self.score_a,
-            'score_b': self.score_b,
-            'winner_id': self.winner_id,
-            'status': self.status,
+            'id':             self.id,
+            'bracket':        self.bracket,          # NEW
+            'round_number':   self.round_number,
+            'position':       self.position,
+            'participant_a':  self.participant_a.to_dict() if self.participant_a else None,
+            'participant_b':  self.participant_b.to_dict() if self.participant_b else None,
+            'score_a':        self.score_a,
+            'score_b':        self.score_b,
+            'winner_id':      self.winner_id,
+            'status':         self.status,
             'scheduled_time': self.scheduled_time.isoformat() if self.scheduled_time else None,
-            'next_match_id': self.next_match_id,
+            'next_match_id':  self.next_match_id,
             'next_match_slot': self.next_match_slot,
+            'loser_next_match_id':   self.loser_next_match_id,   # NEW
+            'loser_next_match_slot': self.loser_next_match_slot, # NEW
         }
