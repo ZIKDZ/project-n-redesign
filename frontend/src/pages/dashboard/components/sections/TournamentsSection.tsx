@@ -1108,7 +1108,7 @@ export default function TournamentsSection() {
     load()
   }, [load])
 
-  const buildPayload = (form: TournamentForm) => ({
+  const buildPayload = (form: TournamentForm, includeBannerUrl = true) => ({
     name:                  form.name,
     game_id:               form.game_id || null,
     format:                form.format,
@@ -1118,7 +1118,7 @@ export default function TournamentsSection() {
     description:           form.description,
     rules:                 form.rules,
     requirements:          form.requirements,
-    banner_url:            form.banner_url,
+    ...(includeBannerUrl && { banner_url: form.banner_url }),
     registration_open_at:  fromLocalInput(form.registration_open_at)  || null,
     registration_deadline: fromLocalInput(form.registration_deadline) || null,
     start_date:            fromLocalInput(form.start_date)            || null,
@@ -1183,17 +1183,21 @@ export default function TournamentsSection() {
     bannerFile: File | null
   ) => {
     if (!editing) return
+  
     if (bannerFile) {
       const fd = new FormData()
-      const payload = buildPayload(form)
+      // Exclude banner_url when uploading a file
+      const payload = buildPayload(form, false)
       Object.entries(payload).forEach(([k, v]) =>
         fd.append(k, v === null ? '' : String(v))
       )
       fd.append('banner', bannerFile)
       await tournamentsApi.updateMultipart(editing.id, fd)
     } else {
-      await tournamentsApi.update(editing.id, buildPayload(form))
+      // Only include banner_url if the user explicitly set/cleared it
+      await tournamentsApi.update(editing.id, buildPayload(form, true))
     }
+  
     await syncPlacements(editing.id, placements, editing.placements || [])
     load()
   }

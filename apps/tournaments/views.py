@@ -169,8 +169,11 @@ def update_tournament(request, pk):
             tournament.banner = banner_file
             tournament.banner_url = ''
         elif 'banner_url' in data:
-            tournament.banner_url = data['banner_url']
-            tournament.banner = None
+            new_url = data['banner_url']
+            if new_url:
+                tournament.banner_url = new_url
+                tournament.banner = None
+
 
         tournament.save()
         return JsonResponse(tournament.to_dict())
