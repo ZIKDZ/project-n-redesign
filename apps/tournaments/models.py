@@ -228,9 +228,16 @@ class TournamentTeam(models.Model):
         return data
 
 
+# models.py - Update TournamentTeamMember model
+
 class TournamentTeamMember(models.Model):
     team = models.ForeignKey(TournamentTeam, on_delete=models.CASCADE, related_name='members')
     player = models.ForeignKey(TournamentPlayer, on_delete=models.CASCADE, related_name='team_memberships')
+    
+    full_name = models.CharField(max_length=200, blank=True)
+    email = models.EmailField(blank=True)
+    in_game_tag = models.CharField(max_length=100, blank=True)
+    
     joined_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -245,6 +252,9 @@ class TournamentTeamMember(models.Model):
             'id': self.id,
             'player': self.player.to_dict(),
             'is_captain': self.team.captain_id == self.player_id,
+            'full_name': self.full_name,
+            'email': self.email,
+            'in_game_tag': self.in_game_tag,
             'joined_at': self.joined_at.isoformat(),
         }
 

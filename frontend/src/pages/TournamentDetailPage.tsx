@@ -607,7 +607,7 @@ function RegistrationPanel({
     return (
       <div className="space-y-2">
         <button
-          onClick={() => setMode("create")}
+          onClick={onManageTeam}  // Changed this line
           className="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-3 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 cursor-pointer"
           style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
         >

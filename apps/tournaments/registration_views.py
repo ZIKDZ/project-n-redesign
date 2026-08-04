@@ -1,18 +1,11 @@
-"""
-Public, Discord-session-authenticated endpoints for tournament registration.
-
-These are NOT staff endpoints — they're called by any signed-in TournamentPlayer
-from the public tournament page. They intentionally don't require Django's
-staff session/CSRF flow (mirrors how /api/shop/order/ and /api/joins/ work
-for anonymous public submissions elsewhere in this codebase) — auth here is
-the Discord session cookie set by discord_auth_views, checked per-request.
-"""
 import json
+import re
 
 from django.db import transaction
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from django.core.files.uploadedfile import InMemoryUploadedFile
 
 from .discord_auth_views import get_current_player
 from .models import Tournament, TournamentTeam, TournamentTeamMember, Participant, generate_invite_code
@@ -36,6 +29,21 @@ def _active_team_membership(player, tournament):
         .select_related('team')
         .first()
     )
+
+
+def _validate_email(email):
+    """Basic email validation."""
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email) is not None
+
+
+def _validate_team_tag(tag):
+    """Validate team tag: alphanumeric only, max 6 chars."""
+    if not tag:
+        return True  # Optional field
+    if len(tag) > 6:
+        return False
+    return tag.isalnum()
 
 
 # ── Status ────────────────────────────────────────────────────────────────────
@@ -139,13 +147,60 @@ def create_team(request, slug):
     if _active_team_membership(player, tournament):
         return JsonResponse({'error': 'You are already on a team for this tournament.'}, status=400)
 
-    try:
-        data = json.loads(request.body)
-        name = (data.get('name') or '').strip()
-        if not name:
-            return JsonResponse({'error': 'Team name is required.'}, status=400)
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid request.'}, status=400)
+    # Handle multipart/form-data for file upload
+    if request.content_type and 'multipart/form-data' in request.content_type:
+        # Extract form fields
+        name = (request.POST.get('name') or '').strip()
+        tag = (request.POST.get('tag') or '').strip()
+        full_name = (request.POST.get('full_name') or '').strip()
+        email = (request.POST.get('email') or '').strip()
+        in_game_tag = (request.POST.get('in_game_tag') or '').strip()
+        logo = request.FILES.get('logo')
+    else:
+        # Fallback to JSON for backwards compatibility
+        try:
+            data = json.loads(request.body)
+            name = (data.get('name') or '').strip()
+            tag = (data.get('tag') or '').strip()
+            full_name = (data.get('full_name') or '').strip()
+            email = (data.get('email') or '').strip()
+            in_game_tag = (data.get('in_game_tag') or '').strip()
+            logo = None
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid request.'}, status=400)
+
+    # Validate required fields
+    if not name:
+        return JsonResponse({'error': 'Team name is required.'}, status=400)
+    
+    if len(name) > 50:
+        return JsonResponse({'error': 'Team name must be 50 characters or less.'}, status=400)
+
+    if tag and not _validate_team_tag(tag):
+        return JsonResponse({'error': 'Team tag must be alphanumeric and 6 characters or less.'}, status=400)
+
+    if not full_name:
+        return JsonResponse({'error': 'Full name is required.'}, status=400)
+
+    if not email:
+        return JsonResponse({'error': 'Email is required.'}, status=400)
+
+    if not _validate_email(email):
+        return JsonResponse({'error': 'Invalid email format.'}, status=400)
+
+    if not in_game_tag:
+        return JsonResponse({'error': 'In-game tag is required.'}, status=400)
+
+    # Validate logo if provided
+    if logo:
+        # Check file size (max 2MB)
+        if logo.size > 2 * 1024 * 1024:
+            return JsonResponse({'error': 'Logo must be smaller than 2MB.'}, status=400)
+        
+        # Check file type
+        allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+        if logo.content_type not in allowed_types:
+            return JsonResponse({'error': 'Logo must be an image (JPEG, PNG, GIF, or WebP).'}, status=400)
 
     if tournament.max_participants:
         current_teams = (
@@ -158,14 +213,29 @@ def create_team(request, slug):
             return JsonResponse({'error': 'Registration is full.'}, status=400)
 
     with transaction.atomic():
+        # Create team
         team = TournamentTeam.objects.create(
             tournament=tournament,
             name=name,
-            tag=(data.get('tag') or '')[:10],
-            logo_url=data.get('logo_url', ''),
+            tag=tag,
             captain=player,
         )
-        TournamentTeamMember.objects.create(team=team, player=player)
+        
+        # Save logo if provided
+        if logo:
+            team.logo = logo
+            team.save()
+
+        # Create team member with player info
+        member = TournamentTeamMember.objects.create(
+            team=team,
+            player=player,
+            full_name=full_name,
+            email=email,
+            in_game_tag=in_game_tag,
+        )
+        
+        # Create participant entry
         Participant.objects.create(tournament=tournament, team=team)
 
     return JsonResponse(team.to_dict(), status=201)
@@ -204,6 +274,8 @@ def join_team(request, slug):
     if tournament.team_size and team.members.count() >= tournament.team_size:
         return JsonResponse({'error': 'This team is already full.'}, status=400)
 
+    # When joining, we might want to collect player info too
+    # For now, create member without extra info (can be added later if needed)
     TournamentTeamMember.objects.create(team=team, player=player)
     return JsonResponse(team.to_dict(), status=201)
 
@@ -282,6 +354,7 @@ def kick_member(request, slug):
         return JsonResponse({'error': 'That player is not on your team.'}, status=404)
 
     return JsonResponse(membership.team.to_dict())
+
 
 @csrf_exempt
 @require_http_methods(['POST'])

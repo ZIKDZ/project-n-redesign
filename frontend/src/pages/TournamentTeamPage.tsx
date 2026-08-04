@@ -1,3 +1,5 @@
+// TournamentTeamPage.tsx - Direct team creation flow
+
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { tournaments as tournamentsApi, discordAuth } from "../utils/api";
@@ -26,12 +28,40 @@ interface DiscordPlayer {
   discord_avatar: string;
 }
 
+interface TeamFormData {
+  name: string;
+  tag: string;
+  logo: File | null;
+  logoPreview: string;
+}
+
+interface PlayerFormData {
+  full_name: string;
+  email: string;
+  in_game_tag: string;
+}
+
 const GAME_COLORS: Record<string, string> = {
   rocket_league: "#60b8ff",
   valorant: "#ff7080",
   fortnite: "#ffd700",
 };
 
+// ── Validation helpers ────────────────────────────────────────────────────────
+const validateTeamTag = (tag: string): string | null => {
+  if (!tag) return null;
+  if (tag.length > 6) return "Tag must be 6 characters or less";
+  if (!/^[a-zA-Z0-9]+$/.test(tag)) return "Tag can only contain letters and numbers (no spaces)";
+  return null;
+};
+
+const validateEmail = (email: string): string | null => {
+  if (!email) return "Email is required";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "Invalid email format";
+  return null;
+};
+
+// ── Icons ─────────────────────────────────────────────────────────────────────
 function DiscordIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -40,14 +70,265 @@ function DiscordIcon({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
-// ── MemberRow ─────────────────────────────────────────────────────────────────
-function MemberRow({
-  member,
-  isCaptain,
-  canKick,
-  onKick,
-  kicking,
+// ── Step Indicator ────────────────────────────────────────────────────────────
+function StepIndicator({ currentStep, totalSteps, color }: { currentStep: number; totalSteps: number; color: string }) {
+  return (
+    <div className="flex items-center justify-center gap-2 mb-8">
+      {Array.from({ length: totalSteps }, (_, i) => i + 1).map(step => (
+        <div key={step} className="flex items-center">
+          <div
+            className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all ${
+              step === currentStep ? "scale-110" : step < currentStep ? "opacity-60" : "opacity-30"
+            }`}
+            style={{
+              background: step <= currentStep ? `${color}25` : "rgba(255,255,255,0.05)",
+              border: `2px solid ${step <= currentStep ? color : "rgba(255,255,255,0.1)"}`,
+              color: step <= currentStep ? color : "rgba(255,255,255,0.3)",
+            }}
+          >
+            {step < currentStep ? "✓" : step}
+          </div>
+          {step < totalSteps && (
+            <div
+              className="w-12 h-0.5 mx-1"
+              style={{
+                background: step < currentStep ? color : "rgba(255,255,255,0.1)",
+                opacity: step < currentStep ? 0.5 : 0.3,
+              }}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Team Info Form (Step 1) ───────────────────────────────────────────────────
+function TeamInfoForm({
+  data, onChange, onNext, onCancel, color, submitting, error,
 }: {
+  data: TeamFormData;
+  onChange: (updates: Partial<TeamFormData>) => void;
+  onNext: () => void;
+  onCancel: () => void;
+  color: string;
+  submitting: boolean;
+  error: string;
+}) {
+  const tagError = validateTeamTag(data.tag);
+  const canProceed = data.name.trim() && !tagError;
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return;
+    if (file.size > 2 * 1024 * 1024) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      onChange({ logo: file, logoPreview: reader.result as string });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const inputClass =
+    "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm " +
+    "placeholder-white/25 focus:outline-none focus:border-purple-500/60 transition-all duration-200";
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-white font-black text-2xl uppercase mb-2" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+          Team Information
+        </h3>
+        <p className="text-white/40 text-sm">Set up your team's identity</p>
+      </div>
+
+      {/* Logo Upload */}
+      <div>
+        <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-3">
+          Team Logo (Optional)
+        </label>
+        <div className="flex items-center gap-4">
+          <div
+            className="w-20 h-20 rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden"
+            style={{ borderColor: data.logoPreview ? color : "rgba(255,255,255,0.1)" }}
+          >
+            {data.logoPreview ? (
+              <img src={data.logoPreview} alt="Logo preview" className="w-full h-full object-cover" />
+            ) : (
+              <svg className="w-8 h-8 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            )}
+          </div>
+          <div className="flex-1">
+            <label className="inline-block px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white rounded-lg text-xs font-bold tracking-wider uppercase cursor-pointer transition-all">
+              Choose Image
+              <input type="file" accept="image/*" onChange={handleLogoChange} className="hidden" />
+            </label>
+            <p className="text-white/25 text-[10px] mt-2">PNG, JPG up to 2MB</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Team Name */}
+      <div>
+        <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-2">
+          Team Name *
+        </label>
+        <input
+          placeholder="e.g. Nebula Esports"
+          value={data.name}
+          onChange={e => onChange({ name: e.target.value })}
+          className={inputClass}
+          maxLength={50}
+        />
+        <p className="text-white/20 text-[10px] mt-1">{data.name.length}/50 characters</p>
+      </div>
+
+      {/* Team Tag */}
+      <div>
+        <label className="block text-white/50 text-[10px] font-bold tracking-widests uppercase mb-2">
+          Team Tag *
+        </label>
+        <input
+          placeholder="e.g. NBL"
+          value={data.tag}
+          onChange={e => onChange({ tag: e.target.value.toUpperCase() })}
+          className={`${inputClass} ${tagError ? "border-red-500/50" : ""} font-mono tracking-widest`}
+          maxLength={6}
+        />
+        {tagError ? (
+          <p className="text-red-400/80 text-xs mt-1">⚠ {tagError}</p>
+        ) : (
+          <p className="text-white/20 text-[10px] mt-1">Letters & numbers only, max 6 characters</p>
+        )}
+      </div>
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+          <p className="text-red-400 text-xs">⚠ {error}</p>
+        </div>
+      )}
+
+      <div className="flex gap-3 pt-4">
+        <button
+          onClick={onNext}
+          disabled={!canProceed || submitting}
+          className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black py-3.5 rounded-xl text-sm tracking-widest uppercase transition-all cursor-pointer"
+          style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+        >
+          Next: Player Info →
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={submitting}
+          className="px-6 bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 font-bold py-3.5 rounded-xl text-xs tracking-widest uppercase transition-all cursor-pointer"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Player Info Form (Step 2) ─────────────────────────────────────────────────
+function PlayerInfoForm({
+  data, onChange, onBack, onSubmit, color, submitting, error,
+}: {
+  data: PlayerFormData;
+  onChange: (updates: Partial<PlayerFormData>) => void;
+  onBack: () => void;
+  onSubmit: () => void;
+  color: string;
+  submitting: boolean;
+  error: string;
+}) {
+  const emailError = data.email ? validateEmail(data.email) : null;
+  const canSubmit = data.full_name.trim() && data.email && !emailError && data.in_game_tag.trim();
+
+  const inputClass =
+    "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm " +
+    "placeholder-white/25 focus:outline-none focus:border-purple-500/60 transition-all duration-200";
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-white font-black text-2xl uppercase mb-2" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+          Player Information
+        </h3>
+        <p className="text-white/40 text-sm">Tell us about yourself</p>
+      </div>
+
+      <div>
+        <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-2">
+          Full Name *
+        </label>
+        <input
+          placeholder="e.g. John Smith"
+          value={data.full_name}
+          onChange={e => onChange({ full_name: e.target.value })}
+          className={inputClass}
+        />
+      </div>
+
+      <div>
+        <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-2">
+          Email Address *
+        </label>
+        <input
+          type="email"
+          placeholder="e.g. john@example.com"
+          value={data.email}
+          onChange={e => onChange({ email: e.target.value })}
+          className={`${inputClass} ${emailError ? "border-red-500/50" : ""}`}
+        />
+        {emailError && <p className="text-red-400/80 text-xs mt-1">⚠ {emailError}</p>}
+        <p className="text-white/20 text-[10px] mt-1">We'll use this to contact you about the tournament</p>
+      </div>
+
+      <div>
+        <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-2">
+          In-Game Tag *
+        </label>
+        <input
+          placeholder="e.g. PlayerOne#1234"
+          value={data.in_game_tag}
+          onChange={e => onChange({ in_game_tag: e.target.value })}
+          className={inputClass}
+        />
+        <p className="text-white/20 text-[10px] mt-1">Your display name in the game (including tag/ID if applicable)</p>
+      </div>
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+          <p className="text-red-400 text-xs">⚠ {error}</p>
+        </div>
+      )}
+
+      <div className="flex gap-3 pt-4">
+        <button
+          onClick={onBack}
+          disabled={submitting}
+          className="px-6 bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 font-bold py-3.5 rounded-xl text-xs tracking-widest uppercase transition-all cursor-pointer"
+        >
+          ← Back
+        </button>
+        <button
+          onClick={onSubmit}
+          disabled={!canSubmit || submitting}
+          className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black py-3.5 rounded-xl text-sm tracking-widest uppercase transition-all cursor-pointer"
+          style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+        >
+          {submitting ? "Creating Team..." : "Create Team"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── MemberRow ─────────────────────────────────────────────────────────────────
+function MemberRow({ member, isCaptain, canKick, onKick, kicking }: {
   member: any;
   isCaptain: boolean;
   canKick: boolean;
@@ -77,9 +358,8 @@ function MemberRow({
             {isCaptain && <span className="text-yellow-400">👑</span>}
             {member.player.discord_username}
           </p>
-          {isCaptain && (
-            <p className="text-yellow-400/60 text-[10px] font-bold tracking-widest uppercase">Captain</p>
-          )}
+          {member.in_game_tag && <p className="text-white/40 text-xs">{member.in_game_tag}</p>}
+          {isCaptain && <p className="text-yellow-400/60 text-[10px] font-bold tracking-widest uppercase">Captain</p>}
         </div>
       </div>
       {canKick && !isCaptain && (
@@ -107,16 +387,21 @@ export default function TournamentTeamPage() {
   const [myReg, setMyReg] = useState<any>(null);
   const [regLoading, setRegLoading] = useState(true);
 
-  const [mode, setMode] = useState<"idle" | "create" | "join">("idle");
-  const [teamName, setTeamName] = useState("");
-  const [teamTag, setTeamTag] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
-  const [transferTarget, setTransferTarget] = useState("");
+  // Always start directly on step 1 of create flow
+  const [createStep, setCreateStep] = useState(1);
+  const [teamData, setTeamData] = useState<TeamFormData>({
+    name: "", tag: "", logo: null, logoPreview: "",
+  });
+  const [playerData, setPlayerData] = useState<PlayerFormData>({
+    full_name: "", email: "", in_game_tag: "",
+  });
+
   const [submitting, setSubmitting] = useState(false);
   const [kickingId, setKickingId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   const [confirmDisband, setConfirmDisband] = useState(false);
+  const [transferTarget, setTransferTarget] = useState("");
 
   useEffect(() => {
     if (!slug) return;
@@ -148,17 +433,22 @@ export default function TournamentTeamPage() {
     refreshMyRegistration();
   }, [slug, authLoading, player]);
 
-  const run = async (fn: () => Promise<any>) => {
+  const handleCreateTeam = async () => {
+    if (!slug) return;
     setSubmitting(true);
     setError("");
     try {
-      await fn();
-      setMode("idle");
-      setTeamName("");
-      setTeamTag("");
-      setInviteCode("");
-      setTransferTarget("");
-      setConfirmDisband(false);
+      const formData = new FormData();
+      formData.append("name", teamData.name.trim());
+      formData.append("tag", teamData.tag.trim());
+      if (teamData.logo) formData.append("logo", teamData.logo);
+      formData.append("full_name", playerData.full_name.trim());
+      formData.append("email", playerData.email.trim());
+      formData.append("in_game_tag", playerData.in_game_tag.trim());
+      await tournamentsApi.createTeam(slug, formData);
+      setCreateStep(1);
+      setTeamData({ name: "", tag: "", logo: null, logoPreview: "" });
+      setPlayerData({ full_name: "", email: "", in_game_tag: "" });
       refreshMyRegistration();
     } catch (e: any) {
       setError(e.message || "Something went wrong.");
@@ -196,12 +486,10 @@ export default function TournamentTeamPage() {
   if (!t) return null;
 
   const color = GAME_COLORS[t.game || ""] || "#a855f7";
-  const inputClass =
-    "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm " +
-    "placeholder-white/25 focus:outline-none focus:border-purple-500/60 transition-all duration-200";
 
   return (
     <div className="min-h-screen bg-[#0d0014] text-white overflow-x-hidden" style={{ fontFamily: "'Barlow', sans-serif" }}>
+
       {/* ── Navbar ── */}
       <nav className="sticky top-0 z-50 bg-[#0d0014]/95 backdrop-blur-md border-b border-white/8">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-4">
@@ -217,9 +505,8 @@ export default function TournamentTeamPage() {
           <div className="h-4 w-px bg-white/15" />
           <img src={asset("images/logo.svg")} alt="NBL" width={22} style={{ filter: "brightness(0) invert(1)", opacity: 0.6 }} />
           <span className="text-white/40 text-xs font-black tracking-widest uppercase hidden sm:block" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-            Team Management
+            Create Team
           </span>
-
           <div className="ml-auto">
             {player ? (
               <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full pl-1 pr-3 py-1">
@@ -256,29 +543,32 @@ export default function TournamentTeamPage() {
             {t.game_title || "Multi-Game"} · {t.format === "team" ? `Team${t.team_size ? ` · ${t.team_size}v${t.team_size}` : ""}` : "Solo"}
           </span>
           <h1 className="font-black text-4xl md:text-5xl uppercase leading-none mb-3" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-            Manage Your <span style={{ color }}>Team</span>
+            Create Your <span style={{ color }}>Team</span>
           </h1>
           <p className="text-white/40 text-sm max-w-md mx-auto">
-            Create a squad, join one with an invite code, or manage your current roster for {t.name}.
+            Register your squad for {t.name}. You'll be the captain and receive an invite code to share with your teammates.
           </p>
         </div>
       </div>
 
       {/* ── Main content ── */}
       <div className="max-w-2xl mx-auto px-6 pb-24">
+
+        {/* Registration closed */}
         {!t.registration_open && (
           <div className="rounded-2xl border border-white/10 p-8 text-center" style={{ background: "rgba(255,255,255,0.02)" }}>
             <p className="text-white/40 font-bold text-sm uppercase tracking-widest">
               {t.status === "completed" ? "This tournament has ended" : "Registration is closed"}
             </p>
-            <p className="text-white/20 text-xs mt-2">Team management isn't available right now.</p>
+            <p className="text-white/20 text-xs mt-2">Team creation isn't available right now.</p>
           </div>
         )}
 
+        {/* Solo tournament guard */}
         {t.registration_open && t.format === "solo" && (
           <div className="rounded-2xl border border-white/10 p-8 text-center" style={{ background: "rgba(255,255,255,0.02)" }}>
             <p className="text-white/40 font-bold text-sm uppercase tracking-widest">This is a solo tournament</p>
-            <p className="text-white/20 text-xs mt-2">There's no team to manage — head back to register individually.</p>
+            <p className="text-white/20 text-xs mt-2">Head back to register individually.</p>
             <button
               onClick={() => navigate(`/tournaments/${t.slug}`)}
               className="mt-6 text-purple-400 text-xs font-bold tracking-widest uppercase hover:text-purple-300 transition-colors cursor-pointer"
@@ -288,12 +578,13 @@ export default function TournamentTeamPage() {
           </div>
         )}
 
+        {/* Not signed in */}
         {t.registration_open && t.format === "team" && !player && (
           <div className="rounded-2xl border border-white/10 p-10 text-center" style={{ background: "rgba(255,255,255,0.02)" }}>
             <DiscordIcon className="w-10 h-10 mx-auto mb-4 text-indigo-400/60" />
             <p className="text-white/50 font-bold text-sm uppercase tracking-widest mb-2">Sign in required</p>
             <p className="text-white/25 text-xs mb-6 max-w-xs mx-auto">
-              Connect your Discord account to create or join a team for this tournament.
+              Connect your Discord account to create a team for this tournament.
             </p>
             <button
               onClick={handleSignIn}
@@ -306,6 +597,7 @@ export default function TournamentTeamPage() {
           </div>
         )}
 
+        {/* Loading registration */}
         {t.registration_open && t.format === "team" && player && regLoading && (
           <div className="flex justify-center py-16">
             <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
@@ -314,144 +606,65 @@ export default function TournamentTeamPage() {
 
         {t.registration_open && t.format === "team" && player && !regLoading && (
           <>
-            {/* ── Not registered — choose create/join ── */}
-            {!myReg && mode === "idle" && (
-              <div className="grid sm:grid-cols-2 gap-4">
-                <button
-                  onClick={() => setMode("create")}
-                  className="rounded-2xl border border-purple-500/25 p-6 text-left hover:border-purple-500/50 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
-                  style={{ background: "rgba(168,85,247,0.06)" }}
-                >
-                  <div className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center mb-4 text-lg">
-                    ➕
-                  </div>
-                  <h3 className="text-white font-black text-lg uppercase mb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-                    Create a Team
-                  </h3>
-                  <p className="text-white/35 text-xs leading-relaxed">
-                    Start a new squad and become captain. You'll get an invite code to share with teammates.
-                  </p>
-                </button>
-                <button
-                  onClick={() => setMode("join")}
-                  className="rounded-2xl border border-white/10 p-6 text-left hover:border-white/25 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
-                  style={{ background: "rgba(255,255,255,0.03)" }}
-                >
-                  <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/15 flex items-center justify-center mb-4 text-lg">
-                    🔑
-                  </div>
-                  <h3 className="text-white font-black text-lg uppercase mb-1" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-                    Join a Team
-                  </h3>
-                  <p className="text-white/35 text-xs leading-relaxed">
-                    Got an invite code from a captain? Enter it here to join their roster.
-                  </p>
-                </button>
-              </div>
-            )}
-
-            {!myReg && mode === "create" && (
+            {/* ── Not registered — show create form directly ── */}
+            {!myReg && (
               <div className="rounded-2xl border border-white/10 p-8" style={{ background: "rgba(255,255,255,0.03)" }}>
-                <h3 className="text-white font-black text-lg uppercase mb-5" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-                  Create Your Team
-                </h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-2">Team Name *</label>
-                    <input placeholder="e.g. Nebula Prime" value={teamName} onChange={e => setTeamName(e.target.value)} className={inputClass} />
-                  </div>
-                  <div>
-                    <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-2">Tag (optional)</label>
-                    <input placeholder="e.g. NBL" value={teamTag} onChange={e => setTeamTag(e.target.value)} maxLength={10} className={inputClass} />
-                  </div>
-                </div>
-                {error && <p className="text-red-400 text-xs mt-4">{error}</p>}
-                <div className="flex gap-3 mt-6">
-                  <button
-                    onClick={() => run(() => tournamentsApi.createTeam(t.slug, { name: teamName.trim(), tag: teamTag.trim() }))}
-                    disabled={submitting || !teamName.trim()}
-                    className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-black py-3 rounded-xl text-sm tracking-widest uppercase transition-all cursor-pointer"
-                    style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-                  >
-                    {submitting ? "Creating…" : "Create Team"}
-                  </button>
-                  <button
-                    onClick={() => { setMode("idle"); setError(""); }}
-                    className="px-5 bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 font-bold py-3 rounded-xl text-xs tracking-widest uppercase transition-all cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
+                <StepIndicator currentStep={createStep} totalSteps={2} color={color} />
+
+                {createStep === 1 && (
+                  <TeamInfoForm
+                    data={teamData}
+                    onChange={(updates) => setTeamData({ ...teamData, ...updates })}
+                    onNext={() => { setError(""); setCreateStep(2); }}
+                    onCancel={() => navigate(`/tournaments/${t.slug}`)}
+                    color={color}
+                    submitting={submitting}
+                    error={error}
+                  />
+                )}
+
+                {createStep === 2 && (
+                  <PlayerInfoForm
+                    data={playerData}
+                    onChange={(updates) => setPlayerData({ ...playerData, ...updates })}
+                    onBack={() => { setError(""); setCreateStep(1); }}
+                    onSubmit={handleCreateTeam}
+                    color={color}
+                    submitting={submitting}
+                    error={error}
+                  />
+                )}
               </div>
             )}
 
-            {!myReg && mode === "join" && (
-              <div className="rounded-2xl border border-white/10 p-8" style={{ background: "rgba(255,255,255,0.03)" }}>
-                <h3 className="text-white font-black text-lg uppercase mb-5" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-                  Join With Invite Code
-                </h3>
-                <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-2">Invite Code *</label>
-                <input
-                  placeholder="e.g. A1B2C3D4"
-                  value={inviteCode}
-                  onChange={e => setInviteCode(e.target.value.toUpperCase())}
-                  className={inputClass + " font-mono tracking-widest text-center text-lg"}
-                  maxLength={12}
-                />
-                {error && <p className="text-red-400 text-xs mt-4">{error}</p>}
-                <div className="flex gap-3 mt-6">
-                  <button
-                    onClick={() => run(() => tournamentsApi.joinTeam(t.slug, inviteCode.trim()))}
-                    disabled={submitting || !inviteCode.trim()}
-                    className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-black py-3 rounded-xl text-sm tracking-widest uppercase transition-all cursor-pointer"
-                    style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
-                  >
-                    {submitting ? "Joining…" : "Join Team"}
-                  </button>
-                  <button
-                    onClick={() => { setMode("idle"); setError(""); }}
-                    className="px-5 bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 font-bold py-3 rounded-xl text-xs tracking-widest uppercase transition-all cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ── Registered solo (shouldn't happen for team tournaments, guard anyway) ── */}
-            {myReg?.kind === "solo" && (
-              <div className="rounded-2xl border border-white/10 p-8 text-center" style={{ background: "rgba(255,255,255,0.03)" }}>
-                <p className="text-white/40 text-sm">You're registered as a solo entrant.</p>
-              </div>
-            )}
-
-            {/* ── On a team ── */}
+            {/* ── Already on a team ── */}
             {myReg?.kind === "team" && (() => {
               const team = myReg.team;
               const isCaptain = myReg.is_captain;
               const otherMembers = team.members.filter((m: any) => !m.is_captain);
-              const capacityLabel = t.team_size ? `${team.member_count} / ${t.team_size} players` : `${team.member_count} player${team.member_count !== 1 ? "s" : ""}`;
+              const capacityLabel = t.team_size
+                ? `${team.member_count} / ${t.team_size} players`
+                : `${team.member_count} player${team.member_count !== 1 ? "s" : ""}`;
 
               return (
                 <div className="space-y-6">
-                  {/* Team header card */}
-                  <div
-                    className="rounded-2xl border p-6"
-                    style={{ background: "rgba(52,211,153,0.05)", borderColor: "rgba(52,211,153,0.25)" }}
-                  >
-                    <div className="flex items-center justify-between flex-wrap gap-3">
-                      <div>
-                        <p className="text-green-400/70 text-[10px] font-bold tracking-widest uppercase mb-1">Your Team</p>
-                        <h2 className="text-white font-black text-2xl uppercase" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-                          {team.name} {team.tag && <span className="text-white/30 text-base">[{team.tag}]</span>}
-                        </h2>
-                        <p className="text-white/30 text-xs mt-1">{capacityLabel}</p>
+                  {/* Team header */}
+                  <div className="rounded-2xl border p-6" style={{ background: "rgba(52,211,153,0.05)", borderColor: "rgba(52,211,153,0.25)" }}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        {team.logo && (
+                          <img src={team.logo} alt={team.name} className="w-16 h-16 rounded-xl object-cover border border-white/10" />
+                        )}
+                        <div>
+                          <p className="text-green-400/70 text-[10px] font-bold tracking-widest uppercase mb-1">Your Team</p>
+                          <h2 className="text-white font-black text-2xl uppercase" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                            {team.name} {team.tag && <span className="text-white/30 text-base">[{team.tag}]</span>}
+                          </h2>
+                          <p className="text-white/30 text-xs mt-1">{capacityLabel}</p>
+                        </div>
                       </div>
                       {isCaptain && (
-                        <div
-                          className="rounded-xl px-4 py-2.5 flex items-center gap-3"
-                          style={{ background: "rgba(0,0,0,0.25)" }}
-                        >
+                        <div className="rounded-xl px-4 py-2.5 flex items-center gap-3" style={{ background: "rgba(0,0,0,0.25)" }}>
                           <div>
                             <p className="text-white/30 text-[9px] font-bold tracking-widest uppercase">Invite Code</p>
                             <p className="font-mono text-purple-300 font-black tracking-widest">{team.invite_code}</p>
@@ -466,7 +679,7 @@ export default function TournamentTeamPage() {
                             title="Copy invite code"
                           >
                             {copied ? (
-                              <span className="text-green-400 text-xs font-bold">✓ Copied</span>
+                              <span className="text-green-400 text-xs font-bold">✓</span>
                             ) : (
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -512,7 +725,11 @@ export default function TournamentTeamPage() {
                       <p className="text-white/30 text-[10px] font-bold tracking-widest uppercase">Captain Controls</p>
 
                       <button
-                        onClick={() => run(() => tournamentsApi.regenerateInviteCode(t.slug))}
+                        onClick={() => {
+                          tournamentsApi.regenerateInviteCode(t.slug)
+                            .then(refreshMyRegistration)
+                            .catch(e => setError(e.message));
+                        }}
                         disabled={submitting}
                         className="w-full sm:w-auto text-white/40 hover:text-white/70 text-xs font-bold tracking-widest uppercase transition-colors cursor-pointer disabled:opacity-40"
                       >
@@ -542,7 +759,9 @@ export default function TournamentTeamPage() {
                               onClick={() => {
                                 if (!transferTarget) return;
                                 if (confirm("Transfer captaincy? You will become a regular member.")) {
-                                  run(() => tournamentsApi.transferCaptain(t.slug, Number(transferTarget)));
+                                  tournamentsApi.transferCaptain(t.slug, Number(transferTarget))
+                                    .then(refreshMyRegistration)
+                                    .catch(e => setError(e.message));
                                 }
                               }}
                               disabled={submitting || !transferTarget}
@@ -564,16 +783,17 @@ export default function TournamentTeamPage() {
                             Disband Team
                           </button>
                         ) : (
-                          <div
-                            className="rounded-xl border p-4 space-y-3"
-                            style={{ background: "rgba(248,113,113,0.06)", borderColor: "rgba(248,113,113,0.25)" }}
-                          >
+                          <div className="rounded-xl border p-4 space-y-3" style={{ background: "rgba(248,113,113,0.06)", borderColor: "rgba(248,113,113,0.25)" }}>
                             <p className="text-red-400/80 text-xs leading-relaxed">
                               This removes every member and cancels your team's registration. This cannot be undone.
                             </p>
                             <div className="flex gap-2">
                               <button
-                                onClick={() => run(() => tournamentsApi.disbandTeam(t.slug))}
+                                onClick={() => {
+                                  tournamentsApi.disbandTeam(t.slug)
+                                    .then(refreshMyRegistration)
+                                    .catch(e => setError(e.message));
+                                }}
                                 disabled={submitting}
                                 className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-black py-2.5 rounded-lg text-xs tracking-widest uppercase transition-all cursor-pointer disabled:opacity-40"
                               >
@@ -593,7 +813,11 @@ export default function TournamentTeamPage() {
                   ) : (
                     <button
                       onClick={() => {
-                        if (confirm("Leave this team?")) run(() => tournamentsApi.leaveTeam(t.slug));
+                        if (confirm("Leave this team?")) {
+                          tournamentsApi.leaveTeam(t.slug)
+                            .then(refreshMyRegistration)
+                            .catch(e => setError(e.message));
+                        }
                       }}
                       disabled={submitting}
                       className="w-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400/80 hover:text-red-400 font-black py-3 rounded-xl text-sm tracking-widest uppercase transition-all cursor-pointer disabled:opacity-40"

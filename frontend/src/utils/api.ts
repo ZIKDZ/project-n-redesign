@@ -223,8 +223,35 @@ export const tournaments = {
     request(`/api/tournaments/${slug}/register/`, { method: 'POST' }),
   withdrawSolo: (slug: string) =>
     request(`/api/tournaments/${slug}/withdraw/`, { method: 'POST' }),
-  createTeam: (slug: string, data: { name: string; tag?: string; logo_url?: string }) =>
-    request(`/api/tournaments/${slug}/teams/create/`, { method: 'POST', body: JSON.stringify(data) }),
+  
+  // Team creation - supports both FormData (with logo) and plain object
+  createTeam: async (slug: string, data: FormData | { name: string; tag?: string; logo_url?: string }) => {
+    const url = `/api/tournaments/${slug}/teams/create/`
+    const csrfToken = getCookie('csrftoken')
+    
+    if (data instanceof FormData) {
+      // Handle multipart form data (with logo file)
+      const res = await fetch(url, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'X-CSRFToken': csrfToken,
+        },
+        body: data,
+      })
+      
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(err.error || `HTTP ${res.status}`)
+      }
+      
+      return res.json()
+    } else {
+      // Handle JSON (backwards compatibility)
+      return request(url, { method: 'POST', body: JSON.stringify(data) })
+    }
+  },
+
   joinTeam: (slug: string, inviteCode: string) =>
     request(`/api/tournaments/${slug}/teams/join/`, { method: 'POST', body: JSON.stringify({ invite_code: inviteCode }) }),
   leaveTeam: (slug: string) =>
@@ -233,9 +260,8 @@ export const tournaments = {
     request(`/api/tournaments/${slug}/teams/regenerate-code/`, { method: 'POST' }),
   kickMember: (slug: string, playerId: number) =>
     request(`/api/tournaments/${slug}/teams/kick/`, { method: 'POST', body: JSON.stringify({ player_id: playerId }) }),
-
   transferCaptain: (slug: string, playerId: number) =>
-  request(`/api/tournaments/${slug}/teams/transfer-captain/`, { method: 'POST', body: JSON.stringify({ player_id: playerId }) }),
+    request(`/api/tournaments/${slug}/teams/transfer-captain/`, { method: 'POST', body: JSON.stringify({ player_id: playerId }) }),
   disbandTeam: (slug: string) =>
     request(`/api/tournaments/${slug}/teams/disband/`, { method: 'POST' }),
 
