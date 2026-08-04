@@ -64,6 +64,11 @@ const STATUS_CONFIG: Record<
   completed:   { label: 'Completed', color: 'purple' },
 }
 
+const BRACKET_TYPE_CONFIG: Record<string, string> = {
+  single_elim: 'Single Elimination',
+  double_elim: 'Double Elimination',
+}
+
 // datetime-local <-> ISO helpers -----------------------------------------------
 function toLocalInput(iso: string | null | undefined): string {
   if (!iso) return ''
@@ -307,12 +312,18 @@ function ParticipantsPanel({
 }
 
 // ── BracketEditor ─────────────────────────────────────────────────────────────
+// Supports both single_elim (bracket: 'winners' only) and double_elim
+// (bracket: 'winners' | 'losers' | 'grand_final'). Matches are grouped by
+// (bracket, round_number) rather than round_number alone, since winners-R1
+// and losers-R1 are two completely different columns in a double-elim event.
 function BracketEditor({
   tournamentId,
   participants,
+  bracketType,
 }: {
   tournamentId: number
   participants: any[]
+  bracketType: string
 }) {
   const [matches, setMatches] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -398,13 +409,17 @@ function BracketEditor({
 
   // ── Empty state ────────────────────────────────────────────────────────────
   if (matches.length === 0) {
+    const isDouble = bracketType === 'double_elim'
     return (
       <div className="border border-dashed border-white/10 rounded-xl p-8 text-center space-y-4">
         <p className="text-white/25 text-xs tracking-widest uppercase">No bracket yet</p>
         <p className="text-white/15 text-[10px] max-w-xs mx-auto leading-relaxed">
-          Generates a single-elimination bracket from the {participants.length} active
-          participant{participants.length !== 1 ? 's' : ''} registered so far, seeded by their
-          seed number (unseeded entrants are seeded last, in registration order).
+          Generates a {isDouble ? 'double' : 'single'}-elimination bracket from the{' '}
+          {participants.length} active participant{participants.length !== 1 ? 's' : ''}{' '}
+          registered so far, seeded by their seed number (unseeded entrants are seeded last, in
+          registration order).
+          {isDouble &&
+            ' Losers dropping out of the winners bracket fall into the losers bracket automatically; the losers-bracket champion faces the winners-bracket champion in the Grand Final.'}
         </p>
         {error && <p className="text-red-400 text-xs">{error}</p>}
         <button
@@ -424,34 +439,162 @@ function BracketEditor({
     )
   }
 
-  // ── Round grouping ─────────────────────────────────────────────────────────
-  const rounds: Record<number, any[]> = {}
-  matches.forEach(m => {
-    ;(rounds[m.round_number] ||= []).push(m)
-  })
-  Object.values(rounds).forEach(list =>
-    list.sort((a, b) => a.position - b.position)
-  )
-  const roundNumbers = Object.keys(rounds)
-    .map(Number)
-    .sort((a, b) => a - b)
-  const totalRounds = roundNumbers.length
+  // ── Split by bracket segment ──────────────────────────────────────────────
+  const winners    = matches.filter(m => m.bracket === 'winners')
+  const losers     = matches.filter(m => m.bracket === 'losers')
+  const grandFinal = matches.filter(m => m.bracket === 'grand_final')
 
-  const roundLabel = (r: number) => {
-    if (r === totalRounds) return 'Final'
-    if (r === totalRounds - 1) return 'Semifinals'
-    if (r === totalRounds - 2) return 'Quarterfinals'
+  const buildRounds = (list: any[]) => {
+    const rounds: Record<number, any[]> = {}
+    list.forEach(m => {
+      ;(rounds[m.round_number] ||= []).push(m)
+    })
+    Object.values(rounds).forEach(l => l.sort((a, b) => a.position - b.position))
+    return rounds
+  }
+
+  const winnersRounds = buildRounds(winners)
+  const losersRounds  = buildRounds(losers)
+
+  const winnersRoundNumbers = Object.keys(winnersRounds).map(Number).sort((a, b) => a - b)
+  const losersRoundNumbers  = Object.keys(losersRounds).map(Number).sort((a, b) => a - b)
+
+  const winnersTotalRounds = winnersRoundNumbers.length
+  const losersTotalRounds  = losersRoundNumbers.length
+  const hasLosersBracket   = losersRoundNumbers.length > 0 || grandFinal.length > 0
+
+  const winnersRoundLabel = (r: number) => {
+    if (r === winnersTotalRounds) return hasLosersBracket ? 'Winners Final' : 'Final'
+    if (r === winnersTotalRounds - 1) return 'Semifinals'
+    if (r === winnersTotalRounds - 2) return 'Quarterfinals'
     return `Round ${r}`
+  }
+
+  const losersRoundLabel = (r: number) => {
+    if (r === losersTotalRounds) return 'Losers Final'
+    return `Losers Round ${r}`
+  }
+
+  // Only winners-bracket Round 1 slots accept manual drag/drop reassignment.
+  // Everything downstream (including the entire losers bracket) is populated
+  // automatically as matches resolve — dragging there would desync the links.
+  const canDropOnto = (bracket: string, round: number) =>
+    bracket === 'winners' && round === 1
+
+  const renderMatchCard = (m: any, allowDrop: boolean) => {
+    const locked = m.status === 'completed' || m.status === 'bye'
+    const bothFilled = !!(m.participant_a && m.participant_b)
+
+    return (
+      <div
+        key={m.id}
+        className="bg-white/5 border border-white/10 rounded-xl overflow-hidden"
+      >
+        {(['a', 'b'] as const).map(slot => {
+          const participant = slot === 'a' ? m.participant_a : m.participant_b
+          const isWinner =
+            m.winner_id && participant && m.winner_id === participant.id
+          const canDrop = allowDrop && !locked
+          const canDeclare = bothFilled && !locked
+
+          return (
+            <div
+              key={slot}
+              onDragOver={e => {
+                if (canDrop) e.preventDefault()
+              }}
+              onDrop={e => {
+                e.preventDefault()
+                if (canDrop && dragIdRef.current != null)
+                  assignSlot(m.id, slot, dragIdRef.current)
+              }}
+              onClick={() => {
+                if (canDeclare && participant) declareWinner(m.id, participant.id)
+              }}
+              className={[
+                'px-3 py-2 text-xs flex items-center justify-between gap-2',
+                'border-b border-white/5 last:border-0 transition-colors',
+                canDeclare ? 'cursor-pointer hover:bg-purple-500/10' : '',
+                isWinner
+                  ? 'bg-green-500/10 text-green-300 font-bold'
+                  : 'text-white/60',
+                canDrop && !participant
+                  ? 'border-dashed border border-white/20'
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              <span className="truncate">
+                {participant
+                  ? participant.display_name
+                  : canDrop
+                  ? 'Drop here'
+                  : '—'}
+              </span>
+              {isWinner && <span className="text-green-400 text-[10px]">✓</span>}
+            </div>
+          )
+        })}
+
+        {m.status === 'completed' && (
+          <button
+            type="button"
+            onClick={() => undoWinner(m.id)}
+            className="w-full text-[9px] text-white/20 hover:text-red-400 py-1 tracking-widest uppercase transition-colors cursor-pointer"
+          >
+            Undo
+          </button>
+        )}
+        {m.status === 'bye' && (
+          <p className="text-[9px] text-white/15 text-center py-1 tracking-widest uppercase">
+            Bye
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  const renderSection = (
+    title: string,
+    roundsMap: Record<number, any[]>,
+    roundNumbers: number[],
+    labelFn: (r: number) => string,
+    bracketKey: string
+  ) => {
+    if (roundNumbers.length === 0) return null
+    return (
+      <div className="space-y-3">
+        <p className="text-white/40 text-[10px] font-black tracking-widest uppercase">
+          {title}
+        </p>
+        <div className="flex gap-6 overflow-x-auto pb-2">
+          {roundNumbers.map(r => (
+            <div key={r} className="flex flex-col gap-4 shrink-0" style={{ minWidth: 190 }}>
+              <p className="text-white/35 text-[10px] font-black tracking-widest uppercase text-center">
+                {labelFn(r)}
+              </p>
+              <div className="flex flex-col justify-around flex-1 gap-4">
+                {roundsMap[r].map((m: any) =>
+                  renderMatchCard(m, canDropOnto(bracketKey, r))
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
   }
 
   // ── Bracket UI ─────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Toolbar */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <p className="text-white/25 text-[10px] tracking-widest max-w-md">
-          Drag a participant onto an empty round-1 slot. Click a filled slot to declare that
-          player/team the winner — it advances automatically to the next round.
+          Drag a participant onto an empty Winners Round 1 slot. Click a filled slot to declare
+          that player/team the winner — it advances automatically
+          {hasLosersBracket ? ' (losers drop into the losers bracket automatically).' : '.'}
         </p>
         <button
           type="button"
@@ -472,7 +615,7 @@ function BracketEditor({
       {/* Participant tray */}
       <div className="bg-white/3 border border-white/8 rounded-xl p-3">
         <p className="text-white/25 text-[10px] font-bold tracking-widest uppercase mb-2">
-          Participants — drag into a round 1 slot
+          Participants — drag into a Winners Round 1 slot
         </p>
         <div className="flex flex-wrap gap-2">
           {participants.map(p => (
@@ -493,107 +636,31 @@ function BracketEditor({
         </div>
       </div>
 
-      {/* Bracket columns */}
-      <div className="flex gap-6 overflow-x-auto pb-2">
-        {roundNumbers.map(r => (
-          <div
-            key={r}
-            className="flex flex-col gap-4 shrink-0"
-            style={{ minWidth: 190 }}
-          >
-            {/* Round label */}
-            <p className="text-white/35 text-[10px] font-black tracking-widest uppercase text-center">
-              {roundLabel(r)}
-            </p>
+      {/* Winners Bracket */}
+      {renderSection(
+        hasLosersBracket ? 'Winners Bracket' : 'Bracket',
+        winnersRounds,
+        winnersRoundNumbers,
+        winnersRoundLabel,
+        'winners'
+      )}
 
-            {/* Matches */}
-            <div className="flex flex-col justify-around flex-1 gap-4">
-              {rounds[r].map((m: any) => {
-                const locked = m.status === 'completed' || m.status === 'bye'
-                const bothFilled = !!(m.participant_a && m.participant_b)
+      {/* Losers Bracket */}
+      {renderSection('Losers Bracket', losersRounds, losersRoundNumbers, losersRoundLabel, 'losers')}
 
-                return (
-                  <div
-                    key={m.id}
-                    className="bg-white/5 border border-white/10 rounded-xl overflow-hidden"
-                  >
-                    {/* Slot A & B */}
-                    {(['a', 'b'] as const).map(slot => {
-                      const participant =
-                        slot === 'a' ? m.participant_a : m.participant_b
-                      const isWinner =
-                        m.winner_id &&
-                        participant &&
-                        m.winner_id === participant.id
-                      const canDrop = r === 1 && !locked
-                      const canDeclare = bothFilled && !locked
-
-                      return (
-                        <div
-                          key={slot}
-                          onDragOver={e => {
-                            if (canDrop) e.preventDefault()
-                          }}
-                          onDrop={e => {
-                            e.preventDefault()
-                            if (canDrop && dragIdRef.current != null)
-                              assignSlot(m.id, slot, dragIdRef.current)
-                          }}
-                          onClick={() => {
-                            if (canDeclare && participant)
-                              declareWinner(m.id, participant.id)
-                          }}
-                          className={[
-                            'px-3 py-2 text-xs flex items-center justify-between gap-2',
-                            'border-b border-white/5 last:border-0 transition-colors',
-                            canDeclare ? 'cursor-pointer hover:bg-purple-500/10' : '',
-                            isWinner
-                              ? 'bg-green-500/10 text-green-300 font-bold'
-                              : 'text-white/60',
-                            // Highlight droppable slots
-                            canDrop && !participant
-                              ? 'border-dashed border border-white/20'
-                              : '',
-                          ]
-                            .filter(Boolean)
-                            .join(' ')}
-                        >
-                          <span className="truncate">
-                            {participant
-                              ? participant.display_name
-                              : r === 1
-                              ? 'Drop here'
-                              : '—'}
-                          </span>
-                          {isWinner && (
-                            <span className="text-green-400 text-[10px]">✓</span>
-                          )}
-                        </div>
-                      )
-                    })}
-
-                    {/* Undo / Bye footer */}
-                    {m.status === 'completed' && (
-                      <button
-                        type="button"
-                        onClick={() => undoWinner(m.id)}
-                        className="w-full text-[9px] text-white/20 hover:text-red-400 py-1 tracking-widest uppercase transition-colors cursor-pointer"
-                      >
-                        Undo
-                      </button>
-                    )}
-                    {m.status === 'bye' && (
-                      <p className="text-[9px] text-white/15 text-center py-1 tracking-widest uppercase">
-                        Bye
-                      </p>
-                    )}
-                  </div>
-                )
-              })}
+      {/* Grand Final */}
+      {grandFinal.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-white/40 text-[10px] font-black tracking-widest uppercase">
+            Grand Final
+          </p>
+          <div className="flex gap-6">
+            <div className="flex flex-col gap-4 shrink-0" style={{ minWidth: 190 }}>
+              {grandFinal.map((m: any) => renderMatchCard(m, false))}
             </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -889,10 +956,18 @@ function TournamentModal({
                   }
                   className={selectClass}
                 >
-                  <option value="single_elim" className="bg-[#1a0030]">
-                    Single Elimination
-                  </option>
+                  {Object.entries(BRACKET_TYPE_CONFIG).map(([v, label]) => (
+                    <option key={v} value={v} className="bg-[#1a0030]">
+                      {label}
+                    </option>
+                  ))}
                 </select>
+                {isEdit && (
+                  <p className="text-white/15 text-[10px] mt-1">
+                    Changing this won't affect an already-generated bracket — reset it first
+                    on the Bracket tab, then regenerate.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -998,6 +1073,7 @@ function TournamentModal({
           <BracketEditor
             tournamentId={initial.id}
             participants={participants}
+            bracketType={form.bracket_type}
           />
         )}
       </ModalBody>
@@ -1065,6 +1141,7 @@ function TournamentRow({
           <Badge color={sc.color}>{sc.label}</Badge>
           <Badge color="purple">{game?.title || t.game_title || 'Multi-game'}</Badge>
           <Badge color="gray">{t.format === 'team' ? 'Team' : 'Solo'}</Badge>
+          <Badge color="gray">{BRACKET_TYPE_CONFIG[t.bracket_type] || t.bracket_type}</Badge>
         </div>
         <p className="text-white/40 text-xs">
           {t.participant_count ?? 0}
@@ -1183,7 +1260,7 @@ export default function TournamentsSection() {
     bannerFile: File | null
   ) => {
     if (!editing) return
-  
+
     if (bannerFile) {
       const fd = new FormData()
       // Exclude banner_url when uploading a file
@@ -1197,7 +1274,7 @@ export default function TournamentsSection() {
       // Only include banner_url if the user explicitly set/cleared it
       await tournamentsApi.update(editing.id, buildPayload(form, true))
     }
-  
+
     await syncPlacements(editing.id, placements, editing.placements || [])
     load()
   }
