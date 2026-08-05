@@ -36,50 +36,21 @@ const WORDMARK_STYLE: React.CSSProperties = {
   fontWeight: 600,
 };
 
-function Counter({ end, duration = 2000, suffix = "" }: { end: number; duration?: number; suffix?: string }) {
-  const [count, setCount] = useState(0);
-  const ref = useRef<HTMLSpanElement>(null);
-  const [started, setStarted] = useState(false);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) setStarted(true); },
-      { threshold: 0.5 }
-    );
-    if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!started) return;
-    let start = 0;
-    const step = end / (duration / 16);
-    const timer = setInterval(() => {
-      start += step;
-      if (start >= end) { setCount(end); clearInterval(timer); }
-      else setCount(Math.floor(start));
-    }, 16);
-    return () => clearInterval(timer);
-  }, [started, end, duration]);
-
-  return <span ref={ref}>{count}{suffix}</span>;
-}
-
-function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+// ── Pill nav link (restyled for floating pill navbar) ─────────────────────────
+function NavLink({ href, children, onClick }: { href: string; children: React.ReactNode; onClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void }) {
   return (
-    <a href={href}
-      className="text-gray-300 hover:text-purple-400 font-medium tracking-wider text-sm uppercase transition-colors duration-200 relative group">
+    <a href={href} onClick={onClick}
+      className="text-gray-300 hover:text-white font-semibold tracking-wide text-xs uppercase transition-colors duration-200 px-4 py-2 rounded-full hover:bg-purple-500/20">
       {children}
-      <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-purple-400 group-hover:w-full transition-all duration-300" />
     </a>
   );
 }
 
-// ── Dynamic Game Card ─────────────────────────────────────────────────────────
+// ── Dynamic Game Card (now sized for horizontal carousel) ─────────────────────
 function GameCard({ game, onRoster }: { game: GameData; onRoster: () => void }) {
   const overlayColor = game.overlay_color || 'rgba(80,0,160,0.35)';
   return (
-    <div className="group relative border border-white/10 rounded-2xl overflow-hidden hover:-translate-y-1 transition-all duration-300 flex flex-col" style={{ background: "#13001f" }}>
+    <div className="group relative border border-white/10 rounded-2xl overflow-hidden hover:-translate-y-1 transition-all duration-300 flex flex-col shrink-0 w-[300px] snap-start" style={{ background: "#13001f" }}>
       <div className="h-40 relative" style={{ overflow: "hidden", borderRadius: "16px 16px 0 0" }}>
         {game.banner ? (
           <img src={game.banner} alt={game.title}
@@ -100,9 +71,6 @@ function GameCard({ game, onRoster }: { game: GameData; onRoster: () => void }) 
           {[game.genre, game.publisher].filter(Boolean).join(' · ')}
         </p>
         <div className="flex items-center justify-between mt-auto gap-3 flex-wrap">
-          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-green-500/15 text-green-400 border border-green-500/25 uppercase tracking-wider shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />Active
-          </span>
           <button
             onClick={onRoster}
             className="inline-flex items-center gap-1.5 text-xs font-black px-4 py-2 rounded-xl uppercase tracking-widest transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg group/btn shrink-0 cursor-pointer"
@@ -123,11 +91,12 @@ function GameCard({ game, onRoster }: { game: GameData; onRoster: () => void }) 
   );
 }
 
-// ── Games Section (dynamic) ───────────────────────────────────────────────────
+// ── Games Section (dynamic — now a horizontal scroll carousel) ────────────────
 function GamesSection() {
   const navigate = useNavigate();
   const [gameList, setGameList] = useState<GameData[]>([]);
   const [loading, setLoading] = useState(true);
+  const scrollerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     (gamesApi.list() as Promise<any>)
@@ -136,30 +105,40 @@ function GamesSection() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) {
-    return (
-      <section id="games" className="py-24">
-        <div className="max-w-7xl mx-auto px-6 flex justify-center py-12">
-          <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      </section>
-    );
-  }
+  const scrollBy = (dir: number) => {
+    scrollerRef.current?.scrollBy({ left: dir * 320, behavior: "smooth" });
+  };
 
   return (
-    <section id="games" className="py-24">
+    <section id="esports" className="py-24 border-t border-white/5">
       <div className="max-w-7xl mx-auto px-6">
-        <div className="text-center mb-16">
-          <span className="text-purple-400 font-bold tracking-widest uppercase text-sm mb-4 block">Our Games</span>
-          <h2 className="text-5xl md:text-6xl font-black uppercase leading-tight mb-4" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-            We Play to <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-300">Win</span>
-          </h2>
-          <p className="text-gray-400 max-w-xl mx-auto">Competing at the highest level across the most exciting esports titles</p>
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-12">
+          <div>
+            <span className="text-purple-400 font-bold tracking-widest uppercase text-sm mb-4 block">Our Esports</span>
+            <h2 className="text-5xl md:text-6xl font-black uppercase leading-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+              We Play to <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-300">Win</span>
+            </h2>
+          </div>
+          {gameList.length > 3 && (
+            <div className="flex items-center gap-3 shrink-0">
+              <button onClick={() => scrollBy(-1)} className="w-11 h-11 rounded-full border border-white/15 flex items-center justify-center text-white/70 hover:text-white hover:border-purple-400/60 hover:bg-purple-500/10 transition-all cursor-pointer">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
+              </button>
+              <button onClick={() => scrollBy(1)} className="w-11 h-11 rounded-full border border-white/15 flex items-center justify-center text-white/70 hover:text-white hover:border-purple-400/60 hover:bg-purple-500/10 transition-all cursor-pointer">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+              </button>
+            </div>
+          )}
         </div>
-        {gameList.length === 0 ? (
-          <p className="text-center text-white/30 text-lg tracking-wider uppercase py-12">No active games yet.</p>
+
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : gameList.length === 0 ? (
+          <p className="text-center text-white/30 text-lg tracking-wider uppercase py-12">No esports yet.</p>
         ) : (
-          <div className={`grid gap-6 ${gameList.length === 1 ? 'max-w-sm mx-auto' : gameList.length === 2 ? 'sm:grid-cols-2 max-w-2xl mx-auto' : 'sm:grid-cols-2 md:grid-cols-3'}`}>
+          <div ref={scrollerRef} className="flex gap-6 overflow-x-auto snap-x snap-mandatory pb-4 -mx-6 px-6 scrollbar-hide" style={{ scrollbarWidth: "none" }}>
             {gameList.map(g => (
               <GameCard
                 key={g.id}
@@ -174,28 +153,22 @@ function GamesSection() {
   );
 }
 
-function PillarCard({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
+// ── About pillar (now a numbered row instead of a card) ───────────────────────
+function PillarCard({ icon, title, description, index }: { icon: React.ReactNode; title: string; description: string; index: number }) {
   return (
-    <div className="group relative bg-white/5 border border-white/10 rounded-2xl p-8 hover:border-purple-500/40 transition-all duration-300">
-      <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-purple-500/5 to-violet-600/5 opacity-0 group-hover:opacity-100 transition-all duration-300" />
-      <div className="relative">
-        <div className="w-14 h-14 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center mb-6 group-hover:bg-purple-500/30 transition-colors duration-300">
-          {icon}
+    <div className="group flex gap-6 py-8 border-b border-white/10 last:border-b-0">
+      <span className="text-white/10 font-black text-6xl leading-none shrink-0 group-hover:text-purple-500/30 transition-colors duration-300" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+        {String(index).padStart(2, "0")}
+      </span>
+      <div className="flex-1">
+        <div className="flex items-center gap-4 mb-3">
+          <div className="w-11 h-11 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center shrink-0 group-hover:bg-purple-500/30 transition-colors duration-300">
+            {icon}
+          </div>
+          <h3 className="text-white font-bold text-xl" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>{title}</h3>
         </div>
-        <h3 className="text-white font-bold text-xl mb-3" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>{title}</h3>
         <p className="text-gray-400 leading-relaxed">{description}</p>
       </div>
-    </div>
-  );
-}
-
-function StatCard({ value, label, suffix }: { value: number; label: string; suffix?: string }) {
-  return (
-    <div className="text-center">
-      <div className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-300 mb-2" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-        <Counter end={value} suffix={suffix || "+"} />
-      </div>
-      <p className="text-gray-400 uppercase tracking-widest text-sm font-medium">{label}</p>
     </div>
   );
 }
@@ -231,15 +204,15 @@ function MatchCard({ rival, rivalLogo, type, game, date, time, status, score, wi
   const color = gameColor || GAME_COLORS[game] || "#a855f7";
   const nblLoser = status === "completed" && winner === "rival";
   const rivalLoser = status === "completed" && winner === "nbl";
- 
+
   const formattedDate = (() => {
     try {
       return new Date(date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
     } catch { return date; }
   })();
- 
+
   return (
-    <div className="group flex items-center gap-5 bg-white/5 border border-white/8 hover:border-purple-500/35 rounded-2xl px-7 py-6 transition-all duration-200">
+    <div className="group flex items-center gap-5 bg-white/5 border border-white/8 hover:border-purple-500/35 rounded-2xl px-7 py-6 transition-all duration-200 w-full">
       {/* NBL side */}
       <div className={`flex flex-col items-center gap-2 min-w-[100px] transition-opacity duration-200 ${nblLoser ? "opacity-40" : ""}`}>
         <div className={`w-14 h-14 rounded-xl bg-gradient-to-br from-violet-600 to-purple-500 flex items-center justify-center ${winner === "nbl" ? "ring-2 ring-purple-400/60" : ""}`}>
@@ -247,7 +220,7 @@ function MatchCard({ rival, rivalLogo, type, game, date, time, status, score, wi
         </div>
         <span className="text-white text-xs font-bold tracking-widest uppercase">NBL Esports</span>
       </div>
- 
+
       {/* Centre */}
       <div className="flex-1 text-center">
         {status === "completed" ? (
@@ -262,7 +235,7 @@ function MatchCard({ rival, rivalLogo, type, game, date, time, status, score, wi
           </>
         )}
       </div>
- 
+
       {/* Rival side */}
       <div className={`flex flex-col items-center gap-2 min-w-[100px] transition-opacity duration-200 ${rivalLoser ? "opacity-40" : ""}`}>
         <div className={`w-14 h-14 rounded-xl overflow-hidden flex items-center justify-center ${winner === "rival" ? "ring-2 ring-pink-400/60" : ""}`}
@@ -275,7 +248,7 @@ function MatchCard({ rival, rivalLogo, type, game, date, time, status, score, wi
         </div>
         <span className="text-white text-xs font-bold tracking-widest uppercase text-center">{rival}</span>
       </div>
- 
+
       {/* Meta */}
       <div className="ml-auto text-right min-w-[130px]">
         <span className="inline-flex items-center text-xs font-bold px-3 py-1 rounded-full mb-2 uppercase tracking-wider"
@@ -283,7 +256,7 @@ function MatchCard({ rival, rivalLogo, type, game, date, time, status, score, wi
         <div className="text-white font-bold text-sm">{formattedDate}</div>
         <div className="text-purple-400 text-sm mt-0.5">{time}</div>
       </div>
- 
+
       {/* Status badge */}
       {status === "live" && (
         <span className="ml-4 inline-flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 uppercase tracking-widest" style={{ minWidth: "110px" }}>
@@ -308,13 +281,13 @@ function MatchCard({ rival, rivalLogo, type, game, date, time, status, score, wi
 }
 
 function NewsCard({
-  tag, title, description, date, thumbnail, onReadMore,
+  tag, title, description, date, thumbnail, onReadMore, featured = false,
 }: {
   tag: string; title: string; description: string;
-  date: string; thumbnail: string; onReadMore?: () => void;
+  date: string; thumbnail: string; onReadMore?: () => void; featured?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
- 
+
   const TAG_COLORS: Record<string, { text: string; bg: string; border: string }> = {
     announcement: { text: "#a855f7", bg: "rgba(168,85,247,0.15)", border: "rgba(168,85,247,0.35)" },
     award:        { text: "#ffd700", bg: "rgba(255,215,0,0.15)",  border: "rgba(255,215,0,0.35)"  },
@@ -323,17 +296,17 @@ function NewsCard({
     roster:       { text: "#60a5fa", bg: "rgba(96,165,250,0.15)", border: "rgba(96,165,250,0.35)" },
     update:       { text: "#fb923c", bg: "rgba(251,146,60,0.15)", border: "rgba(251,146,60,0.35)" },
   };
- 
+
   const tc = TAG_COLORS[tag] || TAG_COLORS.announcement;
- 
+
   const formattedDate = (() => {
     try { return new Date(date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) }
     catch { return date }
   })();
- 
+
   return (
     <div
-      className="group border border-white/8 rounded-2xl overflow-hidden transition-all duration-300 flex flex-col"
+      className={`group border border-white/8 rounded-2xl overflow-hidden transition-all duration-300 flex ${featured ? "flex-col md:flex-row" : "flex-col"}`}
       style={{
         background: "rgba(255,255,255,0.04)",
         borderColor: hovered ? tc.border : "rgba(255,255,255,0.08)",
@@ -344,7 +317,7 @@ function NewsCard({
       onMouseLeave={() => setHovered(false)}
     >
       {/* Thumbnail */}
-      <div className="relative overflow-hidden h-48 shrink-0">
+      <div className={`relative overflow-hidden shrink-0 ${featured ? "h-64 md:h-auto md:w-1/2" : "h-48"}`}>
         {thumbnail
           ? (
             <img
@@ -371,18 +344,18 @@ function NewsCard({
           {tag}
         </span>
       </div>
- 
+
       {/* Body */}
-      <div className="p-5 flex flex-col flex-1">
+      <div className={`p-5 flex flex-col flex-1 ${featured ? "md:p-8 md:justify-center" : ""}`}>
         {title && (
           <h3
-            className="text-white font-black text-base uppercase leading-tight mb-2 line-clamp-2"
+            className={`text-white font-black uppercase leading-tight mb-2 ${featured ? "text-2xl md:text-3xl line-clamp-3" : "text-base line-clamp-2"}`}
             style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
           >
             {title}
           </h3>
         )}
-        <p className="text-white/50 text-sm leading-relaxed mb-4 line-clamp-3 flex-1">{description}</p>
+        <p className={`text-white/50 leading-relaxed mb-4 flex-1 ${featured ? "text-base line-clamp-4" : "text-sm line-clamp-3"}`}>{description}</p>
         <div className="flex items-center justify-between mt-auto pt-3 border-t border-white/6">
           <span className="text-xs text-white/25 tracking-wider">{formattedDate}</span>
           {onReadMore && (
@@ -410,6 +383,7 @@ function NewsCard({
   );
 }
 
+// ── News (magazine layout — featured story + list) ────────────────────────────
 function LiveNewsSection() {
   const navigate = useNavigate();
   const [newsList, setNewsList] = useState<any[]>([]);
@@ -422,16 +396,27 @@ function LiveNewsSection() {
       .finally(() => setLoading(false));
   }, []);
 
-  const displayed = newsList.slice(0, 3); // Keep only 3 on landing
+  const displayed = newsList.slice(0, 3);
+  const [featuredItem, ...restItems] = displayed;
 
   return (
-    <section id="news" className="py-24">
+    <section id="news" className="py-24 border-t border-white/5">
       <div className="max-w-7xl mx-auto px-6">
-        <div className="text-center mb-16">
-          <span className="text-purple-400 font-bold tracking-widest uppercase text-sm mb-4 block">Latest News</span>
-          <h2 className="text-5xl md:text-6xl font-black uppercase leading-tight mb-4" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-            News & <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-300">Updates</span>
-          </h2>
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-12">
+          <div>
+            <span className="text-purple-400 font-bold tracking-widest uppercase text-sm mb-4 block">Latest News</span>
+            <h2 className="text-5xl md:text-6xl font-black uppercase leading-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+              News & <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-300">Updates</span>
+            </h2>
+          </div>
+          {newsList.length > 3 && (
+            <button
+              onClick={() => navigate("/news")}
+              className="inline-flex items-center gap-2 bg-white/5 hover:bg-purple-500/15 border border-white/10 hover:border-purple-500/40 text-white font-bold px-6 py-3 rounded-full text-xs tracking-widest uppercase transition-all duration-200 cursor-pointer shrink-0"
+            >
+              View All ({newsList.length}) →
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -443,33 +428,35 @@ function LiveNewsSection() {
             No news yet. Check back soon.
           </p>
         ) : (
-          <>
-            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
-              {displayed.map((n: any) => (
-                <NewsCard
-                  key={n.id}
-                  tag={n.tag}
-                  title={n.title}
-                  description={n.description}
-                  date={n.published_at}
-                  thumbnail={n.thumbnail || ""}
-                  onReadMore={() => navigate(`/news/${n.id}`)}
-                />
-              ))}
-            </div>
-
-            {/* Only show button if there are more than 3 posts */}
-            {newsList.length > 3 && (
-              <div className="mt-12 text-center">
-                <button
-                  onClick={() => navigate("/news")}
-                  className="inline-flex items-center gap-2 bg-white/5 hover:bg-purple-500/15 border border-white/10 hover:border-purple-500/40 text-white font-bold px-8 py-3 rounded-full text-sm tracking-widest uppercase transition-all duration-200 cursor-pointer"
-                >
-                  View All News ({newsList.length}) →
-                </button>
+          <div className="flex flex-col gap-6">
+            {featuredItem && (
+              <NewsCard
+                featured
+                key={featuredItem.id}
+                tag={featuredItem.tag}
+                title={featuredItem.title}
+                description={featuredItem.description}
+                date={featuredItem.published_at}
+                thumbnail={featuredItem.thumbnail || ""}
+                onReadMore={() => navigate(`/news/${featuredItem.id}`)}
+              />
+            )}
+            {restItems.length > 0 && (
+              <div className="grid sm:grid-cols-2 gap-6">
+                {restItems.map((n: any) => (
+                  <NewsCard
+                    key={n.id}
+                    tag={n.tag}
+                    title={n.title}
+                    description={n.description}
+                    date={n.published_at}
+                    thumbnail={n.thumbnail || ""}
+                    onReadMore={() => navigate(`/news/${n.id}`)}
+                  />
+                ))}
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
     </section>
@@ -519,7 +506,7 @@ function JoinForm() {
 
   if (!loadingGames && gameList.length === 0) {
     return (
-      <div className="bg-white/5 border border-white/10 rounded-3xl p-8 md:p-12 text-center">
+      <div className="text-center">
         <div className="w-16 h-16 rounded-full bg-purple-500/15 border border-purple-500/25 flex items-center justify-center mx-auto mb-6">
           <svg className="w-7 h-7 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round"
@@ -547,7 +534,7 @@ function JoinForm() {
   }
 
   return (
-    <div className="bg-white/5 border border-white/10 rounded-3xl p-8 md:p-10">
+    <div>
       {status === "success" ? (
         <div className="text-center py-12">
           <div className="w-16 h-16 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center mx-auto mb-6">
@@ -564,7 +551,7 @@ function JoinForm() {
         </div>
       ) : (
         <form onSubmit={handleSubmit}>
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid sm:grid-cols-2 gap-5">
             <div>
               <label className={labelClass}>Username</label>
               <input type="text" name="username" value={formData.username} onChange={handleChange}
@@ -576,11 +563,11 @@ function JoinForm() {
                 required placeholder="Your in-game name" className={inputClass} />
             </div>
             <div>
-              <label className={labelClass}>Game</label>
+              <label className={labelClass}>Esport</label>
               <select name="game" value={formData.game} onChange={handleChange} required
                 className={inputClass + " cursor-pointer"}>
                 <option value="" disabled>
-                  {loadingGames ? "Loading…" : "Select a game"}
+                  {loadingGames ? "Loading…" : "Select an esport"}
                 </option>
                 {gameList.map(g => (
                   <option key={g.slug} value={g.slug} className="bg-[#1a0030]">{g.title}</option>
@@ -598,7 +585,7 @@ function JoinForm() {
                 disabled={!formData.game || ranks.length === 0}
                 className={inputClass + " cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"}>
                 <option value="" disabled>
-                  {!formData.game ? "Select a game first" : ranks.length === 0 ? "No ranks defined" : "Select your rank"}
+                  {!formData.game ? "Select an esport first" : ranks.length === 0 ? "No ranks defined" : "Select your rank"}
                 </option>
                 {ranks.map(r => (
                   <option key={r} value={r} className="bg-[#1a0030]">{r}</option>
@@ -627,7 +614,7 @@ function JoinForm() {
   );
 }
 
-// ── Match Schedule ─────────────────────────────────────────────────────────────
+// ── Match Schedule (vertical timeline layout) ──────────────────────────────────
 function MatchSchedule() {
   const [matchList, setMatchList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -642,8 +629,8 @@ function MatchSchedule() {
   const displayed = matchList.slice(0, 5);
 
   return (
-    <section id="schedule" className="py-24">
-      <div className="max-w-7xl mx-auto px-6">
+    <section id="schedule" className="py-24 border-t border-white/5">
+      <div className="max-w-5xl mx-auto px-6">
         <div className="text-center mb-16">
           <span className="inline-block border border-purple-500/40 text-purple-400 font-bold tracking-widest uppercase text-xs px-4 py-2 rounded-full mb-6">Playoff Schedule</span>
           <h2 className="text-5xl md:text-6xl font-black uppercase leading-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
@@ -659,11 +646,20 @@ function MatchSchedule() {
             <p className="text-white/30 text-lg tracking-wider uppercase">No matches scheduled yet.</p>
           </div>
         ) : (
-          <div className="flex flex-col gap-3 mb-10">
-            {displayed.map((m: any) => (
-              <MatchCard key={m.id} rival={m.rival} rivalLogo={m.rival_logo} type={m.match_type} game={m.game}
-                date={m.date} time={m.time} status={m.status} score={m.score} winner={m.winner} />
-            ))}
+          <div className="relative pl-8 md:pl-10 mb-10">
+            <div className="absolute left-[7px] md:left-[11px] top-2 bottom-2 w-px bg-gradient-to-b from-purple-500/60 via-purple-500/20 to-transparent" />
+            <div className="flex flex-col gap-8">
+              {displayed.map((m: any) => (
+                <div key={m.id} className="relative">
+                  <span className={`absolute -left-8 md:-left-10 top-8 w-3.5 h-3.5 rounded-full border-2 ${
+                    m.status === "live" ? "bg-red-400 border-red-400 animate-pulse" :
+                    m.status === "completed" ? "bg-transparent border-white/30" : "bg-purple-400 border-purple-400"
+                  }`} />
+                  <MatchCard rival={m.rival} rivalLogo={m.rival_logo} type={m.match_type} game={m.game}
+                    date={m.date} time={m.time} status={m.status} score={m.score} winner={m.winner} />
+                </div>
+              ))}
+            </div>
           </div>
         )}
         {matchList.length > 5 && (
@@ -733,32 +729,47 @@ function SpotlightHero() {
     </>
   );
 
+  // ── Fallback card (no slides loaded) ────────────────────────────────────────
   if (!loaded || !slides.length) {
     return (
       <div
-        className="animate-float w-full max-w-lg rounded-3xl overflow-hidden border border-white/20 shadow-2xl shadow-purple-900/40"
+        className="animate-float w-full max-w-xl rounded-3xl overflow-hidden border border-white/20 shadow-2xl shadow-purple-900/40"
         style={{ background: "rgba(10,0,20,0.65)", backdropFilter: "blur(16px)" }}
       >
         <div className="h-1.5 w-full bg-gradient-to-r from-purple-600 via-violet-500 to-purple-400" />
-        <div className="p-8 flex flex-col items-center gap-6">
-          <div className="relative">
-            <div className="absolute inset-0 rounded-full bg-purple-500/30 blur-2xl scale-150" />
-            <div className="relative w-24 h-24 rounded-2xl bg-gradient-to-br from-violet-600 to-purple-500 flex items-center justify-center border border-purple-400/30 shadow-lg shadow-purple-500/40">
-              <NBLLogoFull size={56} />
+
+        {/* 16:9 placeholder area */}
+        <div className="relative w-full aspect-video bg-purple-950/60 flex items-center justify-center">
+          <div
+            className="absolute inset-0 opacity-10"
+            style={{
+              backgroundImage:
+                "linear-gradient(rgba(168,85,247,1) 1px, transparent 1px), linear-gradient(90deg, rgba(168,85,247,1) 1px, transparent 1px)",
+              backgroundSize: "30px 30px",
+            }}
+          />
+          <div className="relative flex flex-col items-center gap-4">
+            <div className="relative">
+              <div className="absolute inset-0 rounded-full bg-purple-500/30 blur-2xl scale-150" />
+              <div className="relative w-24 h-24 rounded-2xl bg-gradient-to-br from-violet-600 to-purple-500 flex items-center justify-center border border-purple-400/30 shadow-lg shadow-purple-500/40">
+                <NBLLogoFull size={56} />
+              </div>
+            </div>
+            <div className="text-center px-4">
+              <h3 className="font-black uppercase" style={{ ...WORDMARK_STYLE, fontSize: "1.75rem" }}>
+                NBL<span className="text-purple-400">ESPORT</span>
+              </h3>
+              <p className="text-white/40 text-xs tracking-wider mt-1">Compete · Build · Dominate</p>
             </div>
           </div>
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-2 mb-3">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-              <span className="text-purple-300/80 text-xs font-bold tracking-widest uppercase">Season Active</span>
-            </div>
-            {/* ── Spotlight fallback wordmark ── */}
-            <h3 className="font-black uppercase mb-1" style={{ ...WORDMARK_STYLE, fontSize: "1.875rem" }}>
-              NBL<span className="text-purple-400">ESPORT</span>
-            </h3>
-            <p className="text-white/40 text-sm tracking-wider">Compete · Build · Dominate</p>
+        </div>
+
+        <div className="p-5 flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+            <span className="text-purple-300/80 text-xs font-bold tracking-widest uppercase">Season Active</span>
           </div>
-          <div className="flex items-center gap-2 flex-wrap justify-center">
+          <div className="flex items-center gap-2 flex-wrap">
             {[
               { label: "Rocket League", color: "#60b8ff" },
               { label: "Valorant",      color: "#ff7080" },
@@ -778,29 +789,64 @@ function SpotlightHero() {
     );
   }
 
+  // ── Slide card ───────────────────────────────────────────────────────────────
   const MediaContent = (
     <div
-      className="animate-float w-full max-w-lg rounded-3xl overflow-hidden border border-white/20 shadow-2xl shadow-purple-900/50"
+      className="animate-float w-full max-w-xl rounded-3xl overflow-hidden border border-white/20 shadow-2xl shadow-purple-900/50"
       style={{ background: "rgba(10,0,20,0.55)", backdropFilter: "blur(12px)" }}
     >
       <div className="h-1 w-full bg-gradient-to-r from-purple-600 via-violet-500 to-purple-400" />
-      <div className="relative" style={{ height: "300px" }}>
+
+      {/* 16:9 media area */}
+      <div className="relative w-full aspect-video">
         {slide.media_type === "video" ? (
-          <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline onEnded={advance} style={{ display: "block" }}>
+          <video
+            ref={videoRef}
+            className="absolute inset-0 w-full h-full object-cover"
+            autoPlay
+            muted
+            playsInline
+            onEnded={advance}
+          >
             <source src={slide.media_url} />
           </video>
         ) : (
-          <img src={slide.media_url} alt={slide.title || "Spotlight"} className="w-full h-full object-cover" />
+          <img
+            src={slide.media_url}
+            alt={slide.title || "Spotlight"}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
         )}
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "linear-gradient(to top, rgba(10,0,20,0.90) 0%, rgba(10,0,20,0.15) 55%, transparent 100%)" }} />
+
+        {/* Gradient overlay */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              "linear-gradient(to top, rgba(10,0,20,0.90) 0%, rgba(10,0,20,0.15) 55%, transparent 100%)",
+          }}
+        />
+
+        {/* Pill label */}
         <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm border border-white/15 rounded-full px-3 py-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-white/80 text-[10px] font-bold tracking-widest uppercase">{slide.pill_label}</span>
+          <span className="text-white/80 text-[10px] font-bold tracking-widest uppercase">
+            {slide.pill_label}
+          </span>
         </div>
+
+        {/* Pagination dots */}
         <Dots />
+
+        {/* Title overlay */}
         {slide.title && (
           <div className="absolute bottom-3 left-4 right-8">
-            <p className="text-white font-black text-lg leading-tight uppercase truncate" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>{slide.title}</p>
+            <p
+              className="text-white font-black text-xl leading-tight uppercase truncate"
+              style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+            >
+              {slide.title}
+            </p>
           </div>
         )}
       </div>
@@ -808,13 +854,18 @@ function SpotlightHero() {
   );
 
   if (slide.href) {
-    return <a href={slide.href} target="_blank" rel="noreferrer" className="block w-full max-w-lg">{MediaContent}</a>;
+    return (
+      <a href={slide.href} target="_blank" rel="noreferrer" className="block w-full max-w-xl">
+        {MediaContent}
+      </a>
+    );
   }
-  return <div className="w-full max-w-lg">{MediaContent}</div>;
+  return <div className="w-full max-w-xl">{MediaContent}</div>;
 }
 
-// ── Landing page ──────────────────────────────────────────────────────────────
+// ── Landing page ── whole new layout ───────────────────────────────────────────
 export default function Landing() {
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -827,28 +878,29 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-[#0d0014] text-white overflow-x-hidden" style={{ fontFamily: "'Barlow', sans-serif" }}>
 
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "bg-[#0d0014]/95 backdrop-blur-md shadow-lg shadow-purple-900/30" : "bg-transparent"}`}>
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+      {/* ── Floating pill nav ────────────────────────────────────────────── */}
+      <nav className={`sticky top-0 z-50 transition-all duration-300 ${scrolled ? "bg-[#0d0014]/95 backdrop-blur-md shadow-lg shadow-purple-900/30" : "bg-transparent"}`}>
+        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
           <a href="#" className="flex items-center gap-3 group">
-            <NBLLogoFull size={40} className="group-hover:scale-110 transition-transform duration-200" />
-            <div>
-              {/* ── Nav wordmark ── */}
-              <span className="block font-black tracking-wider" style={{ ...WORDMARK_STYLE, fontSize: "1.5rem" }}>
-                NBL<span className="text-purple-400">ESPORT</span>
-              </span>
-              <span className="block text-purple-400/60 text-xs tracking-widest uppercase">Nebula Esport</span>
-            </div>
+            <NBLLogoFull size={36} className="group-hover:scale-110 transition-transform duration-200" />
+            <span className="block font-black tracking-wider" style={{ ...WORDMARK_STYLE, fontSize: "1.25rem" }}>
+              NBL<span className="text-purple-400">ESPORT</span>
+            </span>
           </a>
-          <div className="hidden md:flex items-center gap-8">
-            <NavLink href="#games">Games</NavLink>
+
+          <div className="hidden md:flex items-center gap-1 bg-white/5 border border-white/10 rounded-full px-2 py-1">
+            <NavLink href="#esports">Esports</NavLink>
             <NavLink href="#schedule">Schedule</NavLink>
             <NavLink href="#about">About</NavLink>
             <NavLink href="#news">News</NavLink>
-            <NavLink href="#join">Join Us</NavLink>
+            <NavLink href="/tournaments" onClick={e => { e.preventDefault(); navigate("/tournaments"); }}>Tournaments</NavLink>
+            <NavLink href="/shop" onClick={e => { e.preventDefault(); navigate("/shop"); }}>Shop</NavLink>
           </div>
+
           <div className="hidden md:flex items-center gap-4">
-            <a href="#join" className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-2.5 rounded-lg text-sm tracking-wider uppercase transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/30">Join Now</a>
+            <a href="#join" className="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-2.5 rounded-full text-xs tracking-widest uppercase transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/30">Join Now</a>
           </div>
+
           <button onClick={() => setMenuOpen(!menuOpen)} className="md:hidden w-10 h-10 flex flex-col justify-center gap-1.5 items-center">
             <span className={`block w-6 h-0.5 bg-white transition-all duration-200 ${menuOpen ? "rotate-45 translate-y-2" : ""}`} />
             <span className={`block w-6 h-0.5 bg-white transition-all duration-200 ${menuOpen ? "opacity-0" : ""}`} />
@@ -857,33 +909,36 @@ export default function Landing() {
         </div>
         {menuOpen && (
           <div className="md:hidden bg-[#0d0014]/98 border-t border-white/10 px-6 py-6 flex flex-col gap-6">
-            {["Games", "Schedule", "About", "News", "Join Us"].map(item => (
+            {["Esports", "Schedule", "About", "News"].map(item => (
               <a key={item} href={`#${item.toLowerCase().replace(" ", "")}`} onClick={() => setMenuOpen(false)}
                 className="text-gray-300 hover:text-purple-400 font-semibold tracking-wider uppercase transition-colors">{item}</a>
             ))}
+            <a href="/tournaments" onClick={e => { e.preventDefault(); setMenuOpen(false); navigate("/tournaments"); }}
+              className="text-gray-300 hover:text-purple-400 font-semibold tracking-wider uppercase transition-colors">Tournaments</a>
+            <a href="/shop" onClick={e => { e.preventDefault(); setMenuOpen(false); navigate("/shop"); }}
+              className="text-gray-300 hover:text-purple-400 font-semibold tracking-wider uppercase transition-colors">Shop</a>
             <a href="#join" className="bg-purple-600 text-white font-bold px-6 py-3 rounded-lg text-center tracking-wider uppercase">Join Now</a>
           </div>
         )}
       </nav>
 
-      {/* ── HERO ─────────────────────────────────────────────────────────── */}
-      <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+      {/* ── HERO — split, asymmetric, with overlapping stats bento ────────── */}
+      <section className="relative overflow-hidden pt-16 pb-0">
         <div className="absolute inset-0">
-          <img src="/static/images/hero-bg.jpg" alt="" className="w-full h-full object-cover opacity-40" />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0d0014]/60 via-[#0d0014]/20 to-[#0d0014]" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#0d0014]/80 via-transparent to-[#0d0014]/80" />
+          <img src={asset("images/hero-bg.jpg")} alt="" className="w-full h-full object-cover opacity-30" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0d0014]/50 via-[#0d0014]/40 to-[#0d0014]" />
         </div>
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl animate-pulse" />
         <div className="absolute bottom-1/3 right-1/4 w-64 h-64 bg-violet-500/15 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1s" }} />
         <div className="absolute inset-0 opacity-5" style={{ backgroundImage: "linear-gradient(rgba(168,85,247,1) 1px, transparent 1px), linear-gradient(90deg, rgba(168,85,247,1) 1px, transparent 1px)", backgroundSize: "60px 60px" }} />
 
-        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-24 pb-12 grid md:grid-cols-2 gap-12 items-center">
+        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-16 pb-32 grid md:grid-cols-[1.2fr_1fr] gap-16 items-center">
           <div>
             <div className="inline-flex items-center gap-2 bg-purple-500/20 border border-purple-500/40 rounded-full px-4 py-2 mb-8">
               <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
               <span className="text-purple-300 text-sm font-semibold tracking-wider uppercase">Season Active</span>
             </div>
-            <h1 className="text-7xl md:text-8xl font-black leading-none mb-6 uppercase" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            <h1 className="text-6xl md:text-7xl lg:text-8xl font-black leading-[0.95] mb-6 uppercase" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
               <span className="block text-white">COMPETE.</span>
               <span className="block text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-violet-400 to-purple-300">BUILD.</span>
               <span className="block text-white">DOMINATE.</span>
@@ -892,7 +947,7 @@ export default function Landing() {
               NBLEsport is an Algerian premier esports organization competing across{" "}
               <span className="text-purple-400 font-semibold">Rocket League</span>,{" "}
               <span className="text-purple-400 font-semibold">Valorant</span>, and{" "}
-              <span className="text-purple-400 font-semibold">Fortnite</span> and much more games. We scout talent, build champions, and create opportunities.
+              <span className="text-purple-400 font-semibold">Fortnite</span> and much more esports. We scout talent, build champions, and create opportunities.
             </p>
             <div className="flex flex-wrap gap-4">
               <a href="#join" className="group relative bg-purple-600 hover:bg-purple-500 text-white font-bold px-8 py-4 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 hover:shadow-2xl hover:shadow-purple-500/40 hover:-translate-y-0.5">
@@ -903,62 +958,47 @@ export default function Landing() {
               </a>
             </div>
           </div>
-          <div className="flex justify-center items-center">
+          <div className="flex justify-center md:justify-end items-center">
             <SpotlightHero />
           </div>
         </div>
-
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 animate-bounce">
-          <span className="text-gray-500 text-xs tracking-widest uppercase">Scroll</span>
-          <svg className="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </div>
       </section>
 
-      <TickerTape />
-
-      {/* STATS */}
-      <section id="stats" className="py-24 relative">
-        <div className="absolute inset-0 bg-gradient-to-b from-purple-950/20 to-transparent" />
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-12 md:gap-8">
-            <StatCard value={3} label="Games Competed" suffix="+" />
-            <StatCard value={50} label="Players Supported" suffix="+" />
-            <StatCard value={100} label="Matches Played" suffix="+" />
-            <StatCard value={2} label="Years Active" suffix="+" />
-          </div>
-        </div>
-      </section>
-
-      <div className="max-w-7xl mx-auto px-6"><div className="h-px bg-gradient-to-r from-transparent via-purple-500/40 to-transparent" /></div>
+      <div className="pt-16">
+        <TickerTape />
+      </div>
 
       <GamesSection />
       <MatchSchedule />
 
-      {/* ABOUT */}
-      <section id="about" className="py-24 relative">
-        <div className="absolute inset-0 bg-gradient-to-b from-purple-950/10 to-transparent" />
-        <div className="max-w-7xl mx-auto px-6 relative">
-          <div className="text-center mb-16">
+      {/* ── ABOUT — sticky heading + numbered rows ─────────────────────────── */}
+      <section id="about" className="py-24 relative border-t border-white/5">
+        <div className="max-w-7xl mx-auto px-6 relative grid md:grid-cols-[320px_1fr] gap-16">
+          <div className="md:sticky md:top-28 self-start">
             <span className="text-purple-400 font-bold tracking-widest uppercase text-sm mb-4 block">What We Do</span>
-            <h2 className="text-5xl md:text-6xl font-black uppercase leading-tight mb-4" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+            <h2 className="text-5xl font-black uppercase leading-tight mb-6" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
               Our <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-300">Mission</span>
             </h2>
+            <p className="text-gray-400 leading-relaxed">
+              From scouting to spotlight — every step is built to turn raw talent into champions.
+            </p>
           </div>
-          <div className="grid md:grid-cols-3 gap-6">
+          <div>
             <PillarCard
-              icon={<svg className="w-7 h-7 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 0 1 3 3h-15a3 3 0 0 1 3-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 0 1-.982-3.172M9.497 14.25a7.454 7.454 0 0 0 .981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 0 0 7.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 0 0 2.748 1.35m8.272-6.842V4.5c0 2.108-.966 3.99-2.48 5.228m2.48-5.492a46.32 46.32 0 0 1 2.916.52 6.003 6.003 0 0 1-5.395 4.972m0 0a6.726 6.726 0 0 1-2.749 1.35m0 0a6.772 6.772 0 0 1-3.044 0" /></svg>}
+              index={1}
+              icon={<svg className="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 0 1 3 3h-15a3 3 0 0 1 3-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 0 1-.982-3.172M9.497 14.25a7.454 7.454 0 0 0 .981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 0 0 7.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 0 0 2.748 1.35m8.272-6.842V4.5c0 2.108-.966 3.99-2.48 5.228m2.48-5.492a46.32 46.32 0 0 1 2.916.52 6.003 6.003 0 0 1-5.395 4.972m0 0a6.726 6.726 0 0 1-2.749 1.35m0 0a6.772 6.772 0 0 1-3.044 0" /></svg>}
               title="Compete in Tournaments"
               description="We field competitive rosters across Valorant, Fortnite, and Rocket League — pushing for victory in every match day, every season."
             />
             <PillarCard
-              icon={<svg className="w-7 h-7 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" /></svg>}
+              index={2}
+              icon={<svg className="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" /></svg>}
               title="Build & Support Teams"
               description="We scout raw talent and cultivate champions. Our coaching staff provides structured training, VOD review, and mental performance support."
             />
             <PillarCard
-              icon={<svg className="w-7 h-7 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>}
+              index={3}
+              icon={<svg className="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" /></svg>}
               title="Create Opportunities"
               description="From players to streamers and content creators — we open doors. NBLEsport is a launchpad for the next generation of esports professionals across Algeria."
             />
@@ -966,16 +1006,16 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* BANNER */}
-      <div className="py-6 mx-6 md:mx-12 rounded-3xl overflow-hidden relative my-4">
+      {/* ── BANNER — diagonal clipped ───────────────────────────────────────── */}
+      <div className="py-8 mx-6 md:mx-12 rounded-3xl overflow-hidden relative my-4">
         <div className="absolute inset-0 bg-gradient-to-r from-purple-900 via-violet-900 to-purple-900" />
         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,.05) 10px, rgba(255,255,255,.05) 20px)" }} />
+        <div className="absolute -right-10 top-0 bottom-0 w-1/3 bg-white/5" style={{ clipPath: "polygon(30% 0, 100% 0, 100% 100%, 0% 100%)" }} />
         <div className="relative max-w-7xl mx-auto px-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-6">
             <NBLLogoFull size={48} color="white" />
             <div>
               <div className="text-purple-300 text-xs font-bold tracking-widest uppercase mb-1">Season 2026</div>
-              {/* ── Banner wordmark ── */}
               <h3 className="font-black uppercase" style={{ ...WORDMARK_STYLE, fontSize: "1.5rem" }}>
                 NBL<span className="text-purple-300">ESPORT</span>
                 <span className="text-white/70 font-normal text-sm ml-2" style={{ fontFamily: "'Barlow', sans-serif" }}>
@@ -991,20 +1031,35 @@ export default function Landing() {
 
       <LiveNewsSection />
 
-      {/* JOIN */}
-      <section id="join" className="py-24 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-950/20 to-[#0d0014]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-3xl" />
-        <div className="relative max-w-4xl mx-auto px-6">
-          <div className="text-center mb-14">
-            <NBLLogoFull size={64} className="mx-auto mb-6" />
-            <h2 className="text-5xl md:text-6xl font-black uppercase mb-4 leading-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-              Ready to Join the{" "}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-violet-300 to-purple-400">Nebula?</span>
-            </h2>
-            <p className="text-gray-400 text-lg max-w-xl mx-auto">Fill in your details below and our team will reach out to you.</p>
+      {/* ── JOIN — split screen ──────────────────────────────────────────────── */}
+      <section id="join" className="py-24 relative overflow-hidden border-t border-white/5">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="grid md:grid-cols-2 rounded-3xl overflow-hidden border border-white/10">
+            {/* Left panel */}
+            <div className="relative bg-gradient-to-br from-purple-900 via-violet-900 to-[#1a0030] p-10 md:p-14 flex flex-col justify-center">
+              <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,1) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
+              <div className="relative">
+                <NBLLogoFull size={56} className="mb-8" />
+                <h2 className="text-4xl md:text-5xl font-black uppercase mb-6 leading-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                  Ready to Join the{" "}
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-violet-200">Nebula?</span>
+                </h2>
+                <p className="text-purple-100/70 text-base leading-relaxed mb-8">
+                  Fill in your details and our team will reach out. Whether you're an aspiring pro or a seasoned competitor, there's a place for you here.
+                </p>
+                <div className="flex items-center gap-3 flex-wrap">
+                  {["Rocket League", "Valorant", "Fortnite"].map(g => (
+                    <span key={g} className="text-xs font-bold tracking-widest uppercase px-3 py-1.5 rounded-full bg-white/10 border border-white/20 text-white/80">{g}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Right panel — form */}
+            <div className="bg-white/5 p-10 md:p-14">
+              <JoinForm />
+            </div>
           </div>
-          <JoinForm />
         </div>
       </section>
 
