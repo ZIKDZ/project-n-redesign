@@ -6,9 +6,7 @@ urlpatterns = [
     path('', views.list_products, name='list-products'),
     path('<int:pk>/', views.get_product, name='get-product'),
     path('order/', views.submit_order, name='submit-order'),
-
-    # ── Chargily webhook (must be csrf_exempt — handled in view) ──────────────
-    path('webhook/', views.chargily_webhook, name='chargily-webhook'),
+    path('coupons/validate/', views.validate_coupon, name='validate-coupon'),
 
     # ── Staff — Products ──────────────────────────────────────────────────────
     path('all/', views.list_products_all, name='list-products-all'),

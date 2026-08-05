@@ -2,8 +2,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { asset } from "../../utils/asset";
-import Footer from "../../components/footer";
-import algeriaData from "../../data/algeria.json";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -59,9 +57,77 @@ interface CouponResult {
   finalPrice: number
 }
 
-const WILAYA_CHOICES: [string, string][] = algeriaData.wilayas as [string, string][]
-const BALADIYAS_BY_WILAYA: Record<string, string[]> = algeriaData.baladiyas
-const ALGERIA_PHONE_RE = /^0[567]\d{8}$/
+const WILAYA_CHOICES: [string, string][] = [
+  ["01", "Adrar"],
+  ["02", "Chlef"],
+  ["03", "Laghouat"],
+  ["04", "Oum El Bouaghi"],
+  ["05", "Batna"],
+  ["06", "Béjaïa"],
+  ["07", "Biskra"],
+  ["08", "Béchar"],
+  ["09", "Blida"],
+  ["10", "Bouira"],
+  ["11", "Tamanrasset"],
+  ["12", "Tébessa"],
+  ["13", "Tlemcen"],
+  ["14", "Tiaret"],
+  ["15", "Tizi Ouzou"],
+  ["16", "Alger"],
+  ["17", "Djelfa"],
+  ["18", "Jijel"],
+  ["19", "Sétif"],
+  ["20", "Saïda"],
+  ["21", "Skikda"],
+  ["22", "Sidi Bel Abbès"],
+  ["23", "Annaba"],
+  ["24", "Guelma"],
+  ["25", "Constantine"],
+  ["26", "Médéa"],
+  ["27", "Mostaganem"],
+  ["28", "M'Sila"],
+  ["29", "Mascara"],
+  ["30", "Ouargla"],
+  ["31", "Oran"],
+  ["32", "El Bayadh"],
+  ["33", "Illizi"],
+  ["34", "Bordj Bou Arréridj"],
+  ["35", "Boumerdès"],
+  ["36", "El Tarf"],
+  ["37", "Tindouf"],
+  ["38", "Tissemsilt"],
+  ["39", "El Oued"],
+  ["40", "Khenchela"],
+  ["41", "Souk Ahras"],
+  ["42", "Tipaza"],
+  ["43", "Mila"],
+  ["44", "Aïn Defla"],
+  ["45", "Naâma"],
+  ["46", "Aïn Témouchent"],
+  ["47", "Ghardaïa"],
+  ["48", "Relizane"],
+  ["49", "Timimoun"],
+  ["50", "Bordj Badji Mokhtar"],
+  ["51", "Ouled Djellal"],
+  ["52", "Béni Abbès"],
+  ["53", "In Salah"],
+  ["54", "In Guezzam"],
+  ["55", "Touggourt"],
+  ["56", "Djanet"],
+  ["57", "El M'Ghair"],
+  ["58", "El Meniaa"],
+  ["59", "Aflou"],
+  ["60", "Barika"],
+  ["61", "El Kantara"],
+  ["62", "Bir El Ater"],
+  ["63", "El Abiodh Sidi Cheikh"],
+  ["64", "Ksar Chellala"],
+  ["65", "Ain Ouessara"],
+  ["66", "M'Sila"],
+  ["67", "Ksar El Boukhari"],
+  ["68", "Bou Saâda"],
+  ["69", "El Abiodh Sidi Cheikh"],
+]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -155,63 +221,34 @@ function CouponInput({
     setError("")
 
     try {
-      // Fetch all coupons and find the matching one client-side
-      // (no dedicated validate endpoint needed)
-      const res  = await fetch("/api/shop/coupons/", { credentials: "include" })
-      if (!res.ok) throw new Error("Could not validate coupon")
-      const data = await res.json()
-      const coupons: any[] = data.coupons || []
+      // Validate server-side via a PUBLIC endpoint. The old implementation
+      // fetched /api/shop/coupons/ (staff-only, @login_required), which for
+      // an unauthenticated shopper gets redirected to a login page and
+      // returns HTML — breaking res.json(). /api/shop/coupons/validate/ is
+      // public and does the whole check (existence, expiry, product
+      // eligibility, minimum order, discount math) on the server.
+      const res = await fetch("/api/shop/coupons/validate/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: trimmed,
+          product_id: productId,
+          subtotal,
+        }),
+      })
 
-      const coupon = coupons.find(
-        (c: any) => c.code === trimmed && c.is_active
-      )
+      const data = await res.json().catch(() => ({}))
 
-      if (!coupon) {
-        throw new Error("Invalid or inactive coupon code.")
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to apply coupon.")
       }
-
-      // Check expiry
-      if (coupon.expiration_date) {
-        const expiry = new Date(coupon.expiration_date + "T23:59:59")
-        if (expiry < new Date()) {
-          throw new Error("This coupon has expired.")
-        }
-      }
-
-      // Check allowed products
-      if (
-        coupon.allowed_products.length > 0 &&
-        !coupon.allowed_products.includes(productId)
-      ) {
-        throw new Error("This coupon doesn't apply to this product.")
-      }
-
-      // Check minimum order amount
-      const minAmount = parseFloat(coupon.minimum_order_amount || "0")
-      if (subtotal < minAmount) {
-        throw new Error(
-          `Minimum order of ${minAmount.toLocaleString()} DZD required for this coupon.`
-        )
-      }
-
-      // Calculate discount
-      const value          = parseFloat(coupon.value)
-      let discountAmount   = 0
-
-      if (coupon.discount_type === "percentage") {
-        discountAmount = Math.round((subtotal * value) / 100)
-      } else {
-        discountAmount = Math.min(value, subtotal)
-      }
-
-      const finalPrice = Math.max(0, subtotal - discountAmount)
 
       onApply({
-        code:           coupon.code,
-        discount_type:  coupon.discount_type,
-        value,
-        discountAmount,
-        finalPrice,
+        code: data.code,
+        discount_type: data.discount_type,
+        value: data.value,
+        discountAmount: data.discount_amount,
+        finalPrice: data.final_price,
       })
       setStatus("success")
     } catch (e: any) {
@@ -420,7 +457,7 @@ function OrderForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.full_name || !ALGERIA_PHONE_RE.test(form.phone)) return
+    if (!form.full_name || !form.phone) return
     if (!customFieldsValid) return
 
     if (unselectedAttributes.length > 0) {
@@ -453,21 +490,12 @@ function OrderForm({
           total_amount:        total,
         }),
       })
-    
       if (!res.ok) {
         const err = await res.json()
         throw new Error(err.error || "Failed to submit")
       }
-    
-      const result = await res.json()
-      if (result.checkout_url) {
-        window.location.href = result.checkout_url
-      } else {
-        // Chargily unavailable — fall back to inline success
-        setStatus("success")
-        onSuccess()
-      }
-    
+      setStatus("success")
+      onSuccess()
     } catch (e: any) {
       setErrorMsg(e.message || "Something went wrong.")
       setStatus("error")
@@ -520,20 +548,11 @@ function OrderForm({
           <input
             type="tel"
             required
-            inputMode="numeric"
-            placeholder="06 XX XX XX XX"
-            maxLength={10}
+            placeholder="05 XX XX XX XX"
             value={form.phone}
-            onChange={e =>
-              setForm(p => ({ ...p, phone: e.target.value.replace(/\D/g, "").slice(0, 10) }))
-            }
+            onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
             className={inputClass}
           />
-          {form.phone.length > 0 && !ALGERIA_PHONE_RE.test(form.phone) && (
-            <p className="text-red-400 text-xs mt-1">
-              Enter a valid phone number.
-            </p>
-          )}
         </div>
         <div className="sm:col-span-2">
           <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-2">
@@ -554,7 +573,7 @@ function OrderForm({
           <select
             required
             value={form.wilaya}
-            onChange={e => setForm(p => ({ ...p, wilaya: e.target.value, baladiya: "" }))}
+            onChange={e => setForm(p => ({ ...p, wilaya: e.target.value }))}
             className={inputClass + " cursor-pointer"}
             style={{ background: "rgba(26,0,48,0.8)" }}
           >
@@ -570,23 +589,14 @@ function OrderForm({
           <label className="block text-white/50 text-[10px] font-bold tracking-widest uppercase mb-2">
             Baladiya *
           </label>
-          <select
+          <input
+            type="text"
             required
-            disabled={!form.wilaya}
+            placeholder="Enter your baladiya"
             value={form.baladiya}
             onChange={e => setForm(p => ({ ...p, baladiya: e.target.value }))}
-            className={inputClass + " cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"}
-            style={{ background: "rgba(26,0,48,0.8)" }}
-          >
-            <option value="">
-              {form.wilaya ? "Select baladiya…" : "Select a wilaya first"}
-            </option>
-            {(BALADIYAS_BY_WILAYA[form.wilaya] || []).map(name => (
-              <option key={name} value={name} style={{ background: "#1a0030" }}>
-                {name}
-              </option>
-            ))}
-          </select>
+            className={inputClass}
+          />
         </div>
       </div>
 
@@ -726,7 +736,7 @@ function OrderForm({
           !customFieldsValid ||
           unselectedAttributes.length > 0 ||
           !form.full_name ||
-          !ALGERIA_PHONE_RE.test(form.phone) ||
+          !form.phone ||
           !form.wilaya ||
           !form.baladiya ||
           !form.address
@@ -1242,7 +1252,27 @@ export default function ProductPage() {
       </div>
 
       {/* Footer */}
-      <Footer />
+      <div className="border-t border-white/8 py-8">
+        <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
+          <button
+            onClick={() => navigate("/shop")}
+            className="text-white/30 hover:text-white text-xs font-bold tracking-widest uppercase
+                       transition-colors flex items-center gap-2 group cursor-pointer"
+          >
+            <svg className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Store
+          </button>
+          <span
+            className="font-black text-sm uppercase tracking-widest text-purple-400"
+            style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
+          >
+            NBL<span className="text-white">STORE</span>
+          </span>
+        </div>
+      </div>
     </div>
   )
 }
