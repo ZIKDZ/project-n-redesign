@@ -109,19 +109,23 @@ def update_team(request, pk):
                 raw = data['igl_id']
                 team.igl_id = int(raw) if raw and raw not in ('null', 'None', '') else None
 
-            # Banner
+            # ── Banner ────────────────────────────────────────────────────────
+            # Only clear the uploaded file when a genuinely non-empty replacement
+            # URL was sent — `'banner_url' in data` alone wipes a real uploaded
+            # banner on any unrelated edit if the form always sends the (blank)
+            # field.
             if banner_file:
                 team.banner     = banner_file
                 team.banner_url = ''
-            elif 'banner_url' in data:
+            elif data.get('banner_url'):
                 team.banner_url = data['banner_url']
                 team.banner     = None
 
-            # Logo
+            # ── Logo ──────────────────────────────────────────────────────────
             if logo_file:
                 team.logo     = logo_file
                 team.logo_url = ''
-            elif 'logo_url' in data:
+            elif data.get('logo_url'):
                 team.logo_url = data['logo_url']
                 team.logo     = None
 

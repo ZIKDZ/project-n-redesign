@@ -90,11 +90,15 @@ def update_match(request, pk):
                     setattr(match, field, data[field])
 
             # ── Rival Logo ────────────────────────────────────────────────────
-            # django-cleanup detects the field change on save() and deletes old file
+            # django-cleanup detects the field change on save() and deletes old file.
+            # Only clear the uploaded file when a genuinely non-empty replacement
+            # URL was sent — `'rival_logo_url' in data` alone wipes a real
+            # uploaded logo on any unrelated edit if the form always sends the
+            # (blank) field.
             if logo_file:
                 match.rival_logo     = logo_file
                 match.rival_logo_url = ''
-            elif 'rival_logo_url' in data:
+            elif data.get('rival_logo_url'):
                 match.rival_logo     = None  # Setting to None triggers cleanup of old file
                 match.rival_logo_url = data['rival_logo_url']
 

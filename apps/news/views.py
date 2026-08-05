@@ -101,11 +101,15 @@ def update_news(request, pk):
                 post.is_published = data['is_published'].lower() != 'false'
 
             # ── Thumbnail ─────────────────────────────────────────────────────
-            # django-cleanup detects the field change on save() and deletes old file
+            # django-cleanup detects the field change on save() and deletes old file.
+            # Only clear the uploaded file when a genuinely non-empty replacement
+            # URL was sent — `'thumbnail_url' in data` alone wipes a real
+            # uploaded thumbnail on any unrelated edit if the form always sends
+            # the (blank) field.
             if thumbnail_file:
                 post.thumbnail     = thumbnail_file
                 post.thumbnail_url = ''
-            elif 'thumbnail_url' in data:
+            elif data.get('thumbnail_url'):
                 post.thumbnail     = None  # Setting to None triggers cleanup of old file
                 post.thumbnail_url = data['thumbnail_url']
 

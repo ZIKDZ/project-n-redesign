@@ -127,11 +127,16 @@ def update_game(request, pk):
                     game.ranks = [r.strip() for r in ranks_raw.split(',') if r.strip()]
 
             # ── Banner ────────────────────────────────────────────────────────
-            # django-cleanup detects the field change on save() and deletes old file
+            # django-cleanup detects the field change on save() and deletes old file.
+            # IMPORTANT: only clear the uploaded file when a genuinely non-empty
+            # replacement URL was sent. Using `'banner_url' in data` here (instead
+            # of checking the value) was the bug — a form that always includes an
+            # empty banner_url field would wipe out a real uploaded banner on
+            # every unrelated edit (toggling is_active, changing display_order, etc).
             if banner_file:
                 game.banner     = banner_file
                 game.banner_url = ''
-            elif 'banner_url' in data:
+            elif data.get('banner_url'):
                 game.banner     = None  # Setting to None triggers cleanup of old file
                 game.banner_url = data['banner_url']
 
@@ -139,7 +144,7 @@ def update_game(request, pk):
             if logo_file:
                 game.logo     = logo_file
                 game.logo_url = ''
-            elif 'logo_url' in data:
+            elif data.get('logo_url'):
                 game.logo     = None  # Setting to None triggers cleanup of old file
                 game.logo_url = data['logo_url']
 
