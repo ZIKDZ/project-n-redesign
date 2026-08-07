@@ -116,7 +116,7 @@ function GamesSection() {
           <div>
             <span className="text-purple-400 font-bold tracking-widest uppercase text-sm mb-4 block">Our Esports</span>
             <h2 className="text-5xl md:text-6xl font-black uppercase leading-tight" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
-              Explore Our <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-300">Roster</span>
+              Explore Our <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-300">Rosters</span>
             </h2>
           </div>
           {gameList.length > 3 && (
