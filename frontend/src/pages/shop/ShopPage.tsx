@@ -1,5 +1,5 @@
 // ShopPage.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { asset } from "../../utils/asset";
 import Footer from "../../components/footer";
@@ -39,21 +39,33 @@ interface Product {
   display_order: number;
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  jersey: "Jersey",
-  hoodie: "Hoodie",
-  cap: "Cap",
-  accessory: "Accessory",
-  other: "Other",
-};
+// Format a raw category slug into a display label (e.g. "hoodie" -> "Hoodie")
+function formatCategoryLabel(category: string): string {
+  if (!category) return "";
+  return category
+    .split(/[-_\s]+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
 
-const CATEGORY_ICONS: Record<string, string> = {
-  jersey: "👕",
-  hoodie: "🧥",
-  cap: "🧢",
-  accessory: "🎮",
-  other: "✨",
-};
+// Generic placeholder icon used when a product has no banner image
+function PlaceholderIcon() {
+  return (
+    <svg
+      className="w-16 h-16 opacity-20"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M20.25 7.5l-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375C2.754 3.75 2.25 4.254 2.25 4.875v1.5c0 .621.504 1.125 1.125 1.125Z"
+      />
+    </svg>
+  );
+}
 
 // ── Product Card ──────────────────────────────────────────────────────────────
 function ProductCard({ product, onClick }: { product: Product; onClick: () => void }) {
@@ -112,7 +124,7 @@ function ProductCard({ product, onClick }: { product: Product; onClick: () => vo
         {product.is_featured && (
           <div className="absolute top-3 left-3 z-10">
             <span className="inline-flex items-center gap-1 text-[10px] font-black tracking-widest uppercase px-2.5 py-1 rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/35">
-              ⭐ Featured
+              Featured
             </span>
           </div>
         )}
@@ -153,10 +165,8 @@ function ProductCard({ product, onClick }: { product: Product; onClick: () => vo
               style={{ transform: hovered ? "scale(1.05)" : "scale(1)" }}
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <span className="text-6xl opacity-20">
-                {CATEGORY_ICONS[product.category] || "🛍"}
-              </span>
+            <div className="w-full h-full flex items-center justify-center text-white">
+              <PlaceholderIcon />
             </div>
           )}
           <div
@@ -167,18 +177,20 @@ function ProductCard({ product, onClick }: { product: Product; onClick: () => vo
             }}
           />
           {/* Category chip */}
-          <div className="absolute bottom-3 right-3">
-            <span
-              className="text-[10px] font-black tracking-widest uppercase px-2.5 py-1 rounded-full"
-              style={{
-                background: "rgba(168,85,247,0.25)",
-                color: "#c084fc",
-                border: "1px solid rgba(168,85,247,0.4)",
-              }}
-            >
-              {CATEGORY_LABELS[product.category] || product.category}
-            </span>
-          </div>
+          {product.category && (
+            <div className="absolute bottom-3 right-3">
+              <span
+                className="text-[10px] font-black tracking-widest uppercase px-2.5 py-1 rounded-full"
+                style={{
+                  background: "rgba(168,85,247,0.25)",
+                  color: "#c084fc",
+                  border: "1px solid rgba(168,85,247,0.4)",
+                }}
+              >
+                {formatCategoryLabel(product.category)}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Info */}
@@ -309,10 +321,6 @@ export default function ShopPage() {
     fetch(url)
       .then((r) => r.json())
       .then((r) => {
-        console.log("Products loaded:", r.products);
-        if (r.products && r.products.length > 0) {
-          console.log("First product variant_config:", r.products[0].variant_config);
-        }
         setProducts(r.products || []);
       })
       .catch((err) => {
@@ -324,7 +332,14 @@ export default function ShopPage() {
 
   const featured = products.filter((p) => p.is_featured && p.is_active);
   const all = products.filter((p) => p.is_active); // Only show active products
-  const categories = ["", "jersey", "hoodie", "cap", "accessory", "other"];
+
+  // Derive categories dynamically from the loaded products instead of a hardcoded list
+  const categories = useMemo(() => {
+    const unique = Array.from(
+      new Set(products.map((p) => p.category).filter(Boolean))
+    ).sort();
+    return ["", ...unique];
+  }, [products]);
 
   return (
     <div
@@ -445,31 +460,31 @@ export default function ShopPage() {
       </div>
 
       {/* ── Filters ── */}
-      <div className="max-w-7xl mx-auto px-6 mb-10">
-        <div className="flex items-center gap-2 flex-wrap justify-center">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setFilter(cat)}
-              className="px-5 py-2 rounded-full text-xs font-black tracking-widest uppercase transition-all duration-200 cursor-pointer"
-              style={{
-                background:
-                  filter === cat ? "rgba(168,85,247,0.3)" : "rgba(255,255,255,0.05)",
-                color:
-                  filter === cat ? "#c084fc" : "rgba(255,255,255,0.4)",
-                border:
-                  filter === cat
-                    ? "1px solid rgba(168,85,247,0.5)"
-                    : "1px solid rgba(255,255,255,0.08)",
-              }}
-            >
-              {cat === ""
-                ? "All"
-                : `${CATEGORY_ICONS[cat]} ${CATEGORY_LABELS[cat]}`}
-            </button>
-          ))}
+      {categories.length > 1 && (
+        <div className="max-w-7xl mx-auto px-6 mb-10">
+          <div className="flex items-center gap-2 flex-wrap justify-center">
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setFilter(cat)}
+                className="px-5 py-2 rounded-full text-xs font-black tracking-widest uppercase transition-all duration-200 cursor-pointer"
+                style={{
+                  background:
+                    filter === cat ? "rgba(168,85,247,0.3)" : "rgba(255,255,255,0.05)",
+                  color:
+                    filter === cat ? "#c084fc" : "rgba(255,255,255,0.4)",
+                  border:
+                    filter === cat
+                      ? "1px solid rgba(168,85,247,0.5)"
+                      : "1px solid rgba(255,255,255,0.08)",
+                }}
+              >
+                {cat === "" ? "All" : formatCategoryLabel(cat)}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Featured ── */}
       {featured.length > 0 && !filter && (
@@ -486,7 +501,7 @@ export default function ShopPage() {
               className="text-white font-black text-xl uppercase tracking-widest"
               style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
             >
-              ⭐ Featured
+              Featured
             </h2>
             <div
               className="h-px flex-1"
@@ -569,7 +584,9 @@ export default function ShopPage() {
             className="text-center py-24 rounded-3xl border border-white/8"
             style={{ background: "rgba(255,255,255,0.02)" }}
           >
-            <div className="text-6xl mb-4 opacity-20">🛍</div>
+            <div className="flex justify-center mb-4 text-white">
+              <PlaceholderIcon />
+            </div>
             <h3
               className="text-white font-black text-2xl uppercase mb-3"
               style={{ fontFamily: "'Barlow Condensed', sans-serif" }}
