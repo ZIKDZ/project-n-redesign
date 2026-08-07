@@ -944,10 +944,16 @@ export default function Landing() {
               <span className="block text-white">DOMINATE.</span>
             </h1>
             <p className="text-gray-300 text-lg leading-relaxed mb-10 max-w-xl">
-              NBLEsport is an Algerian premier esports organization competing across{" "}
-              <span className="text-purple-400 font-semibold">Rocket League</span>,{" "}
-              <span className="text-purple-400 font-semibold">Valorant</span>, and{" "}
-              <span className="text-purple-400 font-semibold">Fortnite</span> and much more esports. We scout talent, build champions, and create opportunities.
+              NBLEsport is a leading esports organization based in Algeria, competing across the{" "}
+              <span className="text-white font-semibold">world's biggest competitive titles</span>
+              . We discover{" "}
+              <span className="text-purple-400 font-semibold">top talent</span>
+              , build{" "}
+              <span className="text-white font-semibold">elite rosters</span>
+              , and create opportunities for players to compete at the{" "}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-300 font-black">
+                highest level.
+              </span>
             </p>
             <div className="flex flex-wrap gap-4">
               <a href="#join" className="group relative bg-purple-600 hover:bg-purple-500 text-white font-bold px-8 py-4 rounded-xl text-sm tracking-widest uppercase transition-all duration-200 hover:shadow-2xl hover:shadow-purple-500/40 hover:-translate-y-0.5">
