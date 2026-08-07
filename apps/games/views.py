@@ -88,61 +88,12 @@ def create_game(request):
         return JsonResponse({'error': str(e)}, status=400)
 
 
-def _apply_media_field(game, field_name, uploaded_file, action, url_value):
-    """
-    Safely update a media field (banner/logo) on `game`, given:
-      - uploaded_file: an UploadedFile or None
-      - action: explicit intent string, one of
-            'keep'          -> do nothing (default/safe — used when action is
-                                missing or unrecognized, so old clients that
-                                don't send it can't accidentally wipe files)
-            'replace_file'  -> use uploaded_file, clear the *_url field
-            'replace_url'   -> use url_value, clear the file field
-            'clear'         -> remove both file and url
-      - url_value: the string to use when action == 'replace_url'
-
-    Only 'replace_file', 'replace_url', and 'clear' ever touch the FileField,
-    so django-cleanup only fires a Cloudinary delete when the user explicitly
-    asked to change or remove the image. Anything else — including a form
-    that re-submits the existing preview URL — is a no-op.
-    """
-    file_field = field_name            # e.g. 'banner'
-    url_field  = f'{field_name}_url'   # e.g. 'banner_url'
-
-    if action == 'replace_file' and uploaded_file:
-        setattr(game, file_field, uploaded_file)
-        setattr(game, url_field, '')
-
-    elif action == 'replace_url' and url_value:
-        # Only null the FileField if one is actually set — avoids a
-        # no-op save() that could still trip cleanup in edge cases.
-        if getattr(game, file_field):
-            setattr(game, file_field, None)
-        setattr(game, url_field, url_value)
-
-    elif action == 'clear':
-        if getattr(game, file_field):
-            setattr(game, file_field, None)
-        setattr(game, url_field, '')
-
-    # action == 'keep', missing, or unrecognized -> do nothing at all.
-
-
 @login_required
 @require_http_methods(['PUT', 'PATCH'])
 def update_game(request, pk):
     """
     Staff only — update a game.
-
-    Banner/logo changes require an explicit intent field so we never guess
-    based on whether a URL string happens to be present or non-empty:
-      - banner_action / logo_action: 'keep' | 'replace_file' | 'replace_url' | 'clear'
-      - defaults to 'keep' if not sent, so old/incomplete payloads can never
-        delete an existing uploaded file by accident.
-
-    django-cleanup automatically deletes old files from CDN when a FileField
-    changes value on save() — so we only assign to game.banner / game.logo
-    when the caller told us to.
+    django-cleanup automatically deletes old files from CDN when fields change.
     """
     try:
         game = Game.objects.get(pk=pk)
@@ -175,28 +126,36 @@ def update_game(request, pk):
                 except json.JSONDecodeError:
                     game.ranks = [r.strip() for r in ranks_raw.split(',') if r.strip()]
 
-            banner_action = data.get('banner_action', 'keep')
-            logo_action   = data.get('logo_action', 'keep')
+            # ── Banner ────────────────────────────────────────────────────────
+            # django-cleanup detects the field change on save() and deletes old file.
+            # IMPORTANT: only clear the uploaded file when a genuinely non-empty
+            # replacement URL was sent. Using `'banner_url' in data` here (instead
+            # of checking the value) was the bug — a form that always includes an
+            # empty banner_url field would wipe out a real uploaded banner on
+            # every unrelated edit (toggling is_active, changing display_order, etc).
+            if banner_file:
+                game.banner     = banner_file
+                game.banner_url = ''
+            elif data.get('banner_url'):
+                game.banner     = None  # Setting to None triggers cleanup of old file
+                game.banner_url = data['banner_url']
 
-            _apply_media_field(game, 'banner', banner_file, banner_action, data.get('banner_url'))
-            _apply_media_field(game, 'logo',   logo_file,   logo_action,   data.get('logo_url'))
+            # ── Logo ──────────────────────────────────────────────────────────
+            if logo_file:
+                game.logo     = logo_file
+                game.logo_url = ''
+            elif data.get('logo_url'):
+                game.logo     = None  # Setting to None triggers cleanup of old file
+                game.logo_url = data['logo_url']
 
         else:
             # JSON payload
             data = json.loads(request.body)
-            for field in ['title', 'slug', 'publisher', 'genre', 'overlay_color',
-                          'ranks', 'is_active', 'registration_open', 'display_order']:
+            for field in ['title', 'slug', 'publisher', 'genre', 'banner_url',
+                          'logo_url', 'overlay_color', 'ranks', 'is_active',
+                          'registration_open', 'display_order']:
                 if field in data:
                     setattr(game, field, data[field])
-
-            banner_action = data.get('banner_action', 'keep')
-            logo_action   = data.get('logo_action', 'keep')
-
-            # JSON payloads can't carry file uploads — 'replace_file' only
-            # makes sense via multipart. Silently treat it as a no-op here
-            # rather than erroring, since there's no file to apply anyway.
-            _apply_media_field(game, 'banner', None, banner_action, data.get('banner_url'))
-            _apply_media_field(game, 'logo',   None, logo_action,   data.get('logo_url'))
 
         game.save()  # django-cleanup's pre_save signal fires here
         return JsonResponse(game.to_dict())
