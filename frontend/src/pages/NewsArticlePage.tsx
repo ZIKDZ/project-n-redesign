@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { news as newsApi } from "../utils/api";
 import { asset } from "../utils/asset";
@@ -77,7 +77,7 @@ function RelatedCard({ item, onClick }: { item: NewsItem; onClick: () => void })
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="w-full text-left group cursor-pointer"  // ← added cursor-pointer
+      className="w-full text-left group cursor-pointer"
     >
       <div
         className="rounded-2xl overflow-hidden border transition-all duration-300"
@@ -141,20 +141,27 @@ export default function NewsArticlePage() {
   const [scrolled, setScrolled] = useState(false);
   const [readPct,  setReadPct]  = useState(0);
   const [revealed, setRevealed] = useState(false);
-  const articleRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onScroll = () => {
       setScrolled(window.scrollY > 60);
-      if (articleRef.current) {
-        const rect = articleRef.current.getBoundingClientRect();
-        const total = articleRef.current.offsetHeight;
-        const scrolled = Math.max(0, -rect.top);
-        setReadPct(Math.min(100, Math.round((scrolled / total) * 100)));
-      }
+
+      const doc = document.documentElement;
+      const scrollTop = window.scrollY || doc.scrollTop;
+      const scrollHeight = doc.scrollHeight - doc.clientHeight; // total scrollable distance
+      const pct = scrollHeight > 0 ? (scrollTop / scrollHeight) * 100 : 0;
+
+      setReadPct(Math.min(100, Math.max(0, Math.round(pct))));
     };
+
+    onScroll(); // run once on mount in case content is short / page loads mid-scroll
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    window.addEventListener("resize", onScroll);
+
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
   }, []);
 
   useEffect(() => {
@@ -240,7 +247,7 @@ export default function NewsArticlePage() {
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center gap-4">
           <button
             onClick={() => navigate("/")}
-            className="flex items-center gap-2 text-white/40 hover:text-white transition-colors text-xs font-bold tracking-wider uppercase group cursor-pointer"  // ← added cursor-pointer
+            className="flex items-center gap-2 text-white/40 hover:text-white transition-colors text-xs font-bold tracking-wider uppercase group cursor-pointer"
           >
             <svg
               className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
@@ -408,7 +415,6 @@ export default function NewsArticlePage() {
 
       {/* ── Article Body ── */}
       <div
-        ref={articleRef}
         className="max-w-3xl mx-auto px-6 py-14"
         style={{
           opacity: revealed ? 1 : 0,
@@ -440,7 +446,7 @@ export default function NewsArticlePage() {
         <div className="mt-10 flex items-center justify-between flex-wrap gap-4">
           <button
             onClick={() => navigate("/")}
-            className="flex items-center gap-2 text-white/40 hover:text-white transition-colors text-xs font-bold tracking-wider uppercase group cursor-pointer"  // ← added cursor-pointer
+            className="flex items-center gap-2 text-white/40 hover:text-white transition-colors text-xs font-bold tracking-wider uppercase group cursor-pointer"
           >
             <svg
               className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform"
@@ -455,7 +461,7 @@ export default function NewsArticlePage() {
             <span className="text-white/25 text-[10px] tracking-widest uppercase">Share</span>
             <button
               onClick={() => navigator.clipboard?.writeText(window.location.href)}
-              className="flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase px-4 py-2 rounded-xl border transition-all duration-200 hover:-translate-y-0.5 cursor-pointer"  // ← added cursor-pointer
+              className="flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase px-4 py-2 rounded-xl border transition-all duration-200 hover:-translate-y-0.5 cursor-pointer"
               style={{
                 background: `${cfg.color}15`,
                 color: cfg.color,

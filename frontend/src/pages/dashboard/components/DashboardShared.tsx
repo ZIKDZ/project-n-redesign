@@ -294,8 +294,6 @@ export function Modal({
   onClose: () => void
   size?: ModalSize
 }) {
-  const backdropRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -304,18 +302,10 @@ export function Modal({
     return () => document.removeEventListener('keydown', handler)
   }, [onClose])
 
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === backdropRef.current && window.getSelection()?.toString() === '') {
-      onClose()
-    }
-  }
-
   return (
     <div
-      ref={backdropRef}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
       style={{ background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(4px)' }}
-      onClick={handleBackdropClick}
     >
       <div
         className="bg-[#13001f] border border-white/10 rounded-3xl w-full shadow-2xl

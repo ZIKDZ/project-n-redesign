@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { matches } from '../../../../utils/api'
+import { matches, games } from '../../../../utils/api'
 import { Badge, SectionHeader, ActionButton, getCsrfToken } from '../DashboardShared'
 
 const EMPTY_FORM = {
   rival: '',
   rival_logo_url: '',
   match_type: 'tournament',
-  game: 'rocket_league',
+  game: '',
   date: '',
   time: '',
   status: 'upcoming',
@@ -16,10 +16,12 @@ const EMPTY_FORM = {
 
 function MatchForm({
   initial,
+  gamesList,
   onSaved,
   onCancel,
 }: {
   initial: typeof EMPTY_FORM & { id?: number }
+  gamesList: any[]
   onSaved: () => void
   onCancel: () => void
 }) {
@@ -31,6 +33,15 @@ function MatchForm({
   )
   const [saving, setSaving] = useState(false)
   const logoRef = useRef<HTMLInputElement>(null)
+
+  // Default the game field to the first available game once the list loads,
+  // but only for new (non-edit) forms that don't already have a game set.
+  useEffect(() => {
+    if (!isEdit && !form.game && gamesList.length > 0) {
+      setForm(p => ({ ...p, game: gamesList[0].slug }))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gamesList])
 
   const inputClass =
     'bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500/60 w-full'
@@ -120,8 +131,13 @@ function MatchForm({
             onChange={e => setForm(p => ({ ...p, game: e.target.value }))}
             className={inputClass + ' cursor-pointer'}
           >
-            {[['rocket_league', 'Rocket League'], ['valorant', 'Valorant'], ['fortnite', 'Fortnite']].map(([v, l]) => (
-              <option key={v} value={v} className="bg-[#1a0030]">{l}</option>
+            {gamesList.length === 0 && (
+              <option value="" className="bg-[#1a0030]">No games available</option>
+            )}
+            {gamesList.map((g: any) => (
+              <option key={g.id ?? g.slug} value={g.slug} className="bg-[#1a0030]">
+                {g.title}
+              </option>
             ))}
           </select>
         </div>
@@ -267,6 +283,7 @@ const statusColor = (s: string): 'red' | 'green' | 'purple' =>
 
 export default function MatchesSection() {
   const [data, setData] = useState<any[]>([])
+  const [gamesList, setGamesList] = useState<any[]>([])
   const [showAdd, setShowAdd] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
 
@@ -274,12 +291,21 @@ export default function MatchesSection() {
     ;(matches.list() as Promise<any>).then(r => setData(r.matches || [])).catch(() => {})
   }
 
-  useEffect(() => { load() }, [])
+  const loadGames = () => {
+    ;(games.listAll() as Promise<any>).then(r => setGamesList(r.games || [])).catch(() => {})
+  }
+
+  useEffect(() => { load(); loadGames() }, [])
 
   const remove = async (id: number) => {
     if (!confirm('Delete this match?')) return
     await matches.delete(id)
     load()
+  }
+
+  const gameLabel = (slug: string) => {
+    const g = gamesList.find((g: any) => g.slug === slug)
+    return g ? g.title : slug?.replace('_', ' ')
   }
 
   return (
@@ -296,6 +322,7 @@ export default function MatchesSection() {
       {showAdd && !editing && (
         <MatchForm
           initial={EMPTY_FORM as any}
+          gamesList={gamesList}
           onSaved={() => { setShowAdd(false); load() }}
           onCancel={() => setShowAdd(false)}
         />
@@ -304,6 +331,7 @@ export default function MatchesSection() {
       {editing && (
         <MatchForm
           initial={editing}
+          gamesList={gamesList}
           onSaved={() => { setEditing(null); load() }}
           onCancel={() => setEditing(null)}
         />
@@ -331,7 +359,7 @@ export default function MatchesSection() {
               <div className="flex items-center gap-3 mb-1 flex-wrap">
                 <span className="text-white font-bold">NBL vs {m.rival}</span>
                 <Badge color={statusColor(m.status)}>{m.status}</Badge>
-                <Badge color="purple">{m.game.replace('_', ' ')}</Badge>
+                <Badge color="purple">{gameLabel(m.game)}</Badge>
                 <Badge color="gray">{m.match_type}</Badge>
               </div>
               <p className="text-white/40 text-xs">
