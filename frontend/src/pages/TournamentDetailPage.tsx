@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useEscapeBack } from "../hooks/useEscapeBack";
 import { tournaments as tournamentsApi, discordAuth } from "../utils/api";
 import Footer from "../components/footer";
 
@@ -704,6 +705,7 @@ function RegistrationPanel({
 export default function TournamentDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  useEscapeBack(() => navigate("/tournaments"));
 
   const [t, setT]               = useState<TournamentDetail | null>(null);
   const [loading, setLoading]   = useState(true);

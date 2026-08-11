@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useEscapeBack } from "../hooks/useEscapeBack";
 import { teams as teamsApi, games as gamesApi } from "../utils/api";
 import { asset } from '../utils/asset'
 import Footer from "../components/footer";
@@ -383,6 +384,7 @@ function RosterSection({
 export default function RosterPage() {
   const { gameSlug } = useParams<{ gameSlug: string }>();
   const navigate = useNavigate();
+  useEscapeBack(() => navigate("/"));
 
   const [game, setGame] = useState<GameData | null>(null);
   const [teams, setTeams] = useState<TeamData[]>([]);

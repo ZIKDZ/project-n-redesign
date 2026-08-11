@@ -1,6 +1,7 @@
 // ProductPage.tsx
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useEscapeBack } from "../../hooks/useEscapeBack";
 import { asset } from "../../utils/asset";
 import Footer from "../../components/footer";
 import algeriaData from "../../data/algeria.json";
@@ -755,6 +756,7 @@ function PersonalisationSection({
 export default function ProductPage() {
   const { id }   = useParams<{ id: string }>()
   const navigate = useNavigate()
+  useEscapeBack(() => navigate("/shop"));
 
   const [product, setProduct]             = useState<Product | null>(null)
   const [variantConfig, setVariantConfig] = useState<VariantConfig>({ attributes: [], variants: [] })

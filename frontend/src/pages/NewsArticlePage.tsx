@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { news as newsApi } from "../utils/api";
+import { useEscapeBack } from "../hooks/useEscapeBack";
 import { asset } from "../utils/asset";
 import Footer from "../components/footer";
 
@@ -134,6 +135,7 @@ function RelatedCard({ item, onClick }: { item: NewsItem; onClick: () => void })
 export default function NewsArticlePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  useEscapeBack(() => navigate("/"));
 
   const [article,  setArticle]  = useState<NewsItem | null>(null);
   const [related,  setRelated]  = useState<NewsItem[]>([]);

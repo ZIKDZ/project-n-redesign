@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { news as newsApi } from "../utils/api";
+import { useEscapeBack } from "../hooks/useEscapeBack";
 import { asset } from "../utils/asset";
 import Footer from "../components/footer";
 
@@ -181,6 +182,7 @@ const PAGE_SIZE = 9;
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function NewsPage() {
   const navigate = useNavigate();
+  useEscapeBack(() => navigate("/"));
   const [newsList, setNewsList] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTag, setActiveTag] = useState("all");

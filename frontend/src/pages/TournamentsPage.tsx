@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { tournaments as tournamentsApi } from "../utils/api";
+import { useEscapeBack } from "../hooks/useEscapeBack";
 import { asset } from "../utils/asset";
 import Footer from "../components/footer";
+
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Placement {
@@ -174,6 +176,7 @@ const STATUS_FILTERS = ["all", "open", "in_progress", "closed", "completed"] as 
 
 export default function TournamentsPage() {
   const navigate = useNavigate();
+  useEscapeBack(() => navigate("/"));
   const [list, setList] = useState<TournamentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<typeof STATUS_FILTERS[number]>("all");

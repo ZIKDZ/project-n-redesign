@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useEscapeBack } from "../hooks/useEscapeBack";
 import { players as playersApi } from "../utils/api";
 import { asset } from "../utils/asset";
 import Footer from "../components/footer";
@@ -110,51 +111,38 @@ function ClipCard({
   accent: string;
   index: number;
 }) {
-  const [playing, setPlaying]       = useState(false);
-  const [hovered, setHovered]       = useState(false);
-  const [muted, setMuted]           = useState(true);
-  const [progress, setProgress]     = useState(0);
-  const [duration, setDuration]     = useState(0);
+  const [playing, setPlaying]         = useState(false);
+  const [hovered, setHovered]         = useState(false);
+  const [muted, setMuted]             = useState(true);
+  const [progress, setProgress]       = useState(0);
+  const [duration, setDuration]       = useState(0);
   const [posterError, setPosterError] = useState(false);
-  const videoRef                    = useRef<HTMLVideoElement>(null);
+  const videoRef                      = useRef<HTMLVideoElement>(null);
 
-  // 🔥 FIXED Cloudinary poster logic (more reliable)
   const posterUrl = (() => {
     if (!clip.video_url) return "";
-
     try {
-      // Only transform if it's a Cloudinary URL
       if (clip.video_url.includes("/upload/")) {
         return clip.video_url
           .replace("/upload/", "/upload/so_0,w_800,f_jpg/")
           .replace(/\.(mp4|mov|webm|mkv)(\?.*)?$/i, "");
       }
     } catch {}
-
     return "";
   })();
 
   const handlePlayPause = () => {
     const v = videoRef.current;
     if (!v) return;
-    if (v.paused) {
-      v.play();
-      setPlaying(true);
-    } else {
-      v.pause();
-      setPlaying(false);
-    }
+    if (v.paused) { v.play(); setPlaying(true); }
+    else          { v.pause(); setPlaying(false); }
   };
 
   const handleFullscreen = () => {
     const v = videoRef.current;
     if (!v) return;
-
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
-    } else {
-      v.requestFullscreen();
-    }
+    if (document.fullscreenElement) document.exitFullscreen();
+    else v.requestFullscreen();
   };
 
   const handleTimeUpdate = () => {
@@ -166,13 +154,13 @@ function ClipCard({
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     const v = videoRef.current;
     if (!v || !v.duration) return;
-    const rect = e.currentTarget.getBoundingClientRect();
+    const rect  = e.currentTarget.getBoundingClientRect();
     const ratio = (e.clientX - rect.left) / rect.width;
     v.currentTime = ratio * v.duration;
   };
 
   const formatTime = (s: number) => {
-    const m = Math.floor(s / 60);
+    const m   = Math.floor(s / 60);
     const sec = Math.floor(s % 60);
     return `${m}:${sec.toString().padStart(2, "0")}`;
   };
@@ -180,19 +168,16 @@ function ClipCard({
   return (
     <div
       className="group relative"
-      style={{
-        animation: `slideUp 0.5s ease-out both`,
-        animationDelay: `${index * 80}ms`,
-      }}
+      style={{ animation: `slideUp 0.5s ease-out both`, animationDelay: `${index * 80}ms` }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       <div
         className="rounded-2xl overflow-hidden transition-all duration-300"
         style={{
-          border: `1px solid ${hovered ? `${accent}40` : "rgba(255,255,255,0.07)"}`,
-          transform: hovered ? "translateY(-3px)" : "none",
-          boxShadow: hovered ? "0 16px 48px rgba(0,0,0,0.6)" : "0 4px 20px rgba(0,0,0,0.3)",
+          border:     `1px solid ${hovered ? `${accent}40` : "rgba(255,255,255,0.07)"}`,
+          transform:  hovered ? "translateY(-3px)" : "none",
+          boxShadow:  hovered ? "0 16px 48px rgba(0,0,0,0.6)" : "0 4px 20px rgba(0,0,0,0.3)",
           background: "#0a0015",
         }}
       >
@@ -213,18 +198,14 @@ function ClipCard({
               onEnded={() => setPlaying(false)}
             />
 
-            {/* fallback gradient if no poster */}
             {!playing && !posterUrl && (
               <div
                 className="absolute inset-0"
-                style={{
-                  background:
-                    "linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.2))",
-                }}
+                style={{ background: "linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.2))" }}
               />
             )}
 
-            {/* Play button */}
+            {/* Play / Pause */}
             <button
               onClick={handlePlayPause}
               className="absolute inset-0 flex items-center justify-center transition-opacity duration-200 cursor-pointer"
@@ -234,8 +215,8 @@ function ClipCard({
                 className="w-14 h-14 rounded-full flex items-center justify-center transition-transform duration-200"
                 style={{
                   background: `${accent}cc`,
-                  boxShadow: `0 0 30px ${accent}80`,
-                  transform: hovered ? "scale(1.1)" : "scale(1)",
+                  boxShadow:  `0 0 30px ${accent}80`,
+                  transform:  hovered ? "scale(1.1)" : "scale(1)",
                 }}
               >
                 {playing ? (
@@ -253,7 +234,6 @@ function ClipCard({
 
             {/* Controls */}
             <div className="absolute top-3 right-3 flex gap-2">
-              {/* Mute */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -263,27 +243,17 @@ function ClipCard({
                   });
                 }}
                 className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer transition-opacity duration-200"
-                style={{
-                  background: "rgba(0,0,0,0.60)",
-                  opacity: hovered || playing ? 1 : 0,
-                }}
+                style={{ background: "rgba(0,0,0,0.60)", opacity: hovered || playing ? 1 : 0 }}
               >
                 <svg className="w-4 h-4 text-white/70" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M3 9v6h4l5 5V4L7 9H3z" />
                 </svg>
               </button>
 
-              {/* Fullscreen */}
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleFullscreen();
-                }}
+                onClick={(e) => { e.stopPropagation(); handleFullscreen(); }}
                 className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer transition-opacity duration-200"
-                style={{
-                  background: "rgba(0,0,0,0.60)",
-                  opacity: hovered || playing ? 1 : 0,
-                }}
+                style={{ background: "rgba(0,0,0,0.60)", opacity: hovered || playing ? 1 : 0 }}
               >
                 <svg className="w-4 h-4 text-white/70" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M7 14H5v5h5v-2H7v-3zm12 5v-5h-2v3h-3v2h5zM7 7h3V5H5v5h2V7zm10 3h2V5h-5v2h3v3z" />
@@ -291,7 +261,7 @@ function ClipCard({
               </button>
             </div>
 
-            {/* Progress */}
+            {/* Progress bar */}
             {(playing || hovered) && (
               <div className="absolute bottom-0 left-0 right-0 px-3 pb-2">
                 <div className="flex justify-between text-[10px] text-white/50 mb-1 font-mono">
@@ -369,10 +339,10 @@ function SocialBtn({
       onMouseLeave={() => setH(false)}
       className="flex items-center gap-2 px-4 py-2.5 rounded-xl border font-bold text-xs tracking-wider uppercase transition-all duration-200 cursor-pointer"
       style={{
-        background:    h ? `${accent}20` : "rgba(255,255,255,0.05)",
-        borderColor:   h ? `${accent}50` : "rgba(255,255,255,0.10)",
-        color:         h ? accent : "rgba(255,255,255,0.5)",
-        transform:     h ? "translateY(-2px)" : "none",
+        background:  h ? `${accent}20` : "rgba(255,255,255,0.05)",
+        borderColor: h ? `${accent}50` : "rgba(255,255,255,0.10)",
+        color:       h ? accent : "rgba(255,255,255,0.5)",
+        transform:   h ? "translateY(-2px)" : "none",
       }}
     >
       {icon}
@@ -385,12 +355,13 @@ function SocialBtn({
 export default function PlayerPage() {
   const { id }   = useParams<{ id: string }>();
   const navigate = useNavigate();
+  useEscapeBack(() => navigate(-1));
 
-  const [player,      setPlayer]      = useState<PlayerData | null>(null);
-  const [loading,     setLoading]     = useState(true);
-  const [scrolled,    setScrolled]    = useState(false);
-  const [avatarLoaded,setAvatarLoaded]= useState(false);
-  const [revealed,    setRevealed]    = useState(false);
+  const [player,       setPlayer]       = useState<PlayerData | null>(null);
+  const [loading,      setLoading]      = useState(true);
+  const [scrolled,     setScrolled]     = useState(false);
+  const [avatarLoaded, setAvatarLoaded] = useState(false);
+  const [revealed,     setRevealed]     = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 60);
@@ -403,11 +374,8 @@ export default function PlayerPage() {
     setLoading(true);
     (playersApi.get(Number(id)) as Promise<any>)
       .then((data) => {
-        // Sort clips by display_order so they always render correctly
         if (Array.isArray(data.clips)) {
-          data.clips.sort(
-            (a: Clip, b: Clip) => a.display_order - b.display_order
-          );
+          data.clips.sort((a: Clip, b: Clip) => a.display_order - b.display_order);
         }
         setPlayer(data);
         setTimeout(() => setRevealed(true), 80);
@@ -481,9 +449,9 @@ export default function PlayerPage() {
       <nav
         className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
         style={{
-          background:    scrolled ? "rgba(13,0,20,0.95)" : "transparent",
-          backdropFilter:scrolled ? "blur(14px)"         : "none",
-          boxShadow:     scrolled ? "0 1px 0 rgba(255,255,255,0.06)" : "none",
+          background:     scrolled ? "rgba(13,0,20,0.95)" : "transparent",
+          backdropFilter: scrolled ? "blur(14px)"         : "none",
+          boxShadow:      scrolled ? "0 1px 0 rgba(255,255,255,0.06)" : "none",
         }}
       >
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-4">
@@ -517,8 +485,8 @@ export default function PlayerPage() {
               className="text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-full"
               style={{
                 background: `${accent}20`,
-                color: accent,
-                border: `1px solid ${accent}35`,
+                color:       accent,
+                border:     `1px solid ${accent}35`,
               }}
             >
               {player.game_title}
@@ -578,10 +546,10 @@ export default function PlayerPage() {
                 <div
                   className="absolute rounded-3xl"
                   style={{
-                    inset: "-3px",
-                    background: `linear-gradient(135deg, ${accent}60 0%, ${accent}10 50%, ${accent}40 100%)`,
+                    inset:       "-3px",
+                    background:  `linear-gradient(135deg, ${accent}60 0%, ${accent}10 50%, ${accent}40 100%)`,
                     borderRadius: "26px",
-                    animation: "scaleIn 0.6s ease-out both",
+                    animation:   "scaleIn 0.6s ease-out both",
                     animationDelay: "0.1s",
                   }}
                 />
@@ -594,10 +562,7 @@ export default function PlayerPage() {
                       src={player.avatar}
                       alt={player.username}
                       className="w-full h-full object-cover"
-                      style={{
-                        opacity:    avatarLoaded ? 1 : 0,
-                        transition: "opacity 0.4s ease",
-                      }}
+                      style={{ opacity: avatarLoaded ? 1 : 0, transition: "opacity 0.4s ease" }}
                       onLoad={() => setAvatarLoaded(true)}
                     />
                   ) : (
@@ -619,11 +584,11 @@ export default function PlayerPage() {
                 <div
                   className="absolute -bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap px-4 py-1.5 rounded-xl border text-xs font-black tracking-widest uppercase"
                   style={{
-                    background:   "rgba(13,0,20,0.95)",
-                    borderColor:  `${accent}50`,
-                    color:        accent,
+                    background:     "rgba(13,0,20,0.95)",
+                    borderColor:    `${accent}50`,
+                    color:           accent,
                     backdropFilter: "blur(8px)",
-                    boxShadow:    "0 4px 20px rgba(0,0,0,0.5)",
+                    boxShadow:      "0 4px 20px rgba(0,0,0,0.5)",
                   }}
                 >
                   {ROLE_ICONS[player.role] || "⚡"} {ROLE_LABELS[player.role] || player.role}
@@ -708,11 +673,11 @@ export default function PlayerPage() {
                 className="flex flex-wrap gap-3 mb-6"
                 style={{ animation: "slideUp 0.5s ease-out both", animationDelay: "0.25s" }}
               >
-                {player.rank && <StatPill label="Rank"  value={player.rank}                          accent={accent} />}
-                <StatPill label="Role"  value={ROLE_LABELS[player.role] || player.role} accent={accent} />
-                <StatPill label="Since" value={String(joinYear)}                         accent={accent} />
+                {player.rank && <StatPill label="Rank"  value={player.rank}                           accent={accent} />}
+                <StatPill label="Role"  value={ROLE_LABELS[player.role] || player.role}  accent={accent} />
+                <StatPill label="Since" value={String(joinYear)}                          accent={accent} />
                 {hasClips && (
-                  <StatPill label="Clips" value={String(player.clips.length)}            accent={accent} />
+                  <StatPill label="Clips" value={String(player.clips.length)}             accent={accent} />
                 )}
               </div>
 
@@ -740,14 +705,12 @@ export default function PlayerPage() {
       {hasClips && (
         <section className="py-16">
           <div className="max-w-6xl mx-auto px-6">
-            {/* Section header */}
             <div className="flex items-center gap-4 mb-10">
               <div
                 className="h-px flex-1"
                 style={{ background: `linear-gradient(to right, ${accent}50, transparent)` }}
               />
               <div className="flex items-center gap-3">
-                {/* Video camera icon — neutral, no longer YouTube-specific */}
                 <svg
                   className="w-5 h-5"
                   style={{ color: accent }}
@@ -784,7 +747,7 @@ export default function PlayerPage() {
         </section>
       )}
 
-      {/* ── Team section ── */}
+      {/* ── Team / Roster section ── */}
       {player.team && (
         <section className="py-16">
           <div className="max-w-6xl mx-auto px-6">

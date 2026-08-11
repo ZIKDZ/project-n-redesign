@@ -1,6 +1,7 @@
 // ShopPage.tsx
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useEscapeBack } from "../../hooks/useEscapeBack";
 import { asset } from "../../utils/asset";
 import Footer from "../../components/footer";
 
@@ -304,6 +305,7 @@ function ProductCard({ product, onClick }: { product: Product; onClick: () => vo
 // ── Main Shop Page ────────────────────────────────────────────────────────────
 export default function ShopPage() {
   const navigate = useNavigate();
+  useEscapeBack(() => navigate("/"));
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
